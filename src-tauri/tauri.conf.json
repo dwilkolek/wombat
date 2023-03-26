@@ -7,7 +7,7 @@
     "withGlobalTauri": false
   },
   "package": {
-    "productName": "viproxy",
+    "productName": "wombat",
     "version": "0.0.0"
   },
   "tauri": {
@@ -27,7 +27,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
+      "identifier": "eu.wilkolek.wombat",
       "targets": "all"
     },
     "security": {
@@ -40,7 +40,7 @@
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "viproxy",
+        "title": "Wombat",
         "width": 800,
         "height": 600
       }
