@@ -8,8 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri",
-    "release:mac": "tauri build --target aarch64-apple-darwin"
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.2.0",
