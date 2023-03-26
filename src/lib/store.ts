@@ -17,19 +17,35 @@ export enum Environment {
 export const services: Readable<string[]> = readable([]);
 export const dbs: Readable<string[]> = readable([]);
 
+type Entry = {
+  service: String;
+  service_arn: String;
+  dbs: DbInstance[];
+};
+
+type Endpoint = {
+  address: String;
+  port: number;
+};
+
+type DbInstance = {
+  db_name: String;
+  endpoint: Endpoint;
+  db_instance_arn: String;
+  env: Environment;
+  service: String;
+};
+
 function createState() {
   const env: Writable<Environment> = writable(Environment.DEV);
-  const services: Writable<string[]> = writable([]);
-  const dbs: Writable<string[]> = writable([]);
+  const records: Writable<Entry[]> = writable([]);
   env.subscribe(async (env) => {
     await invoke("set_environment", { env: `${env}` });
-    services.set(await invoke("get_services"));
-    dbs.set(await invoke("get_rds"));
+    records.set(await invoke("records"));
   });
   return {
     env,
-    services,
-    dbs,
+    records,
     selectEnvironment: (newEnv: Environment) => {
       env.set(newEnv);
     },

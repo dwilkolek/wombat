@@ -1,25 +1,39 @@
 <script lang="ts">
   import Menu from "./lib/Menu.svelte";
-  import Services from "./lib/Services.svelte";
+  import { state } from "./lib/store";
+  let records = state.records;
 </script>
 
 <main class="min-h-screen">
   <Menu />
 
   <div class="mx-auto">
-    <div class="flex gap-2">
-      <div class="card w-96 bg-neutral text-neutral-content">
-        <div class="card-body items-center text-center">
-          <h2 class="card-title">Services</h2>
-          <Services />
-        </div>
-      </div>
-      <div class="card w-96 bg-neutral text-neutral-content">
-        <div class="card-body items-center text-center">
-          <h2 class="card-title">Databases</h2>
-          <Services />
-        </div>
-      </div>
+    <div class="overflow-x-auto">
+      <table class="table w-full">
+        <!-- head -->
+        <thead>
+          <tr>
+            <th />
+            <th>Service name</th>
+            <th>DBs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each $records as record, i}
+            <tr>
+              <th>{i}</th>
+              <td>{record.service}</td>
+              <td>
+                {#each record.dbs as db}
+                  <ul>
+                    <li>{db.db_name}</li>
+                  </ul>
+                {/each}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     </div>
   </div>
 </main>

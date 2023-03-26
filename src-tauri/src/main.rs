@@ -3,12 +3,14 @@
 
 use aws_config::SdkConfig;
 use aws_sdk_ecs as ecs;
-use ecs::Client;
+use aws_sdk_rds as rds;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 use tauri::regex::Regex;
+use tauri::Env;
 use tokio::sync::Mutex;
 
 // ./dbeaver-cli.exe
@@ -30,14 +32,9 @@ async fn set_environment(env: &str, state: tauri::State<'_, WombatState>) -> Res
     return Ok(());
 }
 #[tauri::command]
-async fn get_services(state: tauri::State<'_, WombatState>) -> Result<Vec<String>, ()> {
-    let res = state.0.lock().await.services().await;
+async fn records(state: tauri::State<'_, WombatState>) -> Result<Vec<Entry>, ()> {
+    let res = state.0.lock().await.records();
     return Ok(res);
-}
-
-#[tauri::command]
-async fn get_rds(state: tauri::State<'_, WombatState>) -> Result<(), ()> {
-    return Ok(());
 }
 
 #[tauri::command]
@@ -58,31 +55,31 @@ async fn main() {
 
     tauri::Builder::default()
         .manage(managed_state)
-        .invoke_handler(tauri::generate_handler![
-            set_environment,
-            get_services,
-            get_rds
-        ])
+        .invoke_handler(tauri::generate_handler![set_environment, records])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 enum Environment {
+    PLAY,
     LAB,
     DEV,
     DEMO,
     PROD,
+    UNKNOWN,
 }
 
 impl FromStr for Environment {
     type Err = ();
     fn from_str(input: &str) -> Result<Environment, Self::Err> {
         match input {
+            "PLAY" => Ok(Environment::PLAY),
             "LAB" => Ok(Environment::LAB),
             "DEV" => Ok(Environment::DEV),
             "DEMO" => Ok(Environment::DEMO),
             "PROD" => Ok(Environment::PROD),
+            "UNKNOWN" => Ok(Environment::UNKNOWN),
             _ => Err(()),
         }
     }
@@ -90,26 +87,62 @@ impl FromStr for Environment {
 
 struct WombatState(Arc<Mutex<AwsState>>);
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Entry {
+    service: String,
+    service_arn: String,
+    dbs: Vec<DbInstance>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Endpoint {
+    address: String,
+    port: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DbInstance {
+    db_name: String,
+    endpoint: Endpoint,
+    db_instance_arn: String,
+    env: Environment,
+    service: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct EcsService {
+    name: String,
+    service_arn: String,
+    env: Environment,
+}
+
 struct AwsState {
     profile: String,
     config: SdkConfig,
-    client: Client,
+    ecs: ecs::Client,
+    rds: rds::Client,
     env: Environment,
     clusters: HashMap<Environment, String>,
+    databases: Vec<DbInstance>,
+    services: Vec<EcsService>,
 }
 
 impl AwsState {
     async fn default() -> AwsState {
         let profile = "developer".to_owned();
         let config = aws_config::from_env().profile_name(&profile).load().await;
-        let client = ecs::Client::new(&config);
+        let ecs = ecs::Client::new(&config);
+        let rds = rds::Client::new(&config);
 
         AwsState {
             profile,
             config,
-            client,
+            ecs,
+            rds,
             env: Environment::DEV,
             clusters: HashMap::new(),
+            databases: Vec::new(),
+            services: Vec::new(),
         }
     }
 
@@ -117,31 +150,54 @@ impl AwsState {
         self.env = Environment::from_str(env).unwrap()
     }
 
+    fn records(&self) -> Vec<Entry> {
+        return self
+            .services
+            .iter()
+            .filter(|s| s.env == self.env)
+            .map(|s| {
+                let dbs = self
+                    .databases
+                    .iter()
+                    .filter(|db| db.service == s.name && db.env == s.env)
+                    .map(|db| db.to_owned())
+                    .collect();
+                Entry {
+                    service: s.name.to_owned(),
+                    service_arn: s.service_arn.to_owned(),
+                    dbs: dbs,
+                }
+            })
+            .collect();
+    }
+
     async fn init(&mut self) {
-        if self.client.list_clusters().send().await.is_err() {
+        if self.ecs.list_clusters().send().await.is_err() {
             println!("Loggin to AWS");
             Command::new("aws")
                 .args(["sso", "login", "--profile", &self.profile])
                 .output()
                 .expect("failed to execute process");
         }
-        self.refresh_clusters().await
+        self.refresh_clusters().await;
+        self.refresh_services().await;
+        self.refresh_rds().await;
     }
 
     async fn refresh_clusters(&mut self) {
-        let resp = self.client.list_clusters().send().await.unwrap();
+        let resp = self.ecs.list_clusters().send().await.unwrap();
 
         let cluster_arns = resp.cluster_arns().unwrap_or_default();
         println!("Found {} clusters:", cluster_arns.len());
 
         let clusters = self
-            .client
+            .ecs
             .describe_clusters()
             .set_clusters(Some(cluster_arns.into()))
             .send()
             .await
             .unwrap();
-        let env_regex = Regex::new("(lab|dev|demo|prod)").unwrap();
+        let env_regex = Regex::new("(play|lab|dev|demo|prod)").unwrap();
         clusters.clusters().unwrap().iter().for_each(|cluster| {
             let arn = cluster.cluster_arn().unwrap().to_owned();
             let captures = env_regex.captures(&arn);
@@ -156,16 +212,95 @@ impl AwsState {
         })
     }
 
-    async fn services(&self) -> Vec<String> {
-        let cluster_arn = self.clusters.get(&self.env).unwrap();
-        let resp = self
-            .client
-            .list_services()
-            .set_cluster(Option::Some(cluster_arn.to_owned()))
-            .send()
-            .await
-            .unwrap();
+    async fn refresh_rds(&mut self) {
+        if self.databases.len() == 0 {
+            let mut there_is_more = true;
+            let mut marker = None;
+            while there_is_more {
+                let resp = self
+                    .rds
+                    .describe_db_instances()
+                    .set_marker(marker)
+                    .max_records(100)
+                    .send()
+                    .await
+                    .unwrap();
+                marker = resp.marker().map(|m| m.to_owned());
+                let instances = resp.db_instances();
+                let rdses = instances.as_deref().unwrap();
+                there_is_more = rdses.len() == 100;
+                rdses.into_iter().for_each(|rds| {
+                    if let Some(_) = rds.db_name() {
+                        let db_instance_arn = rds.db_instance_arn().unwrap().to_owned();
+                        let db_name = db_instance_arn.split(":").last().unwrap().to_owned();
+                        let tags = rds.tag_list().unwrap();
+                        let mut service = String::from("");
+                        let mut env = Environment::LAB;
+                        let endpoint = rds
+                            .endpoint()
+                            .map(|e| Endpoint {
+                                address: e.address().unwrap().to_owned(),
+                                port: e.port(),
+                            })
+                            .unwrap()
+                            .clone();
+                        for t in tags {
+                            if t.key().unwrap() == "AppName" {
+                                service = t.value().unwrap().to_owned()
+                            }
+                            if t.key().unwrap() == "Environment" {
+                                env = Environment::from_str(&t.value().unwrap().to_uppercase())
+                                    .unwrap_or(Environment::UNKNOWN)
+                            }
+                        }
+                        // let service =  .get("AppName").unwrap();
+                        // let service =  rds.tag_list().unwrap().get("AppName").unwrap();
+                        println!("DB {}: {:?}", &db_instance_arn, &env);
+                        self.databases.push(DbInstance {
+                            env,
+                            service,
+                            db_name,
+                            db_instance_arn,
+                            endpoint,
+                        })
+                    }
+                });
+            }
+        }
+    }
 
-        resp.service_arns().as_deref().unwrap().to_vec()
+    async fn refresh_services(&mut self) {
+        for cluster in self.clusters.iter() {
+            let cluster_arn = cluster.1;
+            let mut has_more = true;
+            let mut next_token = None;
+            while has_more {
+                let resp = self
+                    .ecs
+                    .list_services()
+                    .set_cluster(Option::Some(cluster_arn.to_owned()))
+                    .max_results(100)
+                    .set_next_token(next_token)
+                    .send()
+                    .await
+                    .unwrap();
+                next_token = resp.next_token().map(|t| t.to_owned());
+                has_more = next_token.is_some();
+                resp.service_arns()
+                    .as_deref()
+                    .unwrap()
+                    .iter()
+                    .for_each(|service_arn| {
+                        let ecs_instance = EcsService {
+                            name: service_arn.split("/").last().unwrap().to_owned(),
+                            service_arn: service_arn.to_owned(),
+                            env: cluster.0.to_owned(),
+                        };
+                        println!("ECS {}", &ecs_instance.name);
+
+                        self.services.push(ecs_instance);
+                    })
+            }
+        }
     }
 }

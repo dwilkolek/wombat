@@ -168,6 +168,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-rds"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "648f54deaa9feeb48b03735f7779e7841bf3baa266d8f2c3ddb5d4326d3de162"
+dependencies = [
+ "aws-credential-types",
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-json",
+ "aws-smithy-query",
+ "aws-smithy-types",
+ "aws-smithy-xml",
+ "aws-types",
+ "bytes",
+ "http",
+ "regex",
+ "tokio-stream",
+ "tower",
+]
+
+[[package]]
 name = "aws-sdk-sso"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3540,6 +3566,7 @@ version = "0.0.0"
 dependencies = [
  "aws-config",
  "aws-sdk-ecs",
+ "aws-sdk-rds",
  "serde",
  "serde_json",
  "tauri",
