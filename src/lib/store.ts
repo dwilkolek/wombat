@@ -39,13 +39,29 @@ type DbInstance = {
 function createState() {
   const env: Writable<Environment> = writable(Environment.DEV);
   const records: Writable<Entry[]> = writable([]);
+  const profile: Writable<string> = writable();
+  const error: Writable<string> = writable();
   env.subscribe(async (env) => {
     await invoke("set_environment", { env: `${env}` });
     records.set(await invoke("records"));
   });
+  profile.subscribe(async () => {
+    records.set([]);
+  });
   return {
     env,
     records,
+    profile,
+    error,
+    start: async (withProfile) => {
+      profile.set(withProfile);
+      error.set(undefined);
+      try {
+        records.set(await invoke("login", { profile: withProfile }));
+      } catch (e) {
+        error.set(e);
+      }
+    },
     selectEnvironment: (newEnv: Environment) => {
       env.set(newEnv);
     },

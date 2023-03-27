@@ -10,7 +10,6 @@ use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
 use tauri::regex::Regex;
-use tauri::Env;
 use tokio::sync::Mutex;
 
 // ./dbeaver-cli.exe
@@ -36,27 +35,32 @@ async fn records(state: tauri::State<'_, WombatState>) -> Result<Vec<Entry>, ()>
     let res = state.0.lock().await.records();
     return Ok(res);
 }
-
 #[tauri::command]
-fn open_db_connection(name: &str) -> String {
-    // ./dbeaver-cli.exe
-    //  -con "driver=mariadb|id=viproxy_cogitor|name=vprx_piotrcogitor_cogitor-ci|host=mariadb106.piotrcogitor.nazwa.pl|user=piotrcogitor_cogitor-ci|password=zpk7rjx4bqn6xec-XBN|openConsole=true|folder=viproxy|create=true|save=true"
-    // let output = Command::new("D:/repos/viproxy/proxy/proxy.exe")
-    //     .output()
-    //     .expect("ls command failed to start");
-    format!("Hello, {}! You've been greeted from Rust!", name)
+async fn login(profile: &str, state: tauri::State<'_, WombatState>) -> Result<Vec<Entry>, String> {
+    let init_result = state.0.lock().await.init(profile).await;
+    return init_result;
+
+    // return Ok(records(state).await.unwrap());
 }
+// #[tauri::command]
+// fn open_db_connection(name: &str) -> String {
+//     // ./dbeaver-cli.exe
+//     //  -con "driver=mariadb|id=viproxy_cogitor|name=vprx_piotrcogitor_cogitor-ci|host=mariadb106.piotrcogitor.nazwa.pl|user=piotrcogitor_cogitor-ci|password=zpk7rjx4bqn6xec-XBN|openConsole=true|folder=viproxy|create=true|save=true"
+//     // let output = Command::new("D:/repos/viproxy/proxy/proxy.exe")
+//     //     .output()
+//     //     .expect("ls command failed to start");
+//     format!("Hello, {}! You've been greeted from Rust!", name)
+// }
 
 #[tokio::main]
 async fn main() {
-    fix_path_env::fix();
-    let mut state = AwsState::default().await;
-    state.init().await;
+    fix_path_env::fix().unwrap();
+    let state = AwsState::default().await;
     let managed_state = WombatState(Arc::new(Mutex::new(state)));
 
     tauri::Builder::default()
         .manage(managed_state)
-        .invoke_handler(tauri::generate_handler![set_environment, records])
+        .invoke_handler(tauri::generate_handler![login, set_environment, records])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -119,9 +123,9 @@ struct EcsService {
 
 struct AwsState {
     profile: String,
-    config: SdkConfig,
-    ecs: ecs::Client,
-    rds: rds::Client,
+    config: Option<SdkConfig>,
+    ecs: Option<ecs::Client>,
+    rds: Option<rds::Client>,
     env: Environment,
     clusters: HashMap<Environment, String>,
     databases: Vec<DbInstance>,
@@ -131,15 +135,12 @@ struct AwsState {
 impl AwsState {
     async fn default() -> AwsState {
         let profile = "developer".to_owned();
-        let config = aws_config::from_env().profile_name(&profile).load().await;
-        let ecs = ecs::Client::new(&config);
-        let rds = rds::Client::new(&config);
 
         AwsState {
             profile,
-            config,
-            ecs,
-            rds,
+            config: None,
+            ecs: None,
+            rds: None,
             env: Environment::DEV,
             clusters: HashMap::new(),
             databases: Vec::new(),
@@ -172,27 +173,49 @@ impl AwsState {
             .collect();
     }
 
-    async fn init(&mut self) {
-        if self.ecs.list_clusters().send().await.is_err() {
-            println!("Loggin to AWS");
+    async fn is_logged(&self) -> bool {
+        return self
+            .ecs
+            .as_ref()
+            .unwrap()
+            .list_clusters()
+            .send()
+            .await
+            .is_ok();
+    }
+
+    async fn init(&mut self, profile: &str) -> Result<Vec<Entry>, String> {
+        self.profile = profile.to_owned();
+        self.config = Some(aws_config::from_env().profile_name(profile).load().await);
+        self.ecs = Some(ecs::Client::new(self.config.as_ref().unwrap()));
+        self.rds = Some(rds::Client::new(self.config.as_ref().unwrap()));
+        self.clusters = HashMap::new();
+        self.databases = Vec::new();
+        self.services = Vec::new();
+        if !self.is_logged().await {
+            println!("Trigger log in into AWS");
             Command::new("aws")
                 .args(["sso", "login", "--profile", &self.profile])
                 .output()
                 .expect("failed to execute process");
         }
+        if !self.is_logged().await {
+            return Err(String::from("Failed to log in."));
+        }
         self.refresh_clusters().await;
         self.refresh_services().await;
         self.refresh_rds().await;
+        Ok(self.records())
     }
 
     async fn refresh_clusters(&mut self) {
-        let resp = self.ecs.list_clusters().send().await.unwrap();
+        let ecs_client = self.ecs.as_ref().unwrap();
+        let resp = ecs_client.list_clusters().send().await.unwrap();
 
         let cluster_arns = resp.cluster_arns().unwrap_or_default();
         println!("Found {} clusters:", cluster_arns.len());
 
-        let clusters = self
-            .ecs
+        let clusters = ecs_client
             .describe_clusters()
             .set_clusters(Some(cluster_arns.into()))
             .send()
@@ -220,6 +243,8 @@ impl AwsState {
             while there_is_more {
                 let resp = self
                     .rds
+                    .as_ref()
+                    .unwrap()
                     .describe_db_instances()
                     .set_marker(marker)
                     .max_records(100)
@@ -278,6 +303,8 @@ impl AwsState {
             while has_more {
                 let resp = self
                     .ecs
+                    .as_ref()
+                    .unwrap()
                     .list_services()
                     .set_cluster(Option::Some(cluster_arn.to_owned()))
                     .max_results(100)
