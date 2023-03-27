@@ -4,12 +4,12 @@
 use aws_config::SdkConfig;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
-use tauri::regex::Regex;
 use tokio::sync::Mutex;
 
 // ./dbeaver-cli.exe
