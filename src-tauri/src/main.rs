@@ -49,6 +49,7 @@ fn open_db_connection(name: &str) -> String {
 
 #[tokio::main]
 async fn main() {
+    fix_path_env::fix();
     let mut state = AwsState::default().await;
     state.init().await;
     let managed_state = WombatState(Arc::new(Mutex::new(state)));
