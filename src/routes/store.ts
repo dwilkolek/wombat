@@ -2,15 +2,19 @@ import { derived, readable, writable, type Readable, type Writable } from 'svelt
 import { invoke } from '@tauri-apps/api/tauri';
 
 export enum Environment {
+	PLAY = 'PLAY',
 	LAB = 'LAB',
 	DEV = 'DEV',
 	DEMO = 'DEMO',
-	PROD = 'PROD'
+	PROD = 'PROD',
+	UNKNOWN = 'UNKNOWN'
 }
 
-export const services: Readable<string[]> = readable([]);
-export const dbs: Readable<string[]> = readable([]);
-
+export type EcsService = {
+	name: string;
+	service_arn: string;
+	env: Environment;
+};
 type Entry = {
 	service: String;
 	service_arn: String;
@@ -22,7 +26,7 @@ type Endpoint = {
 	port: number;
 };
 
-type DbInstance = {
+export type DbInstance = {
 	db_name: String;
 	endpoint: Endpoint;
 	db_instance_arn: String;
@@ -42,6 +46,7 @@ function createState() {
 	profile.subscribe(async () => {
 		records.set([]);
 	});
+
 	return {
 		env,
 		records,

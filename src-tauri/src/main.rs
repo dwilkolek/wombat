@@ -39,8 +39,19 @@ async fn records(state: tauri::State<'_, WombatState>) -> Result<Vec<Entry>, ()>
 async fn login(profile: &str, state: tauri::State<'_, WombatState>) -> Result<Vec<Entry>, String> {
     let init_result = state.0.lock().await.init(profile).await;
     return init_result;
+}
 
-    // return Ok(records(state).await.unwrap());
+#[tauri::command]
+async fn services(state: tauri::State<'_, WombatState>) -> Result<Vec<EcsService>, ()> {
+    let mut res = state.0.lock().await.services();
+    res.sort_by(|a, b| a.name.cmp(&b.name));
+    return Ok(res);
+}
+#[tauri::command]
+async fn databases(state: tauri::State<'_, WombatState>) -> Result<Vec<DbInstance>, ()> {
+    let mut res = state.0.lock().await.databases();
+    res.sort_by(|a, b| a.db_name.cmp(&b.db_name));
+    return Ok(res);
 }
 // #[tauri::command]
 // fn open_db_connection(name: &str) -> String {
@@ -60,7 +71,13 @@ async fn main() {
 
     tauri::Builder::default()
         .manage(managed_state)
-        .invoke_handler(tauri::generate_handler![login, set_environment, records])
+        .invoke_handler(tauri::generate_handler![
+            login,
+            set_environment,
+            records,
+            services,
+            databases
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -170,6 +187,24 @@ impl AwsState {
                     dbs: dbs,
                 }
             })
+            .collect();
+    }
+
+    fn services(&self) -> Vec<EcsService> {
+        return self
+            .services
+            .iter()
+            .filter(|s| s.env == self.env)
+            .map(|s| s.clone())
+            .collect();
+    }
+
+    fn databases(&self) -> Vec<DbInstance> {
+        return self
+            .databases
+            .iter()
+            .filter(|s| s.env == self.env)
+            .map(|s| s.clone())
             .collect();
     }
 
