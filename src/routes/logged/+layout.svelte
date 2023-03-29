@@ -65,7 +65,7 @@
 		</div>
 	</div>
 
-	<container class="overflow-y-auto" style="height: calc(100vh - 112px);">
+	<container class="overflow-y-auto" style="height: calc(100vh - 120px);">
 		<slot />
 	</container>
 	<div class="flex justify-center gap-2 my-2">

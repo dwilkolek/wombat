@@ -9,6 +9,10 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use warp::hyper::body::Bytes;
+use warp::hyper::Method;
+use warp::Filter;
+use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
 
 #[tauri::command]
 async fn user_config(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<UserConfig, ()> {
@@ -23,6 +27,15 @@ async fn login(
     let init_result = state.0.lock().await.login(profile).await;
     return init_result;
 }
+
+#[tauri::command]
+async fn set_dbeaver_path(
+    dbeaver_path: &str,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<UserConfig, String> {
+    return state.0.lock().await.set_dbeaver_path(dbeaver_path);
+}
+
 #[tauri::command]
 async fn logout(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), ()> {
     state.0.lock().await.logout();
@@ -45,6 +58,77 @@ async fn databases(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec
     return Ok(state.0.lock().await.databases().await);
 }
 
+#[tauri::command]
+async fn open_dbeaver(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), ()> {
+    // fn db_beaver_con_parma(arn: &str, db_name: &str, host: &str, user: &str, password: &str) -> String {
+    //     format!(
+    //         "driver=postgres|id={}|name={}|host={}|user={}|password={}|openConsole=true|folder=wombat|create=true|save=true",
+    //         arn, db_name, host, user, password
+    //     )
+    // }
+    // let app_state = state.0.lock().await;
+    // let dbeaver_path = &app_state
+    //     .user_config
+    //     .dbeaver_path
+    //     .as_ref()
+    //     .expect("DBeaver needs to be configured")
+    //     .clone();
+
+    // Command::new(dbeaver_path)
+    //     .args(["-con", &db_beaver_con_parma("", "", "", "", "")])
+    //     .output()
+    //     .expect("failed to execute process");
+    // return Ok(());
+    todo!()
+}
+
+#[tauri::command]
+async fn start_local_proxy(
+    local_port: i32,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<(), ()> {
+    // let request_filter = extract_request_data_filter();
+    // let host = "";
+    // let aws_port: u16 = 10000;
+    // let app = warp::any().and(request_filter).and_then(
+    //     move |uri: warp::path::FullPath,
+    //           params: Option<String>,
+    //           method: Method,
+    //           mut headers: Headers,
+    //           body: Bytes| {
+    //         headers.insert("Origin", host.parse().unwrap());
+    //         headers.insert("Host", host.parse().unwrap());
+    //         proxy_to_and_forward_response(
+    //             format!("http://localhost:{}/", aws_port).to_owned(),
+    //             "".to_owned(),
+    //             uri,
+    //             params,
+    //             method,
+    //             headers,
+    //             body,
+    //         )
+    //     },
+    // );
+
+    // // spawn proxy server
+    // warp::serve(app).run(([0, 0, 0, 0], aws_port)).await;
+    todo!()
+}
+
+#[tauri::command]
+async fn start_aws_proxy(
+    local_port: i32,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<(), ()> {
+    // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
+    // aws ssm start-session \
+    //  --target "$instance" \
+    //  --profile "$profile" \
+    //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+    //  --parameters "$parameters"
+    todo!()
+}
+
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap();
@@ -60,7 +144,9 @@ async fn main() {
             logout,
             clusters,
             services,
-            databases
+            databases,
+            set_dbeaver_path,
+            open_dbeaver
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -77,6 +163,7 @@ struct UserConfig {
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
     monitored: Vec<MonitoringConfig>,
+    dbeaver_path: Option<String>,
 }
 
 impl UserConfig {
@@ -88,6 +175,7 @@ impl UserConfig {
                 last_used_profile: None,
                 known_profiles: HashSet::new(),
                 monitored: Vec::new(),
+                dbeaver_path: None,
             },
         };
         user_config
@@ -95,6 +183,16 @@ impl UserConfig {
 
     fn config_path() -> PathBuf {
         home::home_dir().unwrap().as_path().join(".wombat.json")
+    }
+
+    fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, String> {
+        if std::path::Path::new(dbeaver_path).exists() {
+            self.dbeaver_path = Some(dbeaver_path.to_owned());
+            self.save();
+            Ok(self.clone())
+        } else {
+            Err("Invalid path!".to_owned())
+        }
     }
 
     fn use_profile(&mut self, profile: &str) {
@@ -155,6 +253,10 @@ impl AppState {
 
     fn logout(&mut self) {
         self.aws_client = None;
+    }
+
+    fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, String> {
+        self.user_config.set_dbeaver_path(dbeaver_path)
     }
 
     async fn login(&mut self, profile: &str) -> Result<(), String> {

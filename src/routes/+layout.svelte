@@ -3,9 +3,7 @@
 </script>
 
 <div>
-	<main>
+	<main class="px-2 p-1">
 		<slot />
 	</main>
 </div>
-
-

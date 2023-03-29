@@ -2,7 +2,9 @@ export type UserConfig = {
 	last_used_profile: string | undefined;
 	known_profiles: string[];
 	monitored: MonitoringConfig[];
+	dbeaver_path: string | undefined;
 };
+
 export type EcsService = {
 	name: string;
 	service_arn: string;
