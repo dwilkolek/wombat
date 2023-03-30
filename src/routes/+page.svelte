@@ -1,22 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { invoke } from '@tauri-apps/api/tauri';
-	import type { UserConfig } from './types';
-	let userConfigPromise = invoke<UserConfig>('user_config');
+	import { userStore } from './user-store';
+	let { subscribe, login } = userStore;
+	let profile: string = '';
 
-	let profile: string | undefined = undefined;
+	$: subscribe((userConfig) => {
+		profile = userConfig?.last_used_profile ?? '';
+	});
+
 	let loading = false;
 	let storeErr = '';
-	$: userConfigPromise.then((userConfig) => {
-		profile = userConfig?.last_used_profile;
-	});
 </script>
 
 <svelte:head>
 	<title>Home</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-{#await userConfigPromise then userConfig}
+{#await subscribe then _}
 	<div class="hero max-h-screen min-h-screen bg-base-200">
 		<div class="hero-content flex-col">
 			<div class="text-center">
@@ -45,7 +45,7 @@
 							disabled={loading}
 							on:click={async () => {
 								loading = true;
-								storeErr = await invoke('login', { profile });
+								await login(profile);
 								loading = false;
 								goto(`/logged/ecs`, { replaceState: true });
 							}}

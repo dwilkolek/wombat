@@ -15,34 +15,48 @@ use warp::Filter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
 
 #[tauri::command]
-async fn user_config(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<UserConfig, ()> {
+async fn user_config(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<UserConfig, BError> {
     return Ok(state.0.lock().await.user_config.clone());
+}
+
+#[tauri::command]
+async fn toggle_service_favourite(
+    service_name: &str,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<UserConfig, BError> {
+    return state.0.lock().await.toggle_service_favourite(service_name);
+}
+#[tauri::command]
+async fn toggle_db_favourite(
+    db_arn: &str,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<UserConfig, BError> {
+    return state.0.lock().await.toggle_db_favourite(db_arn);
 }
 
 #[tauri::command]
 async fn login(
     profile: &str,
     state: tauri::State<'_, GlobalThreadSafeState>,
-) -> Result<(), String> {
-    let init_result = state.0.lock().await.login(profile).await;
-    return init_result;
+) -> Result<UserConfig, BError> {
+    return state.0.lock().await.login(profile).await;
 }
 
 #[tauri::command]
 async fn set_dbeaver_path(
     dbeaver_path: &str,
     state: tauri::State<'_, GlobalThreadSafeState>,
-) -> Result<UserConfig, String> {
+) -> Result<UserConfig, BError> {
     return state.0.lock().await.set_dbeaver_path(dbeaver_path);
 }
 
 #[tauri::command]
-async fn logout(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), ()> {
+async fn logout(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), BError> {
     state.0.lock().await.logout();
     Ok(())
 }
 #[tauri::command]
-async fn clusters(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<String>, String> {
+async fn clusters(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<String>, BError> {
     return Ok(state.0.lock().await.clusters().await);
 }
 
@@ -50,7 +64,7 @@ async fn clusters(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<
 async fn services(
     cluster_arn: &str,
     state: tauri::State<'_, GlobalThreadSafeState>,
-) -> Result<Vec<EcsService>, ()> {
+) -> Result<Vec<EcsService>, BError> {
     return Ok(state.0.lock().await.services(cluster_arn).await);
 }
 #[tauri::command]
@@ -146,10 +160,26 @@ async fn main() {
             services,
             databases,
             set_dbeaver_path,
+            toggle_service_favourite,
+            toggle_db_favourite,
             open_dbeaver
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BError {
+    message: String,
+    command: String,
+}
+impl BError {
+    fn new(command: &str, message: impl Into<String>) -> BError {
+        BError {
+            command: message.into(),
+            message: command.to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,7 +192,8 @@ struct MonitoringConfig {
 struct UserConfig {
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
-    monitored: Vec<MonitoringConfig>,
+    favourite_service_names: HashSet<String>,
+    favourite_db_arns: HashSet<String>,
     dbeaver_path: Option<String>,
 }
 
@@ -174,7 +205,8 @@ impl UserConfig {
             Err(_) => UserConfig {
                 last_used_profile: None,
                 known_profiles: HashSet::new(),
-                monitored: Vec::new(),
+                favourite_db_arns: HashSet::new(),
+                favourite_service_names: HashSet::new(),
                 dbeaver_path: None,
             },
         };
@@ -185,13 +217,13 @@ impl UserConfig {
         home::home_dir().unwrap().as_path().join(".wombat.json")
     }
 
-    fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, String> {
+    fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
         if std::path::Path::new(dbeaver_path).exists() {
             self.dbeaver_path = Some(dbeaver_path.to_owned());
             self.save();
             Ok(self.clone())
         } else {
-            Err("Invalid path!".to_owned())
+            Err(BError::new("set_dbeaver_path", "Invalid path!"))
         }
     }
 
@@ -201,12 +233,32 @@ impl UserConfig {
         self.save()
     }
 
+    fn toggle_service_favourite(&mut self, service_name: &str) -> Result<UserConfig, BError> {
+        if !self
+            .favourite_service_names
+            .remove(&service_name.to_owned())
+        {
+            self.favourite_service_names.insert(service_name.to_owned());
+        }
+
+        self.save();
+        Ok(self.clone())
+    }
+
+    fn toggle_db_favourite(&mut self, db_arn: &str) -> Result<UserConfig, BError> {
+        if !self.favourite_db_arns.remove(&db_arn.to_owned()) {
+            self.favourite_db_arns.insert(db_arn.to_owned());
+        }
+        self.save();
+        Ok(self.clone())
+    }
+
     fn save(&self) {
         std::fs::write(
             UserConfig::config_path(),
-            serde_json::to_string_pretty(self).unwrap(),
+            serde_json::to_string_pretty(self).expect("Failed to serialize user config"),
         )
-        .unwrap()
+        .expect("Failed to save user config");
     }
 }
 
@@ -255,11 +307,18 @@ impl AppState {
         self.aws_client = None;
     }
 
-    fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, String> {
+    fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
         self.user_config.set_dbeaver_path(dbeaver_path)
     }
 
-    async fn login(&mut self, profile: &str) -> Result<(), String> {
+    fn toggle_service_favourite(&mut self, service_name: &str) -> Result<UserConfig, BError> {
+        self.user_config.toggle_service_favourite(service_name)
+    }
+    fn toggle_db_favourite(&mut self, db_arn: &str) -> Result<UserConfig, BError> {
+        self.user_config.toggle_db_favourite(db_arn)
+    }
+
+    async fn login(&mut self, profile: &str) -> Result<UserConfig, BError> {
         self.user_config.use_profile(profile);
         self.active_profile = Some(profile.to_owned());
         let client_result = AwsClient::default(
@@ -269,12 +328,13 @@ impl AppState {
                 .as_str(),
         )
         .await;
+
         match client_result {
             Ok(client) => {
                 self.aws_client = Some(client);
-                Ok(())
+                Ok(self.user_config.clone())
             }
-            Err(msg) => Err(msg),
+            Err(message) => Err(BError::new("login", message)),
         }
     }
 
@@ -326,7 +386,9 @@ struct AwsClient {
 
 impl AwsClient {
     async fn is_logged(ecs: &ecs::Client) -> bool {
-        return ecs.list_clusters().send().await.is_ok();
+        let resp = ecs.list_clusters().send().await;
+        dbg!(&resp);
+        return resp.is_ok();
     }
 
     async fn default(profile: &str) -> Result<AwsClient, String> {
@@ -336,7 +398,7 @@ impl AwsClient {
 
         if !AwsClient::is_logged(&ecs).await {
             println!("Trigger log in into AWS");
-            Command::new("aws")
+            let output = Command::new("aws")
                 .args(["sso", "login", "--profile", &profile])
                 .output()
                 .expect("failed to execute process");
@@ -370,6 +432,7 @@ impl AwsClient {
     }
     async fn services(&mut self, cluster_arn: &str) -> Vec<EcsService> {
         if !self.cache.services.contains_key(cluster_arn) {
+            println!("Resolving services for {}", &cluster_arn);
             let mut values = vec![];
             let mut has_more = true;
             let mut next_token = None;

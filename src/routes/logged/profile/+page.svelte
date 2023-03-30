@@ -2,21 +2,18 @@
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { prevent_default } from 'svelte/internal';
 	import type { UserConfig } from '../../types';
+	import { userStore } from '../../user-store';
 
-	let userConfigPromise = invoke<UserConfig>('user_config');
-	let dbeaver_path: string | undefined = undefined;
-	$: userConfigPromise.then((userConfig) => {
-		dbeaver_path = userConfig?.dbeaver_path;
-	});
+	let user = $userStore;
+	let dbeaver_path = user?.dbeaver_path ?? '';
 </script>
 
 <svelte:head>
 	<title>Profile</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-
-{#await userConfigPromise then _}
-	<form class="flex justify-center flex-col justify-items-center">
+<div class="max-w-md mx-auto">
+	<form class="flex flex-col justify-items-center gap-2">
 		<div class="form-control w-full min-w-xs">
 			<label class="label" for="dbeaver_path">
 				<span class="label-text">Path to dbeaver</span>
@@ -25,20 +22,17 @@
 				id="dbeaver_path"
 				type="text"
 				placeholder="DB path"
-				class="input input-bordered w-full min-w-xs w-full"
+				class="input input-bordered w-full min-w-xs"
 				bind:value={dbeaver_path}
 			/>
-
-			<button
-				on:click|preventDefault={() => {
-					invoke('set_dbeaver_path', { dbeaverPath: dbeaver_path });
-				}}>Save</button
-			>
-			<button
-				on:click|preventDefault={() => {
-					invoke('open_dbeaver');
-				}}>TRIGGER</button
-			>
 		</div>
+
+		<button
+			class="btn btn-primary"
+			on:click|preventDefault={() => {
+				userStore.setDbeaverPath(dbeaver_path);
+			}}
+			>Save
+		</button>
 	</form>
-{/await}
+</div>

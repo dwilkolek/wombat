@@ -1,7 +1,8 @@
 export type UserConfig = {
 	last_used_profile: string | undefined;
 	known_profiles: string[];
-	monitored: MonitoringConfig[];
+	favourite_service_names: string[];
+	favourite_db_arns: string[];
 	dbeaver_path: string | undefined;
 };
 
