@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-	<title>Home</title>
+	<title>RDS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="mx-auto">

@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>Home</title>
+	<title>Ecs</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 

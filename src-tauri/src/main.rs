@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use warp::http::HeaderValue;
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;
 use warp::Filter;
@@ -129,18 +130,74 @@ async fn start_local_proxy(
     todo!()
 }
 
-#[tauri::command]
-async fn start_aws_proxy(
-    local_port: i32,
-    state: tauri::State<'_, GlobalThreadSafeState>,
-) -> Result<(), ()> {
-    // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
-    // aws ssm start-session \
-    //  --target "$instance" \
-    //  --profile "$profile" \
-    //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-    //  --parameters "$parameters"
-    todo!()
+//untested
+async fn start_proxy_to_aws_proxy(service_header: Option<String>, aws_port: u16) {
+    tokio::task::spawn(async move {
+        let request_filter = extract_request_data_filter();
+        let header_value = service_header
+            .unwrap_or(String::from(""))
+            .parse::<HeaderValue>()
+            .unwrap();
+        let app = warp::any().and(request_filter).and_then(
+            move |uri: warp::path::FullPath,
+                  params: Option<String>,
+                  method: Method,
+                  mut headers: Headers,
+                  body: Bytes| {
+                // if let Some(header_value) = service_header {
+                headers.insert("Origin", header_value.clone());
+                headers.insert("Host", header_value.clone());
+                // }
+
+                proxy_to_and_forward_response(
+                    format!("http://localhost:{}/", aws_port).to_owned(),
+                    "".to_owned(),
+                    uri,
+                    params,
+                    method,
+                    headers,
+                    body,
+                )
+            },
+        );
+        warp::serve(app).run(([0, 0, 0, 0], aws_port)).await;
+    });
+}
+
+//untested
+async fn start_aws_ssm_proxy(
+    bastion: String,
+    profile: String,
+    target: String,
+    target_port: u16,
+    local_port: u16,
+) {
+    tokio::task::spawn(async move {
+        // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
+        // aws ssm start-session \
+        //  --target "$instance" \
+        //  --profile "$profile" \
+        //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+        //  --parameters "$parameters"
+        let output = Command::new("aws")
+            .args([
+                "ssm",
+                "start-session",
+                "--target",
+                &bastion,
+                "--profile",
+                &profile,
+                "--document-name",
+                "AWS-StartPortForwardingSessionToRemoteHost",
+                "--parameters",
+                &format!(
+                    "{{\"host\":[\"{}\"], \"portNumber\":[\"{}\"], \"localPortNumber\":[\"{}\"]}}",
+                    target, target_port, local_port
+                ),
+            ])
+            .output()
+            .expect("failed to execute process");
+    });
 }
 
 #[tokio::main]
@@ -430,6 +487,7 @@ impl AwsClient {
             }
         }
     }
+
     async fn services(&mut self, cluster_arn: &str) -> Vec<EcsService> {
         if !self.cache.services.contains_key(cluster_arn) {
             println!("Resolving services for {}", &cluster_arn);
