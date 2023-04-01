@@ -67,7 +67,12 @@
 								</div>
 							</td>
 							<td>
-								<button class="btn btn-focus" disabled={true}>Proxy</button>
+								<button
+									class="btn btn-focus"
+									on:click={() => {
+										invoke('start_db_proxy', { db });
+									}}>Proxy</button
+								>
 							</td>
 						</tr>
 					{/if}

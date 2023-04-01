@@ -62,7 +62,6 @@ async fn logout(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), BE
 #[tauri::command]
 async fn clusters(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<Cluster>, BError> {
     let mut state = state.0.lock().await;
-    state.bastions().await;
     return Ok(state.clusters().await);
 }
 
@@ -82,7 +81,28 @@ async fn databases(
 }
 
 #[tauri::command]
-async fn open_dbeaver(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), ()> {
+async fn start_db_proxy(
+    db: DbInstance,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<(), ()> {
+    let mut state = state.0.lock().await;
+    let bastion = state.bastion(db.env).await;
+    let profile = state.user_config.clone().last_used_profile.unwrap();
+
+    start_aws_ssm_proxy(
+        bastion.instance_id,
+        profile,
+        db.endpoint.address,
+        db.endpoint.port,
+        8081,
+    );
+    Ok(())
+}
+#[tauri::command]
+async fn open_dbeaver(
+    db: DbInstance,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<(), ()> {
     // fn db_beaver_con_parma(arn: &str, db_name: &str, host: &str, user: &str, password: &str) -> String {
     //     format!(
     //         "driver=postgres|id={}|name={}|host={}|user={}|password={}|openConsole=true|folder=wombat|create=true|save=true",
@@ -173,7 +193,7 @@ async fn start_proxy_to_aws_proxy(service_header: Option<String>, aws_port: u16)
 }
 
 //untested
-async fn start_aws_ssm_proxy(
+fn start_aws_ssm_proxy(
     bastion: String,
     profile: String,
     target: String,
@@ -229,7 +249,8 @@ async fn main() {
             set_dbeaver_path,
             toggle_service_favourite,
             toggle_db_favourite,
-            open_dbeaver
+            open_dbeaver,
+            start_db_proxy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -328,7 +349,7 @@ struct GlobalThreadSafeState(Arc<Mutex<AppState>>);
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Endpoint {
     address: String,
-    port: i32,
+    port: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -426,11 +447,11 @@ impl AppState {
             .cloned()
             .collect()
     }
-    async fn bastions(&mut self) {
+    async fn bastion(&mut self, env: Env) -> Bastion {
         self.aws_client
             .as_mut()
             .expect("Login first!")
-            .bastions()
+            .bastion(env)
             .await
     }
 }
@@ -457,7 +478,7 @@ impl Env {
         }
     }
     fn from_any(str: &str) -> Env {
-        let env_regex = Regex::new("-(play|lab|dev|demo|prod)-").unwrap();
+        let env_regex = Regex::new(".*(play|lab|dev|demo|prod).*").unwrap();
         let captures = env_regex.captures(str);
         let env = captures
             .and_then(|c| c.get(1))
@@ -480,7 +501,7 @@ struct Cluster {
 }
 
 struct AwsCache {
-    bastions: HashMap<Env, Vec<Bastion>>,
+    bastions: HashMap<Env, Bastion>,
     clusters: HashMap<Env, Cluster>,
     databases: Vec<DbInstance>,
     services: HashMap<Env, Vec<EcsService>>,
@@ -534,39 +555,49 @@ impl AwsClient {
         })
     }
 
-    async fn bastions(&mut self) {
-        let filter = Filter::builder()
-            .name("tag:Name")
-            .values("*-bastion*")
-            .build();
-        let res = self.ec2.describe_instances().filters(filter).send().await;
-        let res = res.expect("Failed to get bastion list");
-        let res = res.reservations().unwrap();
-        let res = res
-            .iter()
-            .map(|r| {
-                if let Some(instances) = r.instances() {
-                    instances
-                        .into_iter()
-                        .map(|instance| {
-                            (
-                                instance
+    async fn bastion(&mut self, env: Env) -> Bastion {
+        if self.cache.bastions.is_empty() {
+            let filter = Filter::builder()
+                .name("tag:Name")
+                .values("*-bastion*")
+                .build();
+            let res = self.ec2.describe_instances().filters(filter).send().await;
+            let res = res.expect("Failed to get bastion list");
+            let res = res.reservations().unwrap();
+            let res = res
+                .iter()
+                .map(|r| {
+                    if let Some(instances) = r.instances() {
+                        instances
+                            .into_iter()
+                            .map(|instance| {
+                                let arn = instance
                                     .iam_instance_profile()
                                     .unwrap()
                                     .arn()
                                     .unwrap()
-                                    .to_owned(),
-                                instance.instance_id().unwrap().to_owned(),
-                            )
-                        })
-                        .collect::<Vec<(String, String)>>()
-                } else {
-                    vec![]
-                }
-            })
-            .flatten()
-            .collect::<Vec<(String, String)>>();
-        dbg!(res);
+                                    .to_owned();
+                                let env = Env::from_any(&arn);
+                                Bastion {
+                                    arn,
+                                    instance_id: instance.instance_id().unwrap().to_owned(),
+                                    env,
+                                }
+                            })
+                            .collect::<Vec<Bastion>>()
+                    } else {
+                        vec![]
+                    }
+                })
+                .flatten()
+                .collect::<Vec<Bastion>>();
+            dbg!(&res);
+            for b in res {
+                self.cache.bastions.insert(b.env.clone(), b);
+            }
+            dbg!(&self.cache.bastions);
+        }
+        self.cache.bastions.get(&env).unwrap().clone()
     }
 
     async fn clusters(&mut self) -> HashMap<Env, Cluster> {
@@ -671,7 +702,7 @@ impl AwsClient {
                             .endpoint()
                             .map(|e| Endpoint {
                                 address: e.address().unwrap().to_owned(),
-                                port: e.port(),
+                                port: u16::try_from(e.port()).unwrap(),
                             })
                             .unwrap()
                             .clone();
