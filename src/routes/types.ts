@@ -1,3 +1,15 @@
+export enum Env {
+	DEVNULL = 'DEVNULL',
+	PLAY = 'PLAY',
+	LAB = 'LAB',
+	DEV = 'DEV',
+	DEMO = 'DEMO',
+	PROD = 'PROD'
+}
+export type Cluster = {
+	arn: String;
+	env: Env;
+};
 export type UserConfig = {
 	last_used_profile: string | undefined;
 	known_profiles: string[];
@@ -8,7 +20,7 @@ export type UserConfig = {
 
 export type EcsService = {
 	name: string;
-	service_arn: string;
+	arn: string;
 	cluster_arn: string;
 };
 
@@ -18,9 +30,9 @@ export type Endpoint = {
 };
 
 export type DbInstance = {
-	db_name: string;
+	name: string;
 	endpoint: Endpoint;
-	db_instance_arn: string;
+	arn: string;
 	environment_tag: string;
 	appname_tag: string;
 };

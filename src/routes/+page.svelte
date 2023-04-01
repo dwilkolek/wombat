@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from './user-store';
+	import { open } from '@tauri-apps/api/shell';
+	const openGithubPage = () => {
+		open('https://github.com/dwilkolek/wombat');
+	};
 	let { subscribe, login } = userStore;
 	let profile: string = '';
 
@@ -57,6 +61,17 @@
 						<p>{storeErr ?? ''}</p>
 					</div>
 				</div>
+			</div>
+			<div class="flex justify-center gap-2 my-2">
+				<span>Sourcecode:</span>
+				<a
+					href="https://github.com/dwilkolek/wombat"
+					on:click|preventDefault={() => {
+						openGithubPage();
+					}}
+					target="_blank"
+					>https://github.com/dwilkolek/wombat
+				</a>
 			</div>
 		</div>
 	</div>

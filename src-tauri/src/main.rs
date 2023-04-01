@@ -1,8 +1,11 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
+use ec2::types::Filter;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -12,7 +15,7 @@ use tokio::sync::Mutex;
 use warp::http::HeaderValue;
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;
-use warp::Filter;
+use warp::Filter as WarpFilter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
 
 #[tauri::command]
@@ -57,20 +60,25 @@ async fn logout(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<(), BE
     Ok(())
 }
 #[tauri::command]
-async fn clusters(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<String>, BError> {
-    return Ok(state.0.lock().await.clusters().await);
+async fn clusters(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<Cluster>, BError> {
+    let mut state = state.0.lock().await;
+    state.bastions().await;
+    return Ok(state.clusters().await);
 }
 
 #[tauri::command]
 async fn services(
-    cluster_arn: &str,
+    env: Env,
     state: tauri::State<'_, GlobalThreadSafeState>,
 ) -> Result<Vec<EcsService>, BError> {
-    return Ok(state.0.lock().await.services(cluster_arn).await);
+    return Ok(state.0.lock().await.services(env).await);
 }
 #[tauri::command]
-async fn databases(state: tauri::State<'_, GlobalThreadSafeState>) -> Result<Vec<DbInstance>, ()> {
-    return Ok(state.0.lock().await.databases().await);
+async fn databases(
+    env: Env,
+    state: tauri::State<'_, GlobalThreadSafeState>,
+) -> Result<Vec<DbInstance>, ()> {
+    return Ok(state.0.lock().await.databases(env).await);
 }
 
 #[tauri::command]
@@ -197,6 +205,8 @@ async fn start_aws_ssm_proxy(
             ])
             .output()
             .expect("failed to execute process");
+        println!("THE END");
+        dbg!(output);
     });
 }
 
@@ -237,12 +247,6 @@ impl BError {
             message: command.to_owned(),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct MonitoringConfig {
-    service_arn: Option<String>,
-    database_arn: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -329,18 +333,20 @@ struct Endpoint {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DbInstance {
-    db_name: String,
+    name: String,
     endpoint: Endpoint,
-    db_instance_arn: String,
+    arn: String,
     environment_tag: String,
+    env: Env,
     appname_tag: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EcsService {
     name: String,
-    service_arn: String,
+    arn: String,
     cluster_arn: String,
+    env: Env,
 }
 
 struct AppState {
@@ -395,41 +401,97 @@ impl AppState {
         }
     }
 
-    async fn databases(&mut self) -> Vec<DbInstance> {
+    async fn databases(&mut self, env: Env) -> Vec<DbInstance> {
         self.aws_client
             .as_mut()
             .expect("Login first!")
-            .databases()
+            .databases(env)
             .await
     }
 
-    async fn services(&mut self, cluster_arn: &str) -> Vec<EcsService> {
+    async fn services(&mut self, env: Env) -> Vec<EcsService> {
         self.aws_client
             .as_mut()
             .expect("Login first!")
-            .services(cluster_arn)
+            .services(env)
             .await
     }
-    async fn clusters(&mut self) -> Vec<String> {
+    async fn clusters(&mut self) -> Vec<Cluster> {
         self.aws_client
             .as_mut()
             .expect("Login first!")
             .clusters()
             .await
+            .values()
+            .cloned()
+            .collect()
+    }
+    async fn bastions(&mut self) {
+        self.aws_client
+            .as_mut()
+            .expect("Login first!")
+            .bastions()
+            .await
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+enum Env {
+    DEVNULL,
+    PLAY,
+    LAB,
+    DEV,
+    DEMO,
+    PROD,
+}
+
+impl Env {
+    fn from_exact(str: &str) -> Env {
+        match str {
+            "play" => Env::PLAY,
+            "lab" => Env::LAB,
+            "dev" => Env::DEV,
+            "demo" => Env::DEMO,
+            "prod" => Env::PROD,
+            _ => Env::DEVNULL,
+        }
+    }
+    fn from_any(str: &str) -> Env {
+        let env_regex = Regex::new("-(play|lab|dev|demo|prod)-").unwrap();
+        let captures = env_regex.captures(str);
+        let env = captures
+            .and_then(|c| c.get(1))
+            .and_then(|e| Some(e.as_str().to_owned()))
+            .unwrap_or("".to_owned());
+
+        Env::from_exact(&env)
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Bastion {
+    arn: String,
+    instance_id: String,
+    env: Env,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Cluster {
+    arn: String,
+    env: Env,
+}
+
 struct AwsCache {
-    clusters: Option<Vec<String>>,
-    databases: Option<Vec<DbInstance>>,
-    services: HashMap<String, Vec<EcsService>>,
+    bastions: HashMap<Env, Vec<Bastion>>,
+    clusters: HashMap<Env, Cluster>,
+    databases: Vec<DbInstance>,
+    services: HashMap<Env, Vec<EcsService>>,
 }
 
 impl AwsCache {
     fn default() -> AwsCache {
         AwsCache {
-            clusters: None,
-            databases: None,
+            bastions: HashMap::new(),
+            clusters: HashMap::new(),
+            databases: Vec::new(),
             services: HashMap::new(),
         }
     }
@@ -439,12 +501,12 @@ struct AwsClient {
     cache: AwsCache,
     ecs: ecs::Client,
     rds: rds::Client,
+    ec2: ec2::Client,
 }
 
 impl AwsClient {
     async fn is_logged(ecs: &ecs::Client) -> bool {
         let resp = ecs.list_clusters().send().await;
-        dbg!(&resp);
         return resp.is_ok();
     }
 
@@ -452,6 +514,7 @@ impl AwsClient {
         let config = Some(aws_config::from_env().profile_name(profile).load().await);
         let ecs = ecs::Client::new(config.as_ref().unwrap());
         let rds = rds::Client::new(config.as_ref().unwrap());
+        let ec2 = ec2::Client::new(config.as_ref().unwrap());
 
         if !AwsClient::is_logged(&ecs).await {
             println!("Trigger log in into AWS");
@@ -467,125 +530,181 @@ impl AwsClient {
             cache: AwsCache::default(),
             ecs,
             rds,
+            ec2,
         })
     }
 
-    async fn clusters(&mut self) -> Vec<String> {
-        match &self.cache.clusters {
-            Some(clusters) => clusters.clone(),
-            None => {
-                let cluster_resp = self
-                    .ecs
-                    .list_clusters()
-                    .send()
-                    .await
-                    .expect("Failed to get cluser list");
-
-                let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
-                self.cache.clusters = Some(cluster_arns.to_vec());
-                cluster_arns.to_vec()
-            }
-        }
+    async fn bastions(&mut self) {
+        let filter = Filter::builder()
+            .name("tag:Name")
+            .values("*-bastion*")
+            .build();
+        let res = self.ec2.describe_instances().filters(filter).send().await;
+        let res = res.expect("Failed to get bastion list");
+        let res = res.reservations().unwrap();
+        let res = res
+            .iter()
+            .map(|r| {
+                if let Some(instances) = r.instances() {
+                    instances
+                        .into_iter()
+                        .map(|instance| {
+                            (
+                                instance
+                                    .iam_instance_profile()
+                                    .unwrap()
+                                    .arn()
+                                    .unwrap()
+                                    .to_owned(),
+                                instance.instance_id().unwrap().to_owned(),
+                            )
+                        })
+                        .collect::<Vec<(String, String)>>()
+                } else {
+                    vec![]
+                }
+            })
+            .flatten()
+            .collect::<Vec<(String, String)>>();
+        dbg!(res);
     }
 
-    async fn services(&mut self, cluster_arn: &str) -> Vec<EcsService> {
-        if !self.cache.services.contains_key(cluster_arn) {
-            println!("Resolving services for {}", &cluster_arn);
+    async fn clusters(&mut self) -> HashMap<Env, Cluster> {
+        if self.cache.clusters.is_empty() {
+            let cluster_resp = self
+                .ecs
+                .list_clusters()
+                .send()
+                .await
+                .expect("Failed to get Cluster list");
+
+            let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
+
+            for cluster_arn in cluster_arns {
+                let env = Env::from_any(cluster_arn);
+                self.cache.clusters.insert(
+                    env.clone(),
+                    Cluster {
+                        arn: cluster_arn.clone(),
+                        env: env,
+                    },
+                );
+            }
+        }
+
+        self.cache.clusters.clone()
+    }
+
+    async fn services(&mut self, env: Env) -> Vec<EcsService> {
+        if !self.cache.services.contains_key(&env) {
             let mut values = vec![];
             let mut has_more = true;
             let mut next_token = None;
-            while has_more {
-                let services_resp = self
-                    .ecs
-                    .list_services()
-                    .cluster(cluster_arn.to_owned())
-                    .max_results(100)
-                    .set_next_token(next_token)
-                    .send()
-                    .await
-                    .unwrap();
-                next_token = services_resp.next_token().map(|t| t.to_owned());
-                has_more = next_token.is_some();
+            if let Some(cluster) = self.clusters().await.get(&env) {
+                while has_more {
+                    let services_resp = self
+                        .ecs
+                        .list_services()
+                        .cluster(cluster.arn.to_owned())
+                        .max_results(100)
+                        .set_next_token(next_token)
+                        .send()
+                        .await
+                        .unwrap();
+                    next_token = services_resp.next_token().map(|t| t.to_owned());
+                    has_more = next_token.is_some();
 
-                services_resp
-                    .service_arns()
-                    .unwrap()
-                    .iter()
-                    .for_each(|service_arn| {
-                        values.push(EcsService {
-                            name: service_arn.split("/").last().unwrap().to_owned(),
-                            service_arn: service_arn.to_owned(),
-                            cluster_arn: cluster_arn.to_owned(),
+                    services_resp
+                        .service_arns()
+                        .unwrap()
+                        .iter()
+                        .for_each(|service_arn| {
+                            values.push(EcsService {
+                                name: service_arn.split("/").last().unwrap().to_owned(),
+                                arn: service_arn.to_owned(),
+                                cluster_arn: cluster.arn.to_owned(),
+                                env: env.clone(),
+                            })
                         })
-                    })
+                }
             }
             values.sort_by(|a, b| a.name.cmp(&b.name));
-            self.cache.services.insert(cluster_arn.to_owned(), values);
+            self.cache.services.insert(env.clone(), values);
         }
         self.cache
             .services
-            .get(cluster_arn)
+            .get(&env.clone())
             .expect("Services cached was not filled")
             .clone()
     }
 
-    async fn databases(&mut self) -> Vec<DbInstance> {
-        match &self.cache.databases {
-            Some(databases) => databases.clone(),
-            None => {
-                let mut databases: Vec<DbInstance> = vec![];
-                let mut there_is_more = true;
-                let mut marker = None;
-                while there_is_more {
-                    let resp = self
-                        .rds
-                        .describe_db_instances()
-                        .set_marker(marker)
-                        .max_records(100)
-                        .send()
-                        .await
-                        .unwrap();
-                    marker = resp.marker().map(|m| m.to_owned());
-                    let instances = resp.db_instances();
-                    let rdses = instances.as_deref().unwrap();
-                    there_is_more = rdses.len() == 100;
-                    rdses.into_iter().for_each(|rds| {
-                        if let Some(_) = rds.db_name() {
-                            let db_instance_arn = rds.db_instance_arn().unwrap().to_owned();
-                            let db_name = db_instance_arn.split(":").last().unwrap().to_owned();
-                            let tags = rds.tag_list().unwrap();
-                            let mut appname_tag = String::from("");
-                            let mut environment_tag = String::from("");
-                            let endpoint = rds
-                                .endpoint()
-                                .map(|e| Endpoint {
-                                    address: e.address().unwrap().to_owned(),
-                                    port: e.port(),
-                                })
-                                .unwrap()
-                                .clone();
-                            for t in tags {
-                                if t.key().unwrap() == "AppName" {
-                                    appname_tag = t.value().unwrap().to_owned()
-                                }
-                                if t.key().unwrap() == "Environment" {
-                                    environment_tag = t.value().unwrap().to_owned()
-                                }
-                            }
-                            databases.push(DbInstance {
-                                db_name,
-                                db_instance_arn,
-                                endpoint,
-                                appname_tag,
-                                environment_tag,
+    async fn databases(&mut self, env: Env) -> Vec<DbInstance> {
+        if self.cache.databases.is_empty() {
+            let mut there_is_more = true;
+            let mut marker = None;
+            let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap();
+            while there_is_more {
+                let resp = self
+                    .rds
+                    .describe_db_instances()
+                    .set_marker(marker)
+                    .max_records(100)
+                    .send()
+                    .await
+                    .unwrap();
+                marker = resp.marker().map(|m| m.to_owned());
+                let instances = resp.db_instances();
+                let rdses = instances.as_deref().unwrap();
+                there_is_more = rdses.len() == 100;
+                rdses.into_iter().for_each(|rds| {
+                    if let Some(_) = rds.db_name() {
+                        let db_instance_arn = rds.db_instance_arn().unwrap().to_owned();
+                        let name = name_regex
+                            .captures(&db_instance_arn)
+                            .and_then(|c| c.get(2))
+                            .and_then(|c| Some(c.as_str().to_owned()))
+                            .unwrap_or(db_instance_arn.split(":").last().unwrap().to_owned());
+                        let tags = rds.tag_list().unwrap();
+                        let mut appname_tag = String::from("");
+                        let mut environment_tag = String::from("");
+                        let endpoint = rds
+                            .endpoint()
+                            .map(|e| Endpoint {
+                                address: e.address().unwrap().to_owned(),
+                                port: e.port(),
                             })
+                            .unwrap()
+                            .clone();
+                        let mut env = Env::DEVNULL;
+                        for t in tags {
+                            if t.key().unwrap() == "AppName" {
+                                appname_tag = t.value().unwrap().to_owned()
+                            }
+                            if t.key().unwrap() == "Environment" {
+                                environment_tag = t.value().unwrap().to_owned();
+                                env = Env::from_exact(&environment_tag);
+                            }
                         }
-                    });
-                }
-                databases.sort_by(|a, b| a.db_name.cmp(&b.db_name));
-                self.cache.databases = Some(databases.clone());
-                databases.clone()
+                        let db = DbInstance {
+                            name,
+                            arn: db_instance_arn,
+                            endpoint,
+                            appname_tag,
+                            environment_tag,
+                            env: env.clone(),
+                        };
+                        self.cache.databases.push(db)
+                    }
+                });
             }
+            self.cache.databases.sort_by(|a, b| a.name.cmp(&b.name))
         }
+
+        self.cache
+            .databases
+            .iter()
+            .filter(|db| db.env == env)
+            .cloned()
+            .collect()
     }
 }
