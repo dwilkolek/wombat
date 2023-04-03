@@ -4,14 +4,16 @@
 	import star from '$lib/images/star-solid.svg?raw';
 	import type { EcsService } from '../../types';
 	import { userStore } from '../../user-store';
-	import { currentEnv } from '../../env-store';
+	import { envStore } from '../../env-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
 	$: isFavourite = (serviceName: string): boolean => {
 		return !!user.favourite_service_names.find((s) => s == serviceName);
 	};
-	$: services = invoke<EcsService[]>('services', { env: $currentEnv });
+	$: activeCluser = envStore.activeCluser;
+
+	$: services = invoke<EcsService[]>('services', { cluster: $activeCluser });
 	$: matchesFilter = (service: EcsService): boolean => {
 		return arnFilter === '' || service.arn.indexOf(arnFilter) > 0;
 	};
