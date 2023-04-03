@@ -4,13 +4,14 @@
 	import star from '$lib/images/star-solid.svg?raw';
 	import type { DbInstance, EcsService } from '../../types';
 	import { userStore } from '../../user-store';
-	import { currentEnv } from '../../env-store';
+	import { envStore } from '../../env-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
 	$: isFavourite = (serviceName: string): boolean => {
 		return !!user.favourite_service_names.find((s) => s == serviceName);
 	};
+	$: currentEnv = envStore.currentEnv;
 	$: databases = invoke<DbInstance[]>('databases', { env: $currentEnv });
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.indexOf(arnFilter) > 0;

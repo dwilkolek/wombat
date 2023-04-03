@@ -4,12 +4,13 @@
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { Env, type UserConfig } from '../types';
-	import { currentEnv } from '../env-store';
+	import { envStore } from '../env-store';
+
 	const logout = async () => {
 		await invoke('logout');
 		goto('/');
 	};
-
+	let currentEnv = envStore.currentEnv;
 	let userConfig = invoke<UserConfig>('user_config');
 	let envs = Object.keys(Env);
 </script>
