@@ -5,6 +5,7 @@ use aws::{ecs_client, Cluster};
 use shared::BError;
 use std::sync::Arc;
 use std::{collections::HashMap, process::Command};
+use tauri::{Manager, Window};
 use tokio::sync::Mutex;
 use user::UserConfig;
 use warp::http::HeaderValue;
@@ -12,11 +13,15 @@ use warp::hyper::body::Bytes;
 use warp::hyper::Method;
 use warp::Filter as WarpFilter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
-
 mod aws;
 mod shared;
 mod user;
-
+#[derive(Clone, serde::Serialize)]
+struct Payload {
+    resource: String,
+    arn: String,
+    status: String,
+}
 #[tauri::command]
 async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<UserConfig, BError> {
     let user_config = user_config.0.lock().await;
@@ -162,24 +167,40 @@ async fn databases(
     }
 }
 
-// #[tauri::command]
-// async fn start_db_proxy(
-//     db: DbInstance,
-//     state: tauri::State<'_, GlobalThreadSafeState>,
-// ) -> Result<(), ()> {
-//     let mut state = state.0.lock().await;
-//     let bastion = state.bastion(db.env).await;
-//     let profile = state.user_config.clone().last_used_profile.unwrap();
+#[tauri::command]
+async fn start_db_proxy(
+    window: Window,
+    db: aws::DbInstance,
+    port: u16,
+    app_state: tauri::State<'_, AppContextState>,
+) -> Result<(), BError> {
+    let active_profile = {
+        let app_state = app_state.0.lock().await;
+        app_state.active_profile.clone()
+    };
+    if let Some(active_profile) = active_profile {
+        let ec2Client = aws::ec2_client(&active_profile).await;
+        let bastions = aws::bastions(&ec2Client).await;
+        let bastion = bastions
+            .into_iter()
+            .find(|b| b.env == db.env)
+            .expect("No bastion found");
 
-//     start_aws_ssm_proxy(
-//         bastion.instance_id,
-//         profile,
-//         db.endpoint.address,
-//         db.endpoint.port,
-//         8081,
-//     );
-//     Ok(())
-// }
+        start_aws_ssm_proxy(
+            db.arn,
+            window,
+            bastion.instance_id,
+            active_profile,
+            db.endpoint.address,
+            db.endpoint.port,
+            port,
+        );
+        Ok(())
+    } else {
+        Err(BError::new("start_db_proxy", "Failed to start"))
+    }
+}
+
 // #[tauri::command]
 // async fn open_dbeaver(
 //     db: DbInstance,
@@ -276,19 +297,31 @@ async fn start_proxy_to_aws_proxy(service_header: Option<String>, aws_port: u16)
 
 //untested
 fn start_aws_ssm_proxy(
+    arn: String,
+    window: Window,
     bastion: String,
     profile: String,
     target: String,
     target_port: u16,
     local_port: u16,
 ) {
-    tokio::task::spawn(async move {
+    let handle = tokio::task::spawn(async move {
         // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
         // aws ssm start-session \
         //  --target "$instance" \
         //  --profile "$profile" \
         //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
         //  --parameters "$parameters"
+        window
+            .emit(
+                "db-proxy",
+                Payload {
+                    arn: arn.clone(),
+                    resource: "db".into(),
+                    status: "START".into(),
+                },
+            )
+            .unwrap();
         let output = Command::new("aws")
             .args([
                 "ssm",
@@ -307,6 +340,16 @@ fn start_aws_ssm_proxy(
             ])
             .output()
             .expect("failed to execute process");
+        window
+            .emit(
+                "db-proxy",
+                Payload {
+                    arn: arn.clone(),
+                    resource: "db".into(),
+                    status: "END".into(),
+                },
+            )
+            .unwrap();
         println!("THE END");
         dbg!(output);
     });
@@ -333,8 +376,8 @@ async fn main() {
             set_dbeaver_path,
             toggle_service_favourite,
             toggle_db_favourite,
+            start_db_proxy,
             // open_dbeaver,
-            // start_db_proxy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
