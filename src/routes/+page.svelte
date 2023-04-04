@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userStore } from './user-store';
+	import { userStore } from '$lib/user-store';
 	import { open } from '@tauri-apps/api/shell';
+	import { version } from '$app/environment';
+
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
 	};
@@ -17,7 +19,7 @@
 </script>
 
 <svelte:head>
-	<title>Home</title>
+	<title>HOME</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 {#await subscribe then _}
@@ -70,7 +72,7 @@
 						openGithubPage();
 					}}
 					target="_blank"
-					>https://github.com/dwilkolek/wombat
+					>https://github.com/dwilkolek/wombat v{version}
 				</a>
 			</div>
 		</div>

@@ -1,9 +1,11 @@
 import { invoke } from '@tauri-apps/api';
 import { writable } from 'svelte/store';
-import type { UserConfig } from './types';
-
+import type { UserConfig } from '../routes/types';
+import { version } from '$app/environment';
+declare const gtag: any;
 const createUserStore = () => {
 	const { subscribe, set } = writable<UserConfig>({
+		id: undefined,
 		dbeaver_path: undefined,
 		favourite_db_arns: [],
 		favourite_service_names: [],
@@ -11,7 +13,6 @@ const createUserStore = () => {
 		last_used_profile: undefined
 	});
 	invoke<UserConfig>('user_config').then((userConfig) => {
-		console.log('user_config', userConfig);
 		set(userConfig);
 	});
 

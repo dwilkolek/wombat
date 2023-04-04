@@ -3,9 +3,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::shared::BError;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserConfig {
+    id: Uuid,
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
     favourite_service_names: HashSet<String>,
@@ -19,6 +21,7 @@ impl UserConfig {
         let user_config = match std::fs::read_to_string(config_file) {
             Ok(json) => serde_json::from_str::<UserConfig>(&json).unwrap(),
             Err(_) => UserConfig {
+                id: Uuid::new_v4(),
                 last_used_profile: None,
                 known_profiles: HashSet::new(),
                 favourite_db_arns: HashSet::new(),

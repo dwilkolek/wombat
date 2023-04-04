@@ -3,8 +3,8 @@
 	import Icon from '$lib/images/32x32.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { Env, type UserConfig } from '../types';
-	import { envStore } from '../env-store';
+	import { Env, type UserConfig } from '$lib/types';
+	import { envStore } from '$lib/env-store';
 
 	const logout = async () => {
 		await invoke('logout');
