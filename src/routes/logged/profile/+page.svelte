@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { prevent_default } from 'svelte/internal';
-	import type { UserConfig } from '../../types';
-	import { userStore } from '../../user-store';
+	import type { UserConfig } from '$lib/types';
+	import { userStore } from '$lib/user-store';
 
 	let user = $userStore;
 	let dbeaver_path = user?.dbeaver_path ?? '';
 </script>
 
 <svelte:head>
-	<title>Profile</title>
+	<title>PROFILE</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="max-w-md mx-auto">

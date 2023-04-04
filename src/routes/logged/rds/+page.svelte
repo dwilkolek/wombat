@@ -2,9 +2,9 @@
 	import Icon from 'svelte-icon/Icon.svelte';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import star from '$lib/images/star-solid.svg?raw';
-	import type { DbInstance, EcsService } from '../../types';
-	import { userStore } from '../../user-store';
-	import { envStore } from '../../env-store';
+	import type { DbInstance, EcsService } from '$lib/types';
+	import { userStore } from '$lib/user-store';
+	import { envStore } from '$lib/env-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -19,7 +19,7 @@
 </script>
 
 <svelte:head>
-	<title>ECS</title>
+	<title>RDS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="h-full block">

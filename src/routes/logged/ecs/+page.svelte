@@ -2,9 +2,9 @@
 	import Icon from 'svelte-icon/Icon.svelte';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import star from '$lib/images/star-solid.svg?raw';
-	import type { EcsService } from '../../types';
-	import { userStore } from '../../user-store';
-	import { envStore } from '../../env-store';
+	import type { EcsService } from '$lib/types';
+	import { userStore } from '$lib/user-store';
+	import { envStore } from '$lib/env-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -13,7 +13,7 @@
 	};
 	$: activeCluser = envStore.activeCluser;
 
-	$: services = invoke<EcsService[]>('services', { cluster: $activeCluser });
+	$: services = $activeCluser ? invoke<EcsService[]>('services', { cluster: $activeCluser }) : [];
 	$: matchesFilter = (service: EcsService): boolean => {
 		return arnFilter === '' || service.arn.indexOf(arnFilter) > 0;
 	};

@@ -11,6 +11,7 @@ export type Cluster = {
 	env: Env;
 };
 export type UserConfig = {
+	id: string | undefined;
 	last_used_profile: string | undefined;
 	known_profiles: string[];
 	favourite_service_names: string[];
