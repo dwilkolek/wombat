@@ -1,11 +1,30 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { writable } from 'svelte/store';
 	import { version } from '$app/environment';
 	import { userStore } from '$lib/user-store';
+	let last_push = writable<UserConfig>();
 	$: user = userStore;
 	$: {
-		if (typeof gtag !== 'undefined') {
+		if (
+			typeof gtag !== 'undefined' &&
+			JSON.stringify($last_push) !=
+				JSON.stringify({
+					page_title: document.title,
+					page_path: $page.url.pathname,
+					user_id: $user.id,
+					appName: 'wombat',
+					appVersion: version
+				})
+		) {
 			console.log('pushout:', {
+				page_title: document.title,
+				page_path: $page.url.pathname,
+				user_id: $user.id,
+				appName: 'wombat',
+				appVersion: version
+			});
+			last_push.set({
 				page_title: document.title,
 				page_path: $page.url.pathname,
 				user_id: $user.id,

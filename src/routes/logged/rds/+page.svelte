@@ -5,6 +5,7 @@
 	import type { DbInstance, EcsService } from '$lib/types';
 	import { userStore } from '$lib/user-store';
 	import { envStore } from '$lib/env-store';
+	import { taskStore } from '$lib/task-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -16,6 +17,7 @@
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.indexOf(arnFilter) > 0;
 	};
+	$: console.log('tasks', $taskStore);
 </script>
 
 <svelte:head>
@@ -70,9 +72,10 @@
 							<td>
 								<button
 									class="btn btn-focus"
+									disabled={$taskStore.find((t) => t.arn == db.arn)}
 									on:click={() => {
-										invoke('start_db_proxy', { db });
-									}}>Proxy</button
+										invoke('start_db_proxy', { db, port: 10000 });
+									}}>{$taskStore.find((t) => t.arn == db.arn) ? 'RUNNING' : 'START PROXY'}</button
 								>
 							</td>
 						</tr>

@@ -1,8 +1,7 @@
 import { invoke } from '@tauri-apps/api';
 import { writable } from 'svelte/store';
-import type { UserConfig } from '../routes/types';
-import { version } from '$app/environment';
-declare const gtag: any;
+import type { UserConfig } from './types';
+
 const createUserStore = () => {
 	const { subscribe, set } = writable<UserConfig>({
 		id: undefined,
