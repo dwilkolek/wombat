@@ -1,9 +1,14 @@
+use std::fmt;
+
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
+use aws_sdk_secretsmanager as secretsmanager;
 use ec2::types::Filter;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+
+use crate::shared::BError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Env {
@@ -14,7 +19,18 @@ pub enum Env {
     DEMO,
     PROD,
 }
-
+impl fmt::Display for Env {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Env::DEVNULL => write!(f, "devnull"),
+            Env::PLAY => write!(f, "play"),
+            Env::LAB => write!(f, "lab"),
+            Env::DEV => write!(f, "dev"),
+            Env::DEMO => write!(f, "demo"),
+            Env::PROD => write!(f, "prod"),
+        }
+    }
+}
 impl Env {
     pub fn from_exact(str: &str) -> Env {
         match str {
@@ -66,6 +82,17 @@ pub struct DbInstance {
     pub appname_tag: String,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DbSecret {
+    dbInstanceIdentifier: String,
+    pub dbname: String,
+    engine: String,
+    host: String,
+    pub password: String,
+    port: u16,
+    pub username: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EcsService {
     pub name: String,
@@ -92,6 +119,11 @@ pub async fn rds_client(profile: &str) -> rds::Client {
 pub async fn ec2_client(profile: &str) -> ec2::Client {
     let config = aws_config::from_env().profile_name(profile).load().await;
     ec2::Client::new(&config)
+}
+
+pub async fn secretsmanager_client(profile: &str) -> secretsmanager::Client {
+    let config = aws_config::from_env().profile_name(profile).load().await;
+    secretsmanager::Client::new(&config)
 }
 
 pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
@@ -246,4 +278,37 @@ pub async fn databases(rds: &rds::Client) -> Vec<DbInstance> {
     }
     databases.sort_by(|a, b| a.name.cmp(&b.name));
     databases
+}
+
+pub async fn db_secret(
+    client: &secretsmanager::Client,
+    secret_identified: &str,
+) -> Result<DbSecret, BError> {
+    let filter = secretsmanager::types::Filter::builder()
+        .key("name".into())
+        .values(secret_identified)
+        .build();
+    let secret_arn = client.list_secrets().filters(filter).send().await;
+
+    let secret_arn = secret_arn.expect("Failed to fetch!");
+    let secret_arn = secret_arn.secret_list().expect("No arn list!");
+    if secret_arn.len() == 1 {
+        let secret_arn = secret_arn.first().unwrap();
+        let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
+
+        let secret = client
+            .get_secret_value()
+            .secret_id(secret_arn.clone())
+            .send()
+            .await;
+        if secret.is_err() {
+            return Err(BError::new("db_secret", "No secrets found"));
+        }
+        let secret = secret.unwrap();
+        let secret = secret.secret_string().expect("There should be a secret");
+        let secret = serde_json::from_str::<DbSecret>(secret).expect("Deserialzied DbSecret");
+        return Ok(secret);
+    } else {
+        return Err(BError::new("db_secret", "No secrets found"));
+    }
 }

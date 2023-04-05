@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::shared::BError;
@@ -12,7 +12,7 @@ pub struct UserConfig {
     known_profiles: HashSet<String>,
     favourite_service_names: HashSet<String>,
     favourite_db_arns: HashSet<String>,
-    dbeaver_path: Option<String>,
+    pub dbeaver_path: Option<String>,
 }
 
 impl UserConfig {
