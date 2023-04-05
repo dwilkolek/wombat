@@ -28,7 +28,7 @@
 	<table class="table w-full table-zebra table-compact">
 		<thead class="sticky top-0">
 			<tr>
-				<th>
+				<th colspan="3">
 					<div class="flex gap-2">
 						Info
 						<input
@@ -39,7 +39,6 @@
 						/>
 					</div>
 				</th>
-				<th class="w-40">Monitor</th>
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
@@ -69,6 +68,19 @@
 									</div>
 								</div>
 							</td>
+							<td>
+								<button
+									class="btn btn-focus"
+									disabled={!$taskStore.find((t) => t.arn == db.arn)}
+									on:click={() => {
+										invoke('open_dbeaver', {
+											db,
+											port: $taskStore.find((t) => t.arn == db.arn).port
+										});
+									}}>Open in dbeaver</button
+								>
+							</td>
+
 							<td>
 								<button
 									class="btn btn-focus"

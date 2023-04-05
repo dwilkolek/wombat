@@ -5,7 +5,7 @@ use aws::{ecs_client, Cluster};
 use shared::BError;
 use std::sync::Arc;
 use std::{collections::HashMap, process::Command};
-use tauri::{Manager, Window};
+use tauri::Window;
 use tokio::sync::Mutex;
 use user::UserConfig;
 use warp::http::HeaderValue;
@@ -16,11 +16,14 @@ use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_respo
 mod aws;
 mod shared;
 mod user;
+use rand::Rng;
+
 #[derive(Clone, serde::Serialize)]
 struct Payload {
     resource: String,
     arn: String,
     status: String,
+    port: u16,
 }
 #[tauri::command]
 async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<UserConfig, BError> {
@@ -34,8 +37,7 @@ async fn toggle_service_favourite(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.toggle_service_favourite(service_name);
-    Ok(user_config.clone())
+    user_config.toggle_service_favourite(service_name)
 }
 
 #[tauri::command]
@@ -44,8 +46,7 @@ async fn toggle_db_favourite(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.toggle_db_favourite(db_arn);
-    Ok(user_config.clone())
+    user_config.toggle_db_favourite(db_arn)
 }
 
 #[tauri::command]
@@ -57,7 +58,7 @@ async fn login(
     let ecs_client = aws::ecs_client(profile).await;
     if !aws::is_logged(&ecs_client).await {
         println!("Trigger log in into AWS");
-        let output = Command::new("aws")
+        Command::new("aws")
             .args(["sso", "login", "--profile", &profile])
             .output()
             .expect("failed to execute process");
@@ -178,9 +179,10 @@ async fn start_db_proxy(
         let app_state = app_state.0.lock().await;
         app_state.active_profile.clone()
     };
+    let local_port = rand::thread_rng().gen_range(52100..52200);
     if let Some(active_profile) = active_profile {
-        let ec2Client = aws::ec2_client(&active_profile).await;
-        let bastions = aws::bastions(&ec2Client).await;
+        let ec2_client = aws::ec2_client(&active_profile).await;
+        let bastions = aws::bastions(&ec2_client).await;
         let bastion = bastions
             .into_iter()
             .find(|b| b.env == db.env)
@@ -193,7 +195,7 @@ async fn start_db_proxy(
             active_profile,
             db.endpoint.address,
             db.endpoint.port,
-            port,
+            local_port,
         );
         Ok(())
     } else {
@@ -201,32 +203,73 @@ async fn start_db_proxy(
     }
 }
 
-// #[tauri::command]
-// async fn open_dbeaver(
-//     db: DbInstance,
-//     state: tauri::State<'_, GlobalThreadSafeState>,
-// ) -> Result<(), ()> {
-// fn db_beaver_con_parma(arn: &str, db_name: &str, host: &str, user: &str, password: &str) -> String {
-//     format!(
-//         "driver=postgres|id={}|name={}|host={}|user={}|password={}|openConsole=true|folder=wombat|create=true|save=true",
-//         arn, db_name, host, user, password
-//     )
-// }
-// let app_state = state.0.lock().await;
-// let dbeaver_path = &app_state
-//     .user_config
-//     .dbeaver_path
-//     .as_ref()
-//     .expect("DBeaver needs to be configured")
-//     .clone();
+#[tauri::command]
+async fn open_dbeaver(
+    db: aws::DbInstance,
+    port: u16,
+    user_config: tauri::State<'_, UserConfigState>,
+    app_state: tauri::State<'_, AppContextState>,
+) -> Result<(), BError> {
+    fn db_beaver_con_parma(
+        arn: &str,
+        db_name: &str,
+        host: &str,
+        port: u16,
+        user: &str,
+        password: &str,
+    ) -> String {
+        let cmd = format!(
+        "driver=postgresql|id={}|name={}|host={}|port={}|user={}|password={}|openConsole=true|folder=wombat|create=true|save=true",
+        arn, db_name, host,port, user, password
+        );
+        dbg!(&cmd);
+        cmd
+    }
 
-// Command::new(dbeaver_path)
-//     .args(["-con", &db_beaver_con_parma("", "", "", "", "")])
-//     .output()
-//     .expect("failed to execute process");
-// return Ok(());
-//     todo!()
-// }
+    let dbeaver_path = &user_config
+        .0
+        .lock()
+        .await
+        .dbeaver_path
+        .as_ref()
+        .expect("DBeaver needs to be configured")
+        .clone();
+    let active_profile = {
+        let app_state = app_state.0.lock().await;
+        app_state.active_profile.clone()
+    };
+    //"crush-dev/db-credentials"
+    if let Some(active_profile) = active_profile {
+        let db_secret = aws::db_secret(
+            &aws::secretsmanager_client(&active_profile).await,
+            &format!("{}-{}/db-credentials", db.name, db.env),
+        )
+        .await
+        .expect("Secret required");
+        // let active_profile = {
+        //     let app_state = app_state.0.lock().await;
+        //     app_state.active_profile.clone()
+        // };
+
+        let output = Command::new(dbeaver_path)
+            .args([
+                "-con",
+                &db_beaver_con_parma(
+                    &db.arn,
+                    &db.arn.split(":").last().unwrap(),
+                    "localhost",
+                    port,
+                    &db_secret.username,
+                    &db_secret.password,
+                ),
+            ])
+            .output()
+            .expect("failed to execute process");
+        return Ok(());
+    } else {
+        Err(BError::new("open_dbeaver", "Failed to start"))
+    }
+}
 
 // #[tauri::command]
 // async fn start_local_proxy(
@@ -305,7 +348,7 @@ fn start_aws_ssm_proxy(
     target_port: u16,
     local_port: u16,
 ) {
-    let handle = tokio::task::spawn(async move {
+    tokio::task::spawn(async move {
         // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
         // aws ssm start-session \
         //  --target "$instance" \
@@ -319,6 +362,7 @@ fn start_aws_ssm_proxy(
                     arn: arn.clone(),
                     resource: "db".into(),
                     status: "START".into(),
+                    port: local_port,
                 },
             )
             .unwrap();
@@ -347,6 +391,7 @@ fn start_aws_ssm_proxy(
                     arn: arn.clone(),
                     resource: "db".into(),
                     status: "END".into(),
+                    port: local_port,
                 },
             )
             .unwrap();
@@ -377,7 +422,7 @@ async fn main() {
             toggle_service_favourite,
             toggle_db_favourite,
             start_db_proxy,
-            // open_dbeaver,
+            open_dbeaver,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
