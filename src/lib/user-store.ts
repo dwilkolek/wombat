@@ -1,17 +1,17 @@
 import { invoke } from '@tauri-apps/api';
 import { writable } from 'svelte/store';
+import { execute } from './error-store';
 import type { UserConfig } from './types';
 
 const createUserStore = () => {
 	const { subscribe, set } = writable<UserConfig>({
 		id: undefined,
 		dbeaver_path: undefined,
-		favourite_db_arns: [],
-		favourite_service_names: [],
+		favourite_names: [],
 		known_profiles: [],
 		last_used_profile: undefined
 	});
-	invoke<UserConfig>('user_config').then((userConfig) => {
+	execute<UserConfig>('user_config').then((userConfig) => {
 		set(userConfig);
 	});
 
@@ -19,43 +19,22 @@ const createUserStore = () => {
 		console.log('new! user_config', userConfig);
 	});
 	const setDbeaverPath = async (path: string) => {
-		try {
-			const config = await invoke<UserConfig>('set_dbeaver_path', { dbeaverPath: path });
-			set(config);
-		} catch (e) {
-			console.error('Whoops', e);
-		}
+		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path });
+		set(config);
 	};
 
 	const login = async (profile: string) => {
-		try {
-			const config = await invoke<UserConfig>('login', { profile });
-			set(config);
-		} catch (e) {
-			console.error('Whoops', e);
-		}
+		const config = await execute<UserConfig>('login', { profile });
+		set(config);
 	};
 
-	const favoriteService = async (service_name: string) => {
-		try {
-			const config = await invoke<UserConfig>('toggle_service_favourite', {
-				serviceName: service_name
-			});
-			set(config);
-		} catch (e) {
-			console.error('Whoops', e);
-		}
+	const favoriteToggle = async (name: string) => {
+		const config = await execute<UserConfig>('toggle_favourite', {
+			name: name
+		});
+		set(config);
 	};
 
-	const favoriteDb = async (db_arn: string) => {
-		try {
-			const config = await invoke<UserConfig>('toggle_db_favourite', { dbArn: db_arn });
-			set(config);
-		} catch (e) {
-			console.error('Whoops', e);
-		}
-	};
-
-	return { subscribe, login, setDbeaverPath, favoriteService, favoriteDb };
+	return { subscribe, login, setDbeaverPath, favoriteToggle };
 };
 export const userStore = createUserStore();

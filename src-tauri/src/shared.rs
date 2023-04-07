@@ -8,8 +8,8 @@ pub struct BError {
 impl BError {
     pub fn new(command: &str, message: impl Into<String>) -> BError {
         BError {
-            command: message.into(),
-            message: command.to_owned(),
+            command: command.to_owned(),
+            message: message.into(),
         }
     }
 }

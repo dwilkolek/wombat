@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, process::Command};
 use tauri::Window;
 use tokio::sync::Mutex;
+use urlencoding::encode;
 use user::UserConfig;
 use warp::http::HeaderValue;
 use warp::hyper::body::Bytes;
@@ -16,7 +17,6 @@ use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_respo
 mod aws;
 mod shared;
 mod user;
-use rand::Rng;
 
 #[derive(Clone, serde::Serialize)]
 struct Payload {
@@ -32,21 +32,12 @@ async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<U
 }
 
 #[tauri::command]
-async fn toggle_service_favourite(
-    service_name: &str,
+async fn toggle_favourite(
+    name: &str,
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.toggle_service_favourite(service_name)
-}
-
-#[tauri::command]
-async fn toggle_db_favourite(
-    db_arn: &str,
-    user_config: tauri::State<'_, UserConfigState>,
-) -> Result<UserConfig, BError> {
-    let mut user_config = user_config.0.lock().await;
-    user_config.toggle_db_favourite(db_arn)
+    user_config.toggle_favourite(name)
 }
 
 #[tauri::command]
@@ -172,14 +163,15 @@ async fn databases(
 async fn start_db_proxy(
     window: Window,
     db: aws::DbInstance,
-    port: u16,
+    user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
 ) -> Result<(), BError> {
     let active_profile = {
         let app_state = app_state.0.lock().await;
         app_state.active_profile.clone()
     };
-    let local_port = rand::thread_rng().gen_range(52100..52200);
+    let local_port = user_config.0.lock().await.get_db_port(&db.arn);
+
     if let Some(active_profile) = active_profile {
         let ec2_client = aws::ec2_client(&active_profile).await;
         let bastions = aws::bastions(&ec2_client).await;
@@ -219,10 +211,9 @@ async fn open_dbeaver(
         password: &str,
     ) -> String {
         let cmd = format!(
-        "driver=postgresql|id={}|name={}|host={}|port={}|user={}|password={}|openConsole=true|folder=wombat|create=true|save=true",
-        arn, db_name, host,port, user, password
+        "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|url=jdbc:postgresql://{}:{}/postgres?user={}&password={}",
+        db_name, db_name, host,port, user, encode(password)
         );
-        dbg!(&cmd);
         cmd
     }
 
@@ -238,7 +229,7 @@ async fn open_dbeaver(
         let app_state = app_state.0.lock().await;
         app_state.active_profile.clone()
     };
-    //"crush-dev/db-credentials"
+
     if let Some(active_profile) = active_profile {
         let db_secret = aws::db_secret(
             &aws::secretsmanager_client(&active_profile).await,
@@ -246,10 +237,6 @@ async fn open_dbeaver(
         )
         .await
         .expect("Secret required");
-        // let active_profile = {
-        //     let app_state = app_state.0.lock().await;
-        //     app_state.active_profile.clone()
-        // };
 
         let output = Command::new(dbeaver_path)
             .args([
@@ -419,8 +406,7 @@ async fn main() {
             services,
             databases,
             set_dbeaver_path,
-            toggle_service_favourite,
-            toggle_db_favourite,
+            toggle_favourite,
             start_db_proxy,
             open_dbeaver,
         ])

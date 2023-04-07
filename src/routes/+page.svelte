@@ -15,7 +15,7 @@
 	});
 
 	let loading = false;
-	let storeErr = '';
+	let loginError = '';
 </script>
 
 <svelte:head>
@@ -38,6 +38,7 @@
 						<input
 							id="aws-profile"
 							type="text"
+							autocomplete="false"
 							placeholder="AWS profile"
 							class="input input-bordered w-full max-w-xs"
 							bind:value={profile}
@@ -50,17 +51,19 @@
 							class="btn btn-accent"
 							disabled={loading}
 							on:click={async () => {
-								loading = true;
-								await login(profile);
-								loading = false;
-								goto(`/logged/ecs`, { replaceState: true });
+								try {
+									loginError = '';
+									loading = true;
+									await login(profile);
+									loading = false;
+									goto(`/logged/ecs`, { replaceState: true });
+								} catch (e) {
+									loading = false;
+								}
 							}}
 						>
 							{loading ? 'Preloading...' : 'Get Start'}</button
 						>
-					</div>
-					<div>
-						<p>{storeErr ?? ''}</p>
 					</div>
 				</div>
 			</div>
