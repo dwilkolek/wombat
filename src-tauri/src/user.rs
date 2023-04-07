@@ -1,5 +1,6 @@
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::shared::BError;
@@ -10,8 +11,8 @@ pub struct UserConfig {
     id: Uuid,
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
-    favourite_service_names: HashSet<String>,
-    favourite_db_arns: HashSet<String>,
+    favourite_names: HashSet<String>,
+    db_proxy_port_map: HashMap<String, u16>,
     pub dbeaver_path: Option<String>,
 }
 
@@ -24,8 +25,8 @@ impl UserConfig {
                 id: Uuid::new_v4(),
                 last_used_profile: None,
                 known_profiles: HashSet::new(),
-                favourite_db_arns: HashSet::new(),
-                favourite_service_names: HashSet::new(),
+                favourite_names: HashSet::new(),
+                db_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
             },
         };
@@ -34,6 +35,21 @@ impl UserConfig {
 
     fn config_path() -> PathBuf {
         home::home_dir().unwrap().as_path().join(".wombat.json")
+    }
+
+    pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
+        if let Some(port) = self.db_proxy_port_map.get(db_arn) {
+            *port
+        } else {
+            let mut possible_port = rand::thread_rng().gen_range(52000..53000);
+            while self.db_proxy_port_map.values().any(|p| *p == possible_port) {
+                possible_port = rand::thread_rng().gen_range(52000..53000);
+            }
+            self.db_proxy_port_map
+                .insert(db_arn.to_owned(), possible_port);
+            self.save();
+            possible_port
+        }
     }
 
     pub fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
@@ -52,22 +68,11 @@ impl UserConfig {
         self.save()
     }
 
-    pub fn toggle_service_favourite(&mut self, service_name: &str) -> Result<UserConfig, BError> {
-        if !self
-            .favourite_service_names
-            .remove(&service_name.to_owned())
-        {
-            self.favourite_service_names.insert(service_name.to_owned());
+    pub fn toggle_favourite(&mut self, name: &str) -> Result<UserConfig, BError> {
+        if !self.favourite_names.remove(&name.to_owned()) {
+            self.favourite_names.insert(name.to_owned());
         }
 
-        self.save();
-        Ok(self.clone())
-    }
-
-    pub fn toggle_db_favourite(&mut self, db_arn: &str) -> Result<UserConfig, BError> {
-        if !self.favourite_db_arns.remove(&db_arn.to_owned()) {
-            self.favourite_db_arns.insert(db_arn.to_owned());
-        }
         self.save();
         Ok(self.clone())
     }

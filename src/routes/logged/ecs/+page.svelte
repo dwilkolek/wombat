@@ -5,15 +5,18 @@
 	import type { EcsService } from '$lib/types';
 	import { userStore } from '$lib/user-store';
 	import { envStore } from '$lib/env-store';
+	import { execute } from '$lib/error-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
 	$: isFavourite = (serviceName: string): boolean => {
-		return !!user.favourite_service_names.find((s) => s == serviceName);
+		return !!user.favourite_names.find((s) => s == serviceName);
 	};
 	$: activeCluser = envStore.activeCluser;
 
-	$: services = $activeCluser ? invoke<EcsService[]>('services', { cluster: $activeCluser }) : [];
+	$: services = $activeCluser
+		? execute<EcsService[]>('services', { cluster: $activeCluser }, true)
+		: [];
 	$: matchesFilter = (service: EcsService): boolean => {
 		return arnFilter === '' || service.arn.indexOf(arnFilter) > 0;
 	};
@@ -32,6 +35,7 @@
 						Info
 						<input
 							type="text"
+							autocomplete="false"
 							placeholder="Looking for something?"
 							class="input input-bordered w-full max-w-xs input-xs"
 							bind:value={arnFilter}
@@ -50,7 +54,7 @@
 								<div class="flex flex-row items-stretch gap-1">
 									<button
 										on:click={() => {
-											userStore.favoriteService(service.name);
+											userStore.favoriteToggle(service.name);
 										}}
 									>
 										<Icon

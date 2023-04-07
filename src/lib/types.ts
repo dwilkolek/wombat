@@ -14,8 +14,7 @@ export type UserConfig = {
 	id: string | undefined;
 	last_used_profile: string | undefined;
 	known_profiles: string[];
-	favourite_service_names: string[];
-	favourite_db_arns: string[];
+	favourite_names: string[];
 	dbeaver_path: string | undefined;
 };
 
@@ -41,4 +40,9 @@ export type DbInstance = {
 export type MonitoringConfig = {
 	service_arn: string | undefined;
 	database_arn: string | undefined;
+};
+
+export type BError = {
+	message: string;
+	command: string;
 };
