@@ -8,7 +8,6 @@
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
 	import { open } from '@tauri-apps/api/shell';
-	import { prevent_default } from 'svelte/internal';
 
 	let arnFilter = '';
 	$: user = $userStore;
