@@ -14,7 +14,7 @@
 {#if service}
 	<div class="flex flex-row gap-2 items-start pr-4">
 		<span
-			class={`font-bold ${
+			class={`${
 				entries[service?.name][lower_rank_env] &&
 				entries[service?.name][lower_rank_env]?.service?.version != 'latest' &&
 				entries[service?.name][lower_rank_env]?.service?.version !=

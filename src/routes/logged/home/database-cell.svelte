@@ -8,7 +8,7 @@
 </script>
 
 {#if database}
-	<div class="font-bold">
+	<div class="">
 		{#if !$taskStore.find((t) => t.arn == database?.arn)}
 			<button
 				class="btn btn-sm btn-focus"
