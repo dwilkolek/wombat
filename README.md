@@ -2,6 +2,8 @@
 
 A Portal to AWS created to checkout Tauri and Svelte.
 
+![Wombat homepage](https://github.com/dwilkolek/wombat/blob/main/docs/wombat-homepage.png?raw=true)
+
 ## Features
 
 - Proxy to RDS
