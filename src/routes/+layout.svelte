@@ -9,7 +9,7 @@
 	<Analytics />
 	<ErrorBox />
 	{#if $loading}
-		<div class="absolute z-50 backdrop-blur-sm w-full h-screen flex items-center">
+		<div class="fixed z-50 backdrop-blur-sm w-full h-screen flex items-center">
 			<span class="mx-auto my-10">Loading {$loading}</span>
 		</div>
 	{/if}

@@ -31,6 +31,16 @@
 				</tr>
 			</thead>
 			<tbody class="overflow-y-auto max-h-96">
+				{#if keys.length === 0}
+					<tr>
+						<td colspan="7">
+							<h1 class="text-center text-lg">
+								Nothing here. Visit Services & Databases tabs and start things you want to track
+								from each environemnt. 👻
+							</h1>
+						</td>
+					</tr>
+				{/if}
 				{#each keys as key}
 					<tr>
 						<td>
