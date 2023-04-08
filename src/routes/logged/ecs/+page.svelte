@@ -6,6 +6,9 @@
 	import { userStore } from '$lib/user-store';
 	import { envStore } from '$lib/env-store';
 	import { execute } from '$lib/error-store';
+	import { taskStore } from '$lib/task-store';
+	import { open } from '@tauri-apps/api/shell';
+	import { prevent_default } from 'svelte/internal';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -42,7 +45,7 @@
 						/>
 					</div>
 				</th>
-				<th class="w-40">Monitor</th>
+				<th class="w-40 pr-2">Proxy</th>
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
@@ -72,7 +75,26 @@
 								</div>
 							</td>
 							<td>
-								<button class="btn btn-focus" disabled={true}>Proxy</button>
+								<div class="flex flex-col">
+									{#if !$taskStore.find((t) => t.arn == service.arn)}
+										<button
+											class="btn btn-focus"
+											on:click={() => {
+												invoke('start_service_proxy', { service });
+											}}>Start proxy</button
+										>{/if}
+									{#if $taskStore.find((t) => t.arn == service.arn)}
+										<button
+											class="underline"
+											on:click|preventDefault={() => {
+												open(
+													'http://localhost:' + $taskStore.find((t) => t.arn == service.arn)?.port
+												);
+											}}
+											>Running on port: {$taskStore.find((t) => t.arn == service.arn)?.port}</button
+										>
+									{/if}
+								</div>
 							</td>
 						</tr>
 					{/if}

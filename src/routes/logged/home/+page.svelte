@@ -4,6 +4,7 @@
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
 	import DatabaseCell from './database-cell.svelte';
+	import ServiceCell from './service-cell.svelte';
 	$: homeStore.init();
 	$: entries = $homeStore;
 	$: keys = entries ? Object.keys(entries) : [];
@@ -19,7 +20,7 @@
 			<thead class="sticky top-0">
 				<tr>
 					<th>
-						<div class="flex gap-2">Service Name</div>
+						<div class="flex gap-2">Service</div>
 					</th>
 					<th class="w-40">ECS DEV</th>
 					<th class="w-40">ECS DEMO</th>
@@ -56,85 +57,23 @@
 							</span>
 						</td>
 						<td class="align-top">
-							<div class="flex flex-col gap-2 items-start pr-4">
-								<span class="font-bold">{entries[key][AwsEnv.DEV]?.service?.version ?? '??'}</span>
-							</div>
+							<ServiceCell service={entries[key][AwsEnv.DEV]?.service} />
 						</td>
 						<td class="align-top">
-							<div class="flex flex-col gap-2 items-start pr-4">
-								<span
-									class={`font-bold ${
-										entries[key][AwsEnv.DEV] &&
-										entries[key][AwsEnv.DEMO]?.service?.version !=
-											entries[key][AwsEnv.DEV]?.service?.version
-											? 'text-warning'
-											: ''
-									}`}
-								>
-									{entries[key][AwsEnv.DEMO]?.service?.version ?? '??'}</span
-								>
-							</div>
+							<ServiceCell service={entries[key][AwsEnv.DEMO]?.service} />
 						</td>
 						<td class="align-top">
-							<div class="flex flex-col gap-2 items-start pr-4">
-								<span
-									class={`font-bold ${
-										entries[key][AwsEnv.DEMO] &&
-										entries[key][AwsEnv.PROD]?.service?.version !=
-											entries[key][AwsEnv.DEMO]?.service?.version
-											? 'text-error'
-											: ''
-									}`}
-								>
-									{entries[key][AwsEnv.PROD]?.service?.version ?? '??'}</span
-								>
-							</div>
+							<ServiceCell service={entries[key][AwsEnv.PROD]?.service} />
 						</td>
 						<td class="align-top">
-							<div class="flex flex-col gap-2 items-start pr-4">
-								<DatabaseCell database={entries[key][AwsEnv.DEV]?.db} />
-							</div>
+							<DatabaseCell database={entries[key][AwsEnv.DEV]?.db} />
 						</td>
 						<td class="align-top">
-							<div class="flex flex-col gap-2 items-start pr-4">
-								<DatabaseCell database={entries[key][AwsEnv.DEMO]?.db} />
-							</div>
+							<DatabaseCell database={entries[key][AwsEnv.DEMO]?.db} />
 						</td>
 						<td class="align-top">
-							<div class="flex flex-col gap-2 items-start pr-4">
-								<DatabaseCell database={entries[key][AwsEnv.PROD]?.db} />
-							</div>
+							<DatabaseCell database={entries[key][AwsEnv.PROD]?.db} />
 						</td>
-						<!-- <div class="font-bold">
-								{#if !$taskStore.find((t) => t.arn == db.arn)}
-
-									<button
-										class="btn btn-focus"
-										disabled={!!$taskStore.find((t) => t.arn == db.arn)}
-										on:click={() => {
-											execute('start_db_proxy', { db });
-										}}>START PROXY</button
-									>
-								{/if}
-								{#if $taskStore.find((t) => t.arn == db.arn)}
-									Running on port: {$taskStore.find((t) => t.arn == db.arn)?.port}
-								{/if}
-							</div>
-							<div class="font-bold">
-								{#if !$taskStore.find((t) => t.arn == db.arn)}
-									<button
-										class="btn btn-focus"
-										disabled={!!$taskStore.find((t) => t.arn == db.arn)}
-										on:click={() => {
-											execute('start_db_proxy', { db });
-										}}>START PROXY</button
-									>
-								{/if}
-								{#if $taskStore.find((t) => t.arn == db.arn)}
-									Running on port: {$taskStore.find((t) => t.arn == db.arn)?.port}
-								{/if}
-							</div> -->
-						<!-- </td> -->
 					</tr>
 				{/each}
 			</tbody>
