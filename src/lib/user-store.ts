@@ -18,9 +18,6 @@ const createUserStore = () => {
 		set(userConfig);
 	});
 
-	subscribe((userConfig) => {
-		console.log('new! user_config', userConfig);
-	});
 	const setDbeaverPath = async (path: string) => {
 		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path }, true);
 		set(config);
