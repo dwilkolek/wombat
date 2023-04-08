@@ -9,10 +9,15 @@
 	<title>PROFILE</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="max-w-md mx-auto">
-	<form class="flex flex-col justify-items-center gap-2">
-		<div class="form-control w-full min-w-xs">
-			<div class="border-2 text-sm rounded p-4">
+<div class="mx-auto">
+	<form
+		class="flex flex-col justify-items-center gap-2"
+		on:submit|preventDefault={() => {
+			userStore.setDbeaverPath(dbeaver_path);
+		}}
+	>
+		<div class="form-control">
+			<div class="text-sm rounded p-4">
 				<label class="label p-0 m-0" for="dbeaver_path">
 					<span class="label-text text-lg">Path to dbeaver</span>
 				</label>
@@ -20,6 +25,10 @@
 					<input
 						id="dbeaver_path"
 						type="text"
+						autocomplete="false"
+						autocorrect="off"
+						autocapitalize="off"
+						spellcheck="false"
 						placeholder="DB path"
 						class="input input-bordered w-full min-w-xs mb-2"
 						bind:value={dbeaver_path}
@@ -36,12 +45,6 @@
 			</div>
 		</div>
 
-		<button
-			class="btn btn-primary"
-			on:click|preventDefault={() => {
-				userStore.setDbeaverPath(dbeaver_path);
-			}}
-			>Save
-		</button>
+		<button class="btn btn-primary">Update path </button>
 	</form>
 </div>

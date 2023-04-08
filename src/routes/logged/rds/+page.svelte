@@ -16,7 +16,7 @@
 	$: currentEnv = envStore.currentEnv;
 	$: databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
 	$: matchesFilter = (databse: DbInstance): boolean => {
-		return arnFilter === '' || databse.arn.indexOf(arnFilter) > 0;
+		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
 </script>
 
@@ -34,6 +34,9 @@
 						<input
 							type="text"
 							autocomplete="false"
+							autocorrect="off"
+							autocapitalize="off"
+							spellcheck="false"
 							placeholder="Looking for something?"
 							class="input input-bordered w-full max-w-xs input-xs"
 							bind:value={arnFilter}

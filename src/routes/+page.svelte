@@ -3,6 +3,7 @@
 	import { userStore } from '$lib/user-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
+	import { prevent_default } from 'svelte/internal';
 
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
@@ -31,40 +32,43 @@
 			</div>
 			<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
 				<div class="card-body">
-					<div class="form-control">
-						<label class="label" for="aws-profile">
-							<span class="label-text">AWS profile</span>
-						</label>
-						<input
-							id="aws-profile"
-							type="text"
-							autocomplete="false"
-							placeholder="AWS profile"
-							class="input input-bordered w-full max-w-xs"
-							bind:value={profile}
-							required
-						/>
-					</div>
+					<form
+						on:submit|preventDefault={async () => {
+							try {
+								loginError = '';
+								loading = true;
+								await login(profile);
+								loading = false;
+								goto(`/logged/home`, { replaceState: true });
+							} catch (e) {
+								loading = false;
+							}
+						}}
+					>
+						<div class="form-control">
+							<label class="label" for="aws-profile">
+								<span class="label-text">AWS profile</span>
+							</label>
+							<input
+								id="aws-profile"
+								type="text"
+								autocomplete="false"
+								autocorrect="off"
+								autocapitalize="off"
+								spellcheck="false"
+								placeholder="AWS profile"
+								class="input input-bordered w-full max-w-xs"
+								bind:value={profile}
+								required
+							/>
+						</div>
 
-					<div class="form-control mt-6">
-						<button
-							class="btn btn-accent"
-							disabled={loading}
-							on:click={async () => {
-								try {
-									loginError = '';
-									loading = true;
-									await login(profile);
-									loading = false;
-									goto(`/logged/home`, { replaceState: true });
-								} catch (e) {
-									loading = false;
-								}
-							}}
-						>
-							{loading ? 'Preloading...' : 'Get Start'}</button
-						>
-					</div>
+						<div class="form-control mt-6">
+							<button class="btn btn-accent" disabled={loading} type="submit">
+								{loading ? 'Preloading...' : 'Get Start'}</button
+							>
+						</div>
+					</form>
 				</div>
 			</div>
 			<div class="flex justify-center gap-2 my-2">
