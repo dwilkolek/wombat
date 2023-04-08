@@ -55,3 +55,6 @@
 		{/if}
 	</div>
 {/if}
+{#if !service}
+	<div>N/A</div>
+{/if}

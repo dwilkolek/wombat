@@ -38,7 +38,7 @@ impl UserConfig {
     }
 
     fn config_path() -> PathBuf {
-        home::home_dir().unwrap().as_path().join(".wombat.json")
+        home::home_dir().unwrap().as_path().join(".wombat")
     }
 
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {

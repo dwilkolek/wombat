@@ -45,3 +45,6 @@
 		{/if}
 	</div>
 {/if}
+{#if !database}
+	<div>N/A</div>
+{/if}
