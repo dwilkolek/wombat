@@ -1,13 +1,11 @@
 <script lang="ts">
 	import { AwsEnv } from '$lib/types';
 	import { homeStore } from '$lib/home-store';
-	import { execute } from '$lib/error-store';
-	import { taskStore } from '$lib/task-store';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	$: homeStore.init();
 	$: entries = $homeStore;
-	$: keys = entries ? Object.keys(entries) : [];
+	$: keys = entries ? Object.keys(entries).sort((a, b) => a.localeCompare(b)) : [];
 </script>
 
 <svelte:head>

@@ -1,7 +1,4 @@
 <script lang="ts">
-	import { invoke } from '@tauri-apps/api/tauri';
-	import { prevent_default } from 'svelte/internal';
-	import type { UserConfig } from '$lib/types';
 	import { userStore } from '$lib/user-store';
 
 	let user = $userStore;

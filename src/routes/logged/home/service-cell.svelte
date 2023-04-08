@@ -3,7 +3,6 @@
 	import { homeStore } from '$lib/home-store';
 	import { taskStore } from '$lib/task-store';
 	import { AwsEnv, type ServiceDetails } from '$lib/types';
-	import { invoke } from '@tauri-apps/api';
 
 	$: entries = $homeStore;
 	$: lower_rank_env =
@@ -28,7 +27,7 @@
 		{#if !$taskStore.find((t) => t.arn == service?.arn)}
 			<button
 				on:click={() => {
-					invoke('start_service_proxy', { service });
+					execute('start_service_proxy', { service });
 				}}
 			>
 				<svg

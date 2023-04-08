@@ -11,7 +11,6 @@ export async function execute<T>(
 ): Promise<T> {
 	try {
 		error.set(undefined);
-		console.log('Invoking ', cmd, trackLoading);
 		if (trackLoading) {
 			loading.set(cmd);
 		}
