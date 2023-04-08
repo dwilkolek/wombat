@@ -1,9 +1,8 @@
 <script lang="ts">
 	import Icon from 'svelte-icon/Icon.svelte';
-	import { invoke } from '@tauri-apps/api/tauri';
 	import star from '$lib/images/star-solid.svg?raw';
 	import dbeaver from '$lib/images/dbeaver-head.png';
-	import type { DbInstance, EcsService } from '$lib/types';
+	import type { DbInstance } from '$lib/types';
 	import { userStore } from '$lib/user-store';
 	import { envStore } from '$lib/env-store';
 	import { taskStore } from '$lib/task-store';
