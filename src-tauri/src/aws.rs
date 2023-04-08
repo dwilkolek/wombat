@@ -110,6 +110,15 @@ pub struct EcsService {
     pub env: Env,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceDetails {
+    pub arn: String,
+    pub name: String,
+    pub version: String,
+    pub cluster_arn: String,
+    pub env: Env,
+}
+
 pub async fn is_logged(ecs: &ecs::Client) -> bool {
     let resp = ecs.list_clusters().send().await;
     return resp.is_ok();
@@ -196,6 +205,44 @@ pub async fn clusters(ecs: &ecs::Client) -> Vec<Cluster> {
         });
     }
     clusters
+}
+
+pub async fn service_details(ecs: &ecs::Client, service_arn: &str) -> ServiceDetails {
+    let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
+    let service = ecs
+        .describe_services()
+        .services(service_arn)
+        .cluster(cluster)
+        .send()
+        .await
+        .unwrap();
+    let service = service.services().unwrap();
+    let service = &service[0];
+    let task_def_arn = service.task_definition().unwrap();
+
+    let task_def = ecs
+        .describe_task_definition()
+        .task_definition(task_def_arn)
+        .send()
+        .await
+        .unwrap();
+
+    let task_def = task_def.task_definition().unwrap();
+    let container_def = &task_def.container_definitions().unwrap()[0];
+    let version = container_def
+        .image()
+        .unwrap()
+        .split(":")
+        .last()
+        .unwrap()
+        .to_owned();
+    ServiceDetails {
+        arn: service_arn.to_owned(),
+        cluster_arn: service.cluster_arn().unwrap().to_owned(),
+        version: version,
+        env: Env::from_any(&service_arn),
+        name: service_arn.split("/").last().unwrap().to_owned(),
+    }
 }
 
 pub async fn services(ecs: &ecs::Client, cluster: &Cluster) -> Vec<EcsService> {

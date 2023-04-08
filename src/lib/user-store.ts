@@ -1,13 +1,16 @@
 import { invoke } from '@tauri-apps/api';
-import { writable } from 'svelte/store';
+import { readable, writable } from 'svelte/store';
 import { execute } from './error-store';
 import type { UserConfig } from './types';
+import { homeStore } from './home-store';
 
 const createUserStore = () => {
+	const loggedIn = writable(false);
 	const { subscribe, set } = writable<UserConfig>({
 		id: undefined,
 		dbeaver_path: undefined,
-		favourite_names: [],
+		ecs: [],
+		rds: [],
 		known_profiles: [],
 		last_used_profile: undefined
 	});
@@ -19,22 +22,31 @@ const createUserStore = () => {
 		console.log('new! user_config', userConfig);
 	});
 	const setDbeaverPath = async (path: string) => {
-		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path });
+		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path }, true);
 		set(config);
 	};
 
 	const login = async (profile: string) => {
 		const config = await execute<UserConfig>('login', { profile });
 		set(config);
+		loggedIn.set(true);
 	};
 
-	const favoriteToggle = async (name: string) => {
-		const config = await execute<UserConfig>('toggle_favourite', {
-			name: name
+	const favoriteEcs = async (arn: string) => {
+		const config = await execute<UserConfig>('favorite_ecs', {
+			arn
 		});
 		set(config);
+		homeStore.refresh(false);
+	};
+	const favoriteRds = async (arn: string) => {
+		const config = await execute<UserConfig>('favorite_rds', {
+			arn
+		});
+		set(config);
+		homeStore.refresh(false);
 	};
 
-	return { subscribe, login, setDbeaverPath, favoriteToggle };
+	return { subscribe, login, setDbeaverPath, favoriteEcs, favoriteRds };
 };
 export const userStore = createUserStore();

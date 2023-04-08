@@ -11,8 +11,8 @@
 
 	let arnFilter = '';
 	$: user = $userStore;
-	$: isFavourite = (serviceName: string): boolean => {
-		return !!user.favourite_names.find((s) => s == serviceName);
+	$: isFavourite = (arn: string): boolean => {
+		return !!user.rds.find((dbArn) => dbArn == arn);
 	};
 	$: currentEnv = envStore.currentEnv;
 	$: databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
@@ -53,14 +53,14 @@
 								<div class="flex flex-row items-stretch gap-1">
 									<button
 										on:click={() => {
-											userStore.favoriteToggle(db.name);
+											userStore.favoriteRds(db.arn);
 										}}
 									>
 										<Icon
 											data={star}
 											size="2.2em"
-											fill={isFavourite(db.name) ? 'yellow' : 'accent'}
-											stroke={isFavourite(db.name) ? 'yellow' : 'accent'}
+											fill={isFavourite(db.arn) ? 'yellow' : 'accent'}
+											stroke={isFavourite(db.arn) ? 'yellow' : 'accent'}
 										/>
 									</button>
 
@@ -78,10 +78,14 @@
 									}`}
 									disabled={!$taskStore.find((t) => t.arn == db.arn)}
 									on:click={() => {
-										invoke('open_dbeaver', {
-											db,
-											port: $taskStore.find((t) => t.arn == db.arn)?.port
-										});
+										execute(
+											'open_dbeaver',
+											{
+												db,
+												port: $taskStore.find((t) => t.arn == db.arn)?.port
+											},
+											false
+										);
 									}}
 								>
 									<img width="48" src={dbeaver} alt="download icon" />
@@ -89,13 +93,18 @@
 							</td>
 
 							<td>
-								<button
-									class="btn btn-focus"
-									disabled={!!$taskStore.find((t) => t.arn == db.arn)}
-									on:click={() => {
-										execute('start_db_proxy', { db });
-									}}>{$taskStore.find((t) => t.arn == db.arn) ? 'RUNNING' : 'START PROXY'}</button
-								>
+								{#if !$taskStore.find((t) => t.arn == db.arn)}
+									<button
+										class="btn btn-focus"
+										disabled={!!$taskStore.find((t) => t.arn == db.arn)}
+										on:click={() => {
+											execute('start_db_proxy', { db });
+										}}>START PROXY</button
+									>
+								{/if}
+								{#if $taskStore.find((t) => t.arn == db.arn)}
+									Running on port: {$taskStore.find((t) => t.arn == db.arn)?.port}
+								{/if}
 							</td>
 						</tr>
 					{/if}

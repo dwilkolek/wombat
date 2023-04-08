@@ -3,7 +3,7 @@
 	import Icon from '$lib/images/32x32.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { Env, type UserConfig } from '$lib/types';
+	import { AwsEnv, type UserConfig } from '$lib/types';
 	import { envStore } from '$lib/env-store';
 
 	const logout = async () => {
@@ -12,13 +12,18 @@
 	};
 	let currentEnv = envStore.currentEnv;
 	let userConfig = invoke<UserConfig>('user_config');
-	let envs = Object.keys(Env);
+	let envs = Object.keys(AwsEnv);
 </script>
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between">
 	<div class="flex-none">
 		<ul class="menu menu-horizontal px-1">
-			<li><img class="h-full" alt="wombat" src={Icon} /></li>
+			<li>
+				<a class={$page.url.pathname === '/logged/home' ? 'active' : ''} href="/logged/home">
+					<img class="h-full" alt="wombat" src={Icon} />
+				</a>
+			</li>
+
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 					>Services (ECS)</a
@@ -69,7 +74,7 @@
 	</div>
 </div>
 <div class="flex flex-col">
-	<container class="min-h-screen">
+	<container style="min-height: calc(100vh - 72px)">
 		<slot />
 	</container>
 </div>

@@ -9,8 +9,8 @@
 
 	let arnFilter = '';
 	$: user = $userStore;
-	$: isFavourite = (serviceName: string): boolean => {
-		return !!user.favourite_names.find((s) => s == serviceName);
+	$: isFavourite = (arn: string): boolean => {
+		return !!user.ecs.find((ecsArn) => ecsArn == arn);
 	};
 	$: activeCluser = envStore.activeCluser;
 
@@ -54,14 +54,14 @@
 								<div class="flex flex-row items-stretch gap-1">
 									<button
 										on:click={() => {
-											userStore.favoriteToggle(service.name);
+											userStore.favoriteEcs(service.arn);
 										}}
 									>
 										<Icon
 											data={star}
 											size="2.2em"
-											fill={isFavourite(service.name) ? 'yellow' : 'accent'}
-											stroke={isFavourite(service.name) ? 'yellow' : 'accent'}
+											fill={isFavourite(service.arn) ? 'yellow' : 'accent'}
+											stroke={isFavourite(service.arn) ? 'yellow' : 'accent'}
 										/>
 									</button>
 
