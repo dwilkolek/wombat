@@ -1,22 +1,29 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { invoke } from '@tauri-apps/api/tauri';
-	import type { UserConfig } from './types';
-	let userConfigPromise = invoke<UserConfig>('user_config');
+	import { userStore } from '$lib/user-store';
+	import { open } from '@tauri-apps/api/shell';
+	import { version } from '$app/environment';
+	import { prevent_default } from 'svelte/internal';
 
-	let profile: string | undefined = undefined;
-	let loading = false;
-	let storeErr = '';
-	$: userConfigPromise.then((userConfig) => {
-		profile = userConfig?.last_used_profile;
+	const openGithubPage = () => {
+		open('https://github.com/dwilkolek/wombat');
+	};
+	let { subscribe, login } = userStore;
+	let profile: string = '';
+
+	$: subscribe((userConfig) => {
+		profile = userConfig?.last_used_profile ?? '';
 	});
+
+	let loading = false;
+	let loginError = '';
 </script>
 
 <svelte:head>
-	<title>Home</title>
+	<title>LOGIN</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-{#await userConfigPromise then userConfig}
+{#await subscribe then _}
 	<div class="hero max-h-screen min-h-screen bg-base-200">
 		<div class="hero-content flex-col">
 			<div class="text-center">
@@ -25,38 +32,55 @@
 			</div>
 			<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
 				<div class="card-body">
-					<div class="form-control">
-						<label class="label" for="aws-profile">
-							<span class="label-text">AWS profile</span>
-						</label>
-						<input
-							id="aws-profile"
-							type="text"
-							placeholder="AWS profile"
-							class="input input-bordered w-full max-w-xs"
-							bind:value={profile}
-							required
-						/>
-					</div>
-
-					<div class="form-control mt-6">
-						<button
-							class="btn btn-accent"
-							disabled={loading}
-							on:click={async () => {
+					<form
+						on:submit|preventDefault={async () => {
+							try {
+								loginError = '';
 								loading = true;
-								storeErr = await invoke('login', { profile });
+								await login(profile);
 								loading = false;
-								goto(`/logged/ecs`, { replaceState: true });
-							}}
-						>
-							{loading ? 'Preloading...' : 'Get Start'}</button
-						>
-					</div>
-					<div>
-						<p>{storeErr ?? ''}</p>
-					</div>
+								goto(`/logged/home`, { replaceState: true });
+							} catch (e) {
+								loading = false;
+							}
+						}}
+					>
+						<div class="form-control">
+							<label class="label" for="aws-profile">
+								<span class="label-text">AWS profile</span>
+							</label>
+							<input
+								id="aws-profile"
+								type="text"
+								autocomplete="false"
+								autocorrect="off"
+								autocapitalize="off"
+								spellcheck="false"
+								placeholder="AWS profile"
+								class="input input-bordered w-full max-w-xs"
+								bind:value={profile}
+								required
+							/>
+						</div>
+
+						<div class="form-control mt-6">
+							<button class="btn btn-accent" disabled={loading} type="submit">
+								{loading ? 'Preloading...' : 'Get Start'}</button
+							>
+						</div>
+					</form>
 				</div>
+			</div>
+			<div class="flex justify-center gap-2 my-2">
+				<span>Sourcecode:</span>
+				<a
+					href="https://github.com/dwilkolek/wombat"
+					on:click|preventDefault={() => {
+						openGithubPage();
+					}}
+					target="_blank"
+					>https://github.com/dwilkolek/wombat v{version}
+				</a>
 			</div>
 		</div>
 	</div>
