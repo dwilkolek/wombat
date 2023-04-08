@@ -207,14 +207,19 @@ async fn open_dbeaver(
         db_name: &str,
         host: &str,
         port: u16,
-        user: &str,
-        password: &str,
+        secret: &aws::DbSecret,
     ) -> String {
-        let cmd = format!(
-        "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|url=jdbc:postgresql://{}:{}/postgres?user={}&password={}",
-        db_name, db_name, host,port, user, encode(password)
-        );
-        cmd
+        if secret.auto_rotated {
+            format!(
+                "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|url=jdbc:postgresql://{}:{}/{}?user={}&password={}",
+                db_name, db_name, host,port, secret.dbname, secret.username, encode(&secret.password)
+                )
+        } else {
+            format!(
+                "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|savePassword=true|create=true|save=true|host={}|port={}|database={}|user={}|password={}",
+                db_name, db_name, host,port, secret.dbname, secret.username, &secret.password
+                )
+        }
     }
 
     let dbeaver_path = &user_config
@@ -233,10 +238,15 @@ async fn open_dbeaver(
     if let Some(active_profile) = active_profile {
         let db_secret = aws::db_secret(
             &aws::secretsmanager_client(&active_profile).await,
-            &format!("{}-{}/db-credentials", db.name, db.env),
+            &aws::ssm_client(&active_profile).await,
+            &db.name,
+            &db.env,
         )
-        .await
-        .expect("Secret required");
+        .await;
+        if db_secret.is_err() {
+            return Err(db_secret.err().unwrap());
+        }
+        let db_secret = db_secret.unwrap();
 
         let output = Command::new(dbeaver_path)
             .args([
@@ -246,8 +256,7 @@ async fn open_dbeaver(
                     &db.arn.split(":").last().unwrap(),
                     "localhost",
                     port,
-                    &db_secret.username,
-                    &db_secret.password,
+                    &db_secret,
                 ),
             ])
             .output()
@@ -382,8 +391,6 @@ fn start_aws_ssm_proxy(
                 },
             )
             .unwrap();
-        println!("THE END");
-        dbg!(output);
     });
 }
 
@@ -413,94 +420,6 @@ async fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-// struct GlobalThreadSafeState(Arc<Mutex<AppState>>);
-
-// struct AppState {
-//     active_profile: Option<String>,
-//     user_config: UserConfig,
-//     aws_client: Option<AwsClient>,
-// }
-
-// impl AppState {
-//     async fn default() -> AppState {
-//         let user_config = UserConfig::default();
-//         let aws_client = None;
-//         AppState {
-//             active_profile: user_config.last_used_profile.clone(),
-//             user_config,
-//             aws_client,
-//         }
-//     }
-
-//     fn logout(&mut self) {
-//         self.aws_client = None;
-//     }
-
-//     fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
-//         self.user_config.set_dbeaver_path(dbeaver_path)
-//     }
-
-//     fn toggle_service_favourite(&mut self, service_name: &str) -> Result<UserConfig, BError> {
-//         self.user_config.toggle_service_favourite(service_name)
-//     }
-//     fn toggle_db_favourite(&mut self, db_arn: &str) -> Result<UserConfig, BError> {
-//         self.user_config.toggle_db_favourite(db_arn)
-//     }
-
-//     async fn login(&mut self, profile: &str) -> Result<UserConfig, BError> {
-//         self.user_config.use_profile(profile);
-//         self.active_profile = Some(profile.to_owned());
-//         let client_result = AwsClient::default(
-//             self.active_profile
-//                 .to_owned()
-//                 .expect("Active profile required")
-//                 .as_str(),
-//         )
-//         .await;
-
-//         match client_result {
-//             Ok(client) => {
-//                 self.aws_client = Some(client);
-//                 Ok(self.user_config.clone())
-//             }
-//             Err(message) => Err(BError::new("login", message)),
-//         }
-//     }
-
-//     async fn databases(&mut self, env: Env) -> Vec<DbInstance> {
-//         self.aws_client
-//             .as_mut()
-//             .expect("Login first!")
-//             .databases(env)
-//             .await
-//     }
-
-//     async fn services(&mut self, env: Env) -> Vec<EcsService> {
-//         self.aws_client
-//             .as_mut()
-//             .expect("Login first!")
-//             .services(env)
-//             .await
-//     }
-//     async fn clusters(&mut self) -> Vec<Cluster> {
-//         self.aws_client
-//             .as_mut()
-//             .expect("Login first!")
-//             .clusters()
-//             .await
-//             .values()
-//             .cloned()
-//             .collect()
-//     }
-//     async fn bastion(&mut self, env: Env) -> Bastion {
-//         self.aws_client
-//             .as_mut()
-//             .expect("Login first!")
-//             .bastion(env)
-//             .await
-//     }
-// }
 
 #[derive(Default)]
 struct BastionsCache(Arc<Mutex<Vec<aws::Bastion>>>);

@@ -4,6 +4,7 @@ use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
 use aws_sdk_secretsmanager as secretsmanager;
+use aws_sdk_ssm as ssm;
 use ec2::types::Filter;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -83,7 +84,7 @@ pub struct DbInstance {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct DbSecret {
+pub struct DbSecretDTO {
     dbInstanceIdentifier: String,
     pub dbname: String,
     engine: String,
@@ -91,6 +92,14 @@ pub struct DbSecret {
     pub password: String,
     port: u16,
     pub username: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DbSecret {
+    pub dbname: String,
+    pub password: String,
+    pub username: String,
+    pub auto_rotated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,6 +133,11 @@ pub async fn ec2_client(profile: &str) -> ec2::Client {
 pub async fn secretsmanager_client(profile: &str) -> secretsmanager::Client {
     let config = aws_config::from_env().profile_name(profile).load().await;
     secretsmanager::Client::new(&config)
+}
+
+pub async fn ssm_client(profile: &str) -> ssm::Client {
+    let config = aws_config::from_env().profile_name(profile).load().await;
+    ssm::Client::new(&config)
 }
 
 pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
@@ -281,14 +295,16 @@ pub async fn databases(rds: &rds::Client) -> Vec<DbInstance> {
 }
 
 pub async fn db_secret(
-    client: &secretsmanager::Client,
-    secret_identified: &str,
+    secret_client: &secretsmanager::Client,
+    ssm_client: &ssm::Client,
+    name: &str,
+    env: &Env,
 ) -> Result<DbSecret, BError> {
     let filter = secretsmanager::types::Filter::builder()
         .key("name".into())
-        .values(secret_identified)
+        .values(&format!("{}-{}/db-credentials", name, env))
         .build();
-    let secret_arn = client.list_secrets().filters(filter).send().await;
+    let secret_arn = secret_client.list_secrets().filters(filter).send().await;
 
     let secret_arn = secret_arn.expect("Failed to fetch!");
     let secret_arn = secret_arn.secret_list().expect("No arn list!");
@@ -296,7 +312,7 @@ pub async fn db_secret(
         let secret_arn = secret_arn.first().unwrap();
         let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
 
-        let secret = client
+        let secret = secret_client
             .get_secret_value()
             .secret_id(secret_arn.clone())
             .send()
@@ -306,9 +322,32 @@ pub async fn db_secret(
         }
         let secret = secret.unwrap();
         let secret = secret.secret_string().expect("There should be a secret");
-        let secret = serde_json::from_str::<DbSecret>(secret).expect("Deserialzied DbSecret");
-        return Ok(secret);
+        let secret = serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
+
+        return Ok(DbSecret {
+            dbname: secret.dbname,
+            password: secret.password,
+            username: secret.username,
+            auto_rotated: true,
+        });
     } else {
+        let param = ssm_client
+            .get_parameter()
+            .name(&format!("/config/{}_{}/datasource-password", name, env))
+            .with_decryption(true)
+            .send()
+            .await;
+
+        if let Ok(param) = param {
+            if let Some(param) = param.parameter() {
+                return Ok(DbSecret {
+                    dbname: name.to_owned(),
+                    password: param.value().unwrap().to_owned(),
+                    username: name.to_owned(),
+                    auto_rotated: false,
+                });
+            }
+        }
         return Err(BError::new("db_secret", "No secrets found"));
     }
 }
