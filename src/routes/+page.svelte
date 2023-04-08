@@ -19,7 +19,7 @@
 </script>
 
 <svelte:head>
-	<title>HOME</title>
+	<title>LOGIN</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 {#await subscribe then _}
@@ -56,7 +56,7 @@
 									loading = true;
 									await login(profile);
 									loading = false;
-									goto(`/logged/ecs`, { replaceState: true });
+									goto(`/logged/home`, { replaceState: true });
 								} catch (e) {
 									loading = false;
 								}

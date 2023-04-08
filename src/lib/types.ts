@@ -1,4 +1,4 @@
-export enum Env {
+export enum AwsEnv {
 	DEVNULL = 'DEVNULL',
 	PLAY = 'PLAY',
 	LAB = 'LAB',
@@ -6,15 +6,17 @@ export enum Env {
 	DEMO = 'DEMO',
 	PROD = 'PROD'
 }
+
 export type Cluster = {
-	arn: String;
-	env: Env;
+	arn: string;
+	env: AwsEnv;
 };
 export type UserConfig = {
 	id: string | undefined;
 	last_used_profile: string | undefined;
 	known_profiles: string[];
-	favourite_names: string[];
+	ecs: string[];
+	rds: string[];
 	dbeaver_path: string | undefined;
 };
 
@@ -22,6 +24,14 @@ export type EcsService = {
 	name: string;
 	arn: string;
 	cluster_arn: string;
+};
+
+export type ServiceDetails = {
+	arn: string;
+	name: string;
+	version: string;
+	cluster_arn: string;
+	env: AwsEnv;
 };
 
 export type Endpoint = {

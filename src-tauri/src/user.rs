@@ -11,7 +11,8 @@ pub struct UserConfig {
     id: Uuid,
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
-    favourite_names: HashSet<String>,
+    pub ecs: HashSet<String>,
+    pub rds: HashSet<String>,
     db_proxy_port_map: HashMap<String, u16>,
     pub dbeaver_path: Option<String>,
 }
@@ -25,7 +26,8 @@ impl UserConfig {
                 id: Uuid::new_v4(),
                 last_used_profile: None,
                 known_profiles: HashSet::new(),
-                favourite_names: HashSet::new(),
+                ecs: HashSet::new(),
+                rds: HashSet::new(),
                 db_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
             },
@@ -68,9 +70,18 @@ impl UserConfig {
         self.save()
     }
 
-    pub fn toggle_favourite(&mut self, name: &str) -> Result<UserConfig, BError> {
-        if !self.favourite_names.remove(&name.to_owned()) {
-            self.favourite_names.insert(name.to_owned());
+    pub fn favorite_ecs(&mut self, arn: &str) -> Result<UserConfig, BError> {
+        if !self.ecs.remove(&arn.to_owned()) {
+            self.ecs.insert(arn.to_owned());
+        }
+
+        self.save();
+        Ok(self.clone())
+    }
+
+    pub fn favorite_rds(&mut self, arn: &str) -> Result<UserConfig, BError> {
+        if !self.rds.remove(&arn.to_owned()) {
+            self.rds.insert(arn.to_owned());
         }
 
         self.save();

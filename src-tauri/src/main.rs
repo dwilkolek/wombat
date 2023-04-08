@@ -32,12 +32,21 @@ async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<U
 }
 
 #[tauri::command]
-async fn toggle_favourite(
-    name: &str,
+async fn favorite_ecs(
+    arn: &str,
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.toggle_favourite(name)
+    user_config.favorite_ecs(arn)
+}
+
+#[tauri::command]
+async fn favorite_rds(
+    arn: &str,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<UserConfig, BError> {
+    let mut user_config = user_config.0.lock().await;
+    user_config.favorite_rds(arn)
 }
 
 #[tauri::command]
@@ -57,9 +66,11 @@ async fn login(
     if !aws::is_logged(&ecs_client).await {
         return Err(BError::new("login", "Failed to log in"));
     }
+
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
     app_state.0.lock().await.active_profile = Some(profile.to_owned());
+
     Ok(user_config.clone())
 }
 
@@ -85,6 +96,55 @@ async fn logout(
     service_cache.0.lock().await.clear();
     db_cache.0.lock().await.clear();
     Ok(())
+}
+
+#[tauri::command]
+async fn home(
+    app_state: tauri::State<'_, AppContextState>,
+    user_config: tauri::State<'_, UserConfigState>,
+    home_cache: tauri::State<'_, HomeCache>,
+    databases_cache: tauri::State<'_, DatabasesCache>,
+) -> Result<HomePage, BError> {
+    let active_profile = {
+        let app_state = app_state.0.lock().await;
+        app_state.active_profile.clone()
+    };
+    if let Some(active_profile) = active_profile {
+        let mut home_cache = home_cache.0.lock().await;
+        let user = user_config.0.lock().await;
+        let ecs_client = aws::ecs_client(&active_profile).await;
+
+        let mut databases_cache = databases_cache.0.lock().await;
+        {
+            if databases_cache.is_empty() {
+                let databases = aws::databases(&aws::rds_client(&active_profile).await).await;
+                for db in databases {
+                    databases_cache.push(db);
+                }
+            }
+        }
+
+        let dbs_list: Vec<aws::DbInstance> = databases_cache
+            .iter()
+            .filter(|db| user.rds.contains(&db.arn))
+            .cloned()
+            .collect();
+        home_cache.databases = dbs_list;
+        let ecs_arns = &user.ecs;
+        let cached_services = &mut home_cache.services;
+        for ecs in ecs_arns.into_iter() {
+            if !cached_services
+                .into_iter()
+                .any(|cached_ecs| cached_ecs.arn == *ecs)
+            {
+                cached_services.push(aws::service_details(&ecs_client, ecs).await);
+            }
+        }
+
+        Ok(home_cache.clone())
+    } else {
+        Err(BError::new("home", "Login required"))
+    }
 }
 
 #[tauri::command]
@@ -134,6 +194,7 @@ async fn services(
         Err(BError::new("services", "Login required"))
     }
 }
+
 #[tauri::command]
 async fn databases(
     env: aws::Env,
@@ -157,6 +218,11 @@ async fn databases(
     } else {
         Err(BError::new("databases", "Login required"))
     }
+}
+
+#[tauri::command]
+async fn discover() -> Result<(), BError> {
+    todo!()
 }
 
 #[tauri::command]
@@ -202,13 +268,7 @@ async fn open_dbeaver(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
 ) -> Result<(), BError> {
-    fn db_beaver_con_parma(
-        arn: &str,
-        db_name: &str,
-        host: &str,
-        port: u16,
-        secret: &aws::DbSecret,
-    ) -> String {
+    fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
             format!(
                 "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|url=jdbc:postgresql://{}:{}/{}?user={}&password={}",
@@ -248,11 +308,10 @@ async fn open_dbeaver(
         }
         let db_secret = db_secret.unwrap();
 
-        let output = Command::new(dbeaver_path)
+        Command::new(dbeaver_path)
             .args([
                 "-con",
                 &db_beaver_con_parma(
-                    &db.arn,
                     &db.arn.split(":").last().unwrap(),
                     "localhost",
                     port,
@@ -362,7 +421,7 @@ fn start_aws_ssm_proxy(
                 },
             )
             .unwrap();
-        let output = Command::new("aws")
+        Command::new("aws")
             .args([
                 "ssm",
                 "start-session",
@@ -405,6 +464,10 @@ async fn main() {
         .manage(ClustersCache::default())
         .manage(DatabasesCache::default())
         .manage(ServicesCache::default())
+        .manage(HomeCache(Arc::new(Mutex::new(HomePage {
+            services: Vec::new(),
+            databases: Vec::new(),
+        }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             login,
@@ -413,13 +476,18 @@ async fn main() {
             services,
             databases,
             set_dbeaver_path,
-            toggle_favourite,
+            favorite_ecs,
+            favorite_rds,
             start_db_proxy,
             open_dbeaver,
+            home,
+            discover
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+struct HomeCache(Arc<Mutex<HomePage>>);
 
 #[derive(Default)]
 struct BastionsCache(Arc<Mutex<Vec<aws::Bastion>>>);
@@ -439,3 +507,9 @@ struct AppContext {
 struct AppContextState(Arc<Mutex<AppContext>>);
 
 struct UserConfigState(Arc<Mutex<UserConfig>>);
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct HomePage {
+    services: Vec<aws::ServiceDetails>,
+    databases: Vec<aws::DbInstance>,
+}

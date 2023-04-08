@@ -3,7 +3,7 @@ import type { InvokeArgs } from '@tauri-apps/api/tauri';
 import { writable } from 'svelte/store';
 
 export const error = writable<string | undefined>();
-export const loading = writable<String | undefined>();
+export const loading = writable<string | undefined>();
 export async function execute<T>(
 	cmd: string,
 	args: InvokeArgs | undefined = undefined,
