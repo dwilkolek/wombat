@@ -1,68 +1,108 @@
 <script lang="ts">
+	import Icon from 'svelte-icon/Icon.svelte';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { readable, writable } from 'svelte/store';
-	import type { EcsService } from '../../types';
-	let clustersPromise = invoke<string[]>('clusters');
-	let selectedClusterArn = writable<string | undefined>();
-	let services = readable<EcsService[]>([]);
+	import star from '$lib/images/star-solid.svg?raw';
+	import type { EcsService } from '$lib/types';
+	import { userStore } from '$lib/user-store';
+	import { envStore } from '$lib/env-store';
+	import { execute } from '$lib/error-store';
+	import { taskStore } from '$lib/task-store';
+	import { open } from '@tauri-apps/api/shell';
+	import { prevent_default } from 'svelte/internal';
 
-	clustersPromise.then(async (clusters) => {
-		selectedClusterArn.set(clusters[0]);
-	});
-	selectedClusterArn.subscribe(async (clusterArn) => {
-		services = readable(await invoke<EcsService[]>('services', { clusterArn }));
-	});
+	let arnFilter = '';
+	$: user = $userStore;
+	$: isFavourite = (arn: string): boolean => {
+		return !!user.ecs.find((ecsArn) => ecsArn == arn);
+	};
+	$: activeCluser = envStore.activeCluser;
+
+	$: services = $activeCluser
+		? execute<EcsService[]>('services', { cluster: $activeCluser }, true)
+		: [];
+	$: matchesFilter = (service: EcsService): boolean => {
+		return arnFilter === '' || service.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
+	};
 </script>
 
 <svelte:head>
-	<title>Home</title>
+	<title>ECS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-
-<div class="mx-auto">
-	<div class="overflow-x-auto">
-		{#await clustersPromise}
-			<p>loading</p>
-		{:then clusters}
-			<div>
-				<select class="select select-bordered" bind:value={$selectedClusterArn}>
-					{#each clusters as clusterArn}
-						<option value={clusterArn}>{clusterArn}</option>
-					{/each}
-				</select>
-				<table class="table w-full table-zebra table-compact">
-					<thead>
+<div class="h-full block">
+	<table class="table w-full table-zebra table-compact">
+		<thead class="sticky top-0">
+			<tr>
+				<th>
+					<div class="flex gap-2">
+						Info
+						<input
+							type="text"
+							autocomplete="false"
+							autocorrect="off"
+							autocapitalize="off"
+							spellcheck="false"
+							placeholder="Looking for something?"
+							class="input input-bordered w-full max-w-xs input-xs"
+							bind:value={arnFilter}
+						/>
+					</div>
+				</th>
+				<th class="w-40 pr-2">Proxy</th>
+			</tr>
+		</thead>
+		<tbody class="overflow-y-auto max-h-96">
+			{#await services then services}
+				{#each services as service, i}
+					{#if matchesFilter(service)}
 						<tr>
-							<th />
-							<th>Name</th>
-							<th>Monitor</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each $services as { name, service_arn }, i}
-							<tr>
-								<th>{i}</th>
-								<td>
-									<div class="flex flex-col">
-										<span class="font-bold"> {name}</span>
-										<span class="text-xs"> {service_arn}</span>
-									</div>
-								</td>
-								<td>
+							<td>
+								<div class="flex flex-row items-stretch gap-1">
 									<button
-										class="btn btn-focus"
-										on:click={async () => {
-											await invoke('monitor_service', { serviceArn: service_arn });
-										}}>Monitor</button
+										on:click={() => {
+											userStore.favoriteEcs(service.arn);
+										}}
 									>
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{:catch error}
-			<p style="color: red">{error}</p>
-		{/await}
-	</div>
+										<Icon
+											data={star}
+											size="2.2em"
+											fill={isFavourite(service.arn) ? 'yellow' : 'accent'}
+											stroke={isFavourite(service.arn) ? 'yellow' : 'accent'}
+										/>
+									</button>
+
+									<div class="flex flex-col">
+										<span class="font-bold"> {service.name}</span>
+										<span class="text-xs"> {service.arn}</span>
+									</div>
+								</div>
+							</td>
+							<td>
+								<div class="flex flex-col">
+									{#if !$taskStore.find((t) => t.arn == service.arn)}
+										<button
+											class="btn btn-focus"
+											on:click={() => {
+												invoke('start_service_proxy', { service });
+											}}>Start proxy</button
+										>{/if}
+									{#if $taskStore.find((t) => t.arn == service.arn)}
+										<button
+											class="underline"
+											on:click|preventDefault={() => {
+												open(
+													'http://localhost:' + $taskStore.find((t) => t.arn == service.arn)?.port
+												);
+											}}
+											>Running on port: {$taskStore.find((t) => t.arn == service.arn)?.port}</button
+										>
+									{/if}
+								</div>
+							</td>
+						</tr>
+					{/if}
+				{/each}
+			{/await}
+		</tbody>
+	</table>
 </div>
