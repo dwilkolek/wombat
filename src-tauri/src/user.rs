@@ -14,6 +14,7 @@ pub struct UserConfig {
     pub ecs: HashSet<String>,
     pub rds: HashSet<String>,
     db_proxy_port_map: HashMap<String, u16>,
+    service_proxy_port_map: HashMap<String, u16>,
     pub dbeaver_path: Option<String>,
 }
 
@@ -29,6 +30,7 @@ impl UserConfig {
                 ecs: HashSet::new(),
                 rds: HashSet::new(),
                 db_proxy_port_map: HashMap::new(),
+                service_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
             },
         };
@@ -49,6 +51,25 @@ impl UserConfig {
             }
             self.db_proxy_port_map
                 .insert(db_arn.to_owned(), possible_port);
+            self.save();
+            possible_port
+        }
+    }
+
+    pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {
+        if let Some(port) = self.service_proxy_port_map.get(ecs_arn) {
+            *port
+        } else {
+            let mut possible_port = rand::thread_rng().gen_range(53000..54000);
+            while self
+                .service_proxy_port_map
+                .values()
+                .any(|p| *p == possible_port)
+            {
+                possible_port = rand::thread_rng().gen_range(53000..54000);
+            }
+            self.service_proxy_port_map
+                .insert(ecs_arn.to_owned(), possible_port);
             self.save();
             possible_port
         }

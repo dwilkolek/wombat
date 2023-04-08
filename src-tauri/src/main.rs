@@ -19,8 +19,7 @@ mod shared;
 mod user;
 
 #[derive(Clone, serde::Serialize)]
-struct Payload {
-    resource: String,
+struct ProxyEventMessage {
     arn: String,
     status: String,
     port: u16,
@@ -254,10 +253,54 @@ async fn start_db_proxy(
             db.endpoint.address,
             db.endpoint.port,
             local_port,
+            None,
+            local_port,
         );
+
         Ok(())
     } else {
         Err(BError::new("start_db_proxy", "Failed to start"))
+    }
+}
+
+#[tauri::command]
+async fn start_service_proxy(
+    window: Window,
+    service: aws::EcsService,
+    user_config: tauri::State<'_, UserConfigState>,
+    app_state: tauri::State<'_, AppContextState>,
+) -> Result<(), BError> {
+    let active_profile = {
+        let app_state = app_state.0.lock().await;
+        app_state.active_profile.clone()
+    };
+    let local_port = user_config.0.lock().await.get_service_port(&service.arn);
+    let aws_local_port = local_port + 10000;
+
+    if let Some(active_profile) = active_profile {
+        let ec2_client = aws::ec2_client(&active_profile).await;
+        let bastions = aws::bastions(&ec2_client).await;
+        let bastion = bastions
+            .into_iter()
+            .find(|b| b.env == service.env)
+            .expect("No bastion found");
+        let host = format!("{}.service", service.name);
+        let handle = start_proxy_to_aws_proxy(Some(host.clone()), local_port, aws_local_port).await;
+        start_aws_ssm_proxy(
+            service.arn,
+            window,
+            bastion.instance_id,
+            active_profile,
+            host,
+            80,
+            aws_local_port,
+            Some(handle),
+            local_port,
+        );
+
+        Ok(())
+    } else {
+        Err(BError::new("start_service_proxy", "Failed to start"))
     }
 }
 
@@ -326,41 +369,11 @@ async fn open_dbeaver(
     }
 }
 
-// #[tauri::command]
-// async fn start_local_proxy(
-//     local_port: i32,
-//     state: tauri::State<'_, GlobalThreadSafeState>,
-// ) -> Result<(), ()> {
-// let request_filter = extract_request_data_filter();
-// let host = "";
-// let aws_port: u16 = 10000;
-// let app = warp::any().and(request_filter).and_then(
-//     move |uri: warp::path::FullPath,
-//           params: Option<String>,
-//           method: Method,
-//           mut headers: Headers,
-//           body: Bytes| {
-//         headers.insert("Origin", host.parse().unwrap());
-//         headers.insert("Host", host.parse().unwrap());
-//         proxy_to_and_forward_response(
-//             format!("http://localhost:{}/", aws_port).to_owned(),
-//             "".to_owned(),
-//             uri,
-//             params,
-//             method,
-//             headers,
-//             body,
-//         )
-//     },
-// );
-
-// // spawn proxy server
-// warp::serve(app).run(([0, 0, 0, 0], aws_port)).await;
-//     todo!()
-// }
-
-//untested
-async fn start_proxy_to_aws_proxy(service_header: Option<String>, aws_port: u16) {
+async fn start_proxy_to_aws_proxy(
+    service_header: Option<String>,
+    local_port: u16,
+    aws_local_port: u16,
+) -> tokio::task::JoinHandle<()> {
     tokio::task::spawn(async move {
         let request_filter = extract_request_data_filter();
         let header_value = service_header
@@ -373,13 +386,11 @@ async fn start_proxy_to_aws_proxy(service_header: Option<String>, aws_port: u16)
                   method: Method,
                   mut headers: Headers,
                   body: Bytes| {
-                // if let Some(header_value) = service_header {
                 headers.insert("Origin", header_value.clone());
                 headers.insert("Host", header_value.clone());
-                // }
 
                 proxy_to_and_forward_response(
-                    format!("http://localhost:{}/", aws_port).to_owned(),
+                    format!("http://localhost:{}/", aws_local_port).to_owned(),
                     "".to_owned(),
                     uri,
                     params,
@@ -389,11 +400,10 @@ async fn start_proxy_to_aws_proxy(service_header: Option<String>, aws_port: u16)
                 )
             },
         );
-        warp::serve(app).run(([0, 0, 0, 0], aws_port)).await;
-    });
+        warp::serve(app).run(([0, 0, 0, 0], local_port)).await;
+    })
 }
 
-//untested
 fn start_aws_ssm_proxy(
     arn: String,
     window: Window,
@@ -402,6 +412,9 @@ fn start_aws_ssm_proxy(
     target: String,
     target_port: u16,
     local_port: u16,
+
+    abort_on_exit: Option<tokio::task::JoinHandle<()>>,
+    access_port: u16,
 ) {
     tokio::task::spawn(async move {
         // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
@@ -412,12 +425,11 @@ fn start_aws_ssm_proxy(
         //  --parameters "$parameters"
         window
             .emit(
-                "db-proxy",
-                Payload {
+                "proxy-start",
+                ProxyEventMessage {
                     arn: arn.clone(),
-                    resource: "db".into(),
                     status: "START".into(),
-                    port: local_port,
+                    port: access_port,
                 },
             )
             .unwrap();
@@ -439,14 +451,17 @@ fn start_aws_ssm_proxy(
             ])
             .output()
             .expect("failed to execute process");
+
+        if let Some(handle) = abort_on_exit {
+            handle.abort()
+        }
         window
             .emit(
-                "db-proxy",
-                Payload {
+                "proxy-end",
+                ProxyEventMessage {
                     arn: arn.clone(),
-                    resource: "db".into(),
                     status: "END".into(),
-                    port: local_port,
+                    port: access_port,
                 },
             )
             .unwrap();
@@ -479,6 +494,7 @@ async fn main() {
             favorite_ecs,
             favorite_rds,
             start_db_proxy,
+            start_service_proxy,
             open_dbeaver,
             home,
             discover
