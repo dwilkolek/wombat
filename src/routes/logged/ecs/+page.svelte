@@ -21,7 +21,7 @@
 		? execute<EcsService[]>('services', { cluster: $activeCluser }, true)
 		: [];
 	$: matchesFilter = (service: EcsService): boolean => {
-		return arnFilter === '' || service.arn.indexOf(arnFilter) > 0;
+		return arnFilter === '' || service.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
 </script>
 
@@ -39,6 +39,9 @@
 						<input
 							type="text"
 							autocomplete="false"
+							autocorrect="off"
+							autocapitalize="off"
+							spellcheck="false"
 							placeholder="Looking for something?"
 							class="input input-bordered w-full max-w-xs input-xs"
 							bind:value={arnFilter}
