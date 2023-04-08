@@ -153,9 +153,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ec2"
-version = "0.25.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd180c0cb50c9b4306288a9c67f51a0e252ce09f05462b34a437b8b37107982e"
+checksum = "9f9d53395ddad7cb7997d2fcd1eeceab970ad5bbb8f1529e651d5efd3df5782a"
 dependencies = [
  "aws-credential-types",
  "aws-endpoint",
@@ -181,9 +181,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ecs"
-version = "0.25.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1bafcf31437776898e90ac06d84706faad9abc6804a925d8975e3d3a78ebe50"
+checksum = "bdce4cdde04ba663a35af6d8396e8383f65d3e3c275fca216e8d6157c2696e49"
 dependencies = [
  "aws-credential-types",
  "aws-endpoint",
@@ -206,9 +206,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-rds"
-version = "0.25.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "551b4e2364ecbea418d01fd8574060c188086cee8a34118f39c0c691170a5e16"
+checksum = "bcfe6de158b218db5ffb1ac4b3a0c4ef6a66b6a5d9e35a36dd74911fe12f6316"
 dependencies = [
  "aws-credential-types",
  "aws-endpoint",
@@ -233,9 +233,35 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-secretsmanager"
-version = "0.25.0"
+version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bec78cc4e47d934c7ae534a527b5c18e1511aea2b737cf16cde9c1cde375286a"
+checksum = "f6e928b6ed2176d1546b5a5a350255b0ff22558f64b52962248aea7488a5d29b"
+dependencies = [
+ "aws-credential-types",
+ "aws-endpoint",
+ "aws-http",
+ "aws-sig-auth",
+ "aws-smithy-async",
+ "aws-smithy-client",
+ "aws-smithy-http",
+ "aws-smithy-http-tower",
+ "aws-smithy-json",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http",
+ "regex",
+ "tokio-stream",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "aws-sdk-ssm"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16940b2f918cc91396d1755dbe8d9414c753531b8431f1e6e6c211f65f3f67f5"
 dependencies = [
  "aws-credential-types",
  "aws-endpoint",
@@ -4518,6 +4544,7 @@ dependencies = [
  "aws-sdk-ecs",
  "aws-sdk-rds",
  "aws-sdk-secretsmanager",
+ "aws-sdk-ssm",
  "fix-path-env",
  "home",
  "rand 0.8.5",
