@@ -7,6 +7,8 @@
 	import { envStore } from '$lib/env-store';
 	import { taskStore } from '$lib/task-store';
 	import { execute } from '$lib/error-store';
+	import StarIcon from '$lib/star-icon.svelte';
+	import { listen } from '@tauri-apps/api/event';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -15,6 +17,9 @@
 	};
 	$: currentEnv = envStore.currentEnv;
 	$: databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
+	$: listen('cache-refreshed', () => {
+		databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
+	});
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
@@ -57,12 +62,7 @@
 											userStore.favoriteRds(db.arn);
 										}}
 									>
-										<Icon
-											data={star}
-											size="2.2em"
-											fill={isFavourite(db.arn) ? 'yellow' : 'accent'}
-											stroke={isFavourite(db.arn) ? 'yellow' : 'accent'}
-										/>
+										<StarIcon state={isFavourite(db.arn)} />
 									</button>
 
 									<div class="flex flex-col">
