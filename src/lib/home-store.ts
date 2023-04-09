@@ -1,5 +1,6 @@
 import { execute } from '$lib/error-store';
 import type { AwsEnv, DbInstance, ServiceDetails } from '$lib/types';
+import { listen } from '@tauri-apps/api/event';
 import { readable, writable } from 'svelte/store';
 type HomePage = {
 	services: ServiceDetails[];
@@ -16,6 +17,9 @@ type HomeEntries = {
 
 const createHome = () => {
 	const entries = writable<HomeEntries>({});
+	listen('cache-refreshed', () => {
+		refresh();
+	});
 	const refresh = (tracking = false) => {
 		execute<HomePage>('home', undefined, tracking).then((home) => {
 			const newEntries: HomeEntries = {};

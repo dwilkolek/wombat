@@ -9,6 +9,7 @@
 	import { taskStore } from '$lib/task-store';
 	import { open } from '@tauri-apps/api/shell';
 	import StarIcon from '$lib/star-icon.svelte';
+	import { listen } from '@tauri-apps/api/event';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -16,6 +17,9 @@
 		return !!user.ecs.find((ecsArn) => ecsArn == arn);
 	};
 	$: activeCluser = envStore.activeCluser;
+	$: listen('cache-refreshed', () => {
+		services = execute<EcsService[]>('services', { cluster: $activeCluser }, true);
+	});
 
 	$: services = $activeCluser
 		? execute<EcsService[]>('services', { cluster: $activeCluser }, true)

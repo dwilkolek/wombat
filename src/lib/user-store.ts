@@ -1,5 +1,4 @@
-import { invoke } from '@tauri-apps/api';
-import { readable, writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { execute } from './error-store';
 import type { UserConfig } from './types';
 import { homeStore } from './home-store';
