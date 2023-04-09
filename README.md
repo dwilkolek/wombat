@@ -1,7 +1,6 @@
 # Wombat
 
-A Portal to AWS created to checkout Tauri and Svelte.
-
+Wombat presentes view at AWS services that I use. I created it to learn Tauri and Svelte... and make my life easier 😎
 ![Wombat homepage](https://github.com/dwilkolek/wombat/blob/main/docs/wombat-homepage.png?raw=true)
 
 ## Features
