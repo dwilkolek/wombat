@@ -1,5 +1,6 @@
 import { execute } from '$lib/error-store';
-import type { DbInstance, ServiceDetails } from '$lib/types';
+import type { AwsEnv, DbInstance, ServiceDetails } from '$lib/types';
+import { listen } from '@tauri-apps/api/event';
 import { readable, writable } from 'svelte/store';
 type HomePage = {
 	services: ServiceDetails[];
@@ -16,10 +17,13 @@ type HomeEntries = {
 
 const createHome = () => {
 	const entries = writable<HomeEntries>({});
-
-	const refresh = (tracking: boolean = false) => {
+	listen('cache-refreshed', () => {
+		refresh();
+	});
+	const refresh = (tracking = false) => {
 		execute<HomePage>('home', undefined, tracking).then((home) => {
-			let newEntries: HomeEntries = {};
+			const newEntries: HomeEntries = {};
+			const newArnList: string[] = [];
 			home.services.forEach((v) => {
 				if (!newEntries[v.name]) {
 					newEntries[v.name] = {};
@@ -27,6 +31,7 @@ const createHome = () => {
 				if (!newEntries[v.name][v.env]) {
 					newEntries[v.name][v.env] = {};
 				}
+				newArnList.push(v.arn);
 				newEntries[v.name][v.env].service = v;
 			});
 
@@ -37,6 +42,7 @@ const createHome = () => {
 				if (!newEntries[v.name][v.environment_tag.toUpperCase()]) {
 					newEntries[v.name][v.environment_tag.toUpperCase()] = {};
 				}
+				newArnList.push(v.arn);
 				newEntries[v.name][v.environment_tag.toUpperCase()].db = v;
 			});
 			entries.set(newEntries);
@@ -49,15 +55,10 @@ const createHome = () => {
 		});
 	});
 
-	const discover = async (name: string) => {
-		await execute('discover', { name }, true);
-		refresh(true);
-	};
-	let initialized = false;
+	const initialized = false;
 	return {
 		subscribe: entriesReadable.subscribe,
 		refresh,
-		discover,
 		init: () => {
 			if (!initialized) {
 				refresh(true);

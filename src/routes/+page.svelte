@@ -16,7 +16,6 @@
 	});
 
 	let loading = false;
-	let loginError = '';
 </script>
 
 <svelte:head>
@@ -35,12 +34,12 @@
 					<form
 						on:submit|preventDefault={async () => {
 							try {
-								loginError = '';
 								loading = true;
 								await login(profile);
 								loading = false;
 								goto(`/logged/home`, { replaceState: true });
 							} catch (e) {
+								console.error(e);
 								loading = false;
 							}
 						}}
@@ -72,7 +71,7 @@
 				</div>
 			</div>
 			<div class="flex justify-center gap-2 my-2">
-				<span>Sourcecode:</span>
+				<span>Source code:</span>
 				<a
 					href="https://github.com/dwilkolek/wombat"
 					on:click|preventDefault={() => {

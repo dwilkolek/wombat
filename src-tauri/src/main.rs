@@ -1,7 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use aws::{ecs_client, Cluster};
+use aws::{ecs_client, Cluster, DbInstance, EcsService, Env, ServiceDetails};
 use shared::BError;
 use std::sync::Arc;
 use std::{collections::HashMap, process::Command};
@@ -53,6 +53,10 @@ async fn login(
     profile: &str,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
+
+    databse_cache: tauri::State<'_, DatabasesCache>,
+    cluster_cache: tauri::State<'_, ClustersCache>,
+    service_cache: tauri::State<'_, ServicesCache>,
 ) -> Result<UserConfig, BError> {
     let ecs_client = aws::ecs_client(profile).await;
     if !aws::is_logged(&ecs_client).await {
@@ -70,6 +74,15 @@ async fn login(
     user_config.use_profile(profile);
     app_state.0.lock().await.active_profile = Some(profile.to_owned());
 
+    let db_cache = &mut databse_cache.0.lock().await;
+    populate_db_cache(profile, db_cache).await;
+
+    let cluster_cache = &mut cluster_cache.0.lock().await;
+    populate_cluster_cache(profile, cluster_cache).await;
+
+    let service_cache = &mut service_cache.0.lock().await;
+    populate_services_cache(profile, &cluster_cache, service_cache).await;
+
     Ok(user_config.clone())
 }
 
@@ -85,16 +98,45 @@ async fn set_dbeaver_path(
 #[tauri::command]
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
-    cluster_cache: tauri::State<'_, ClustersCache>,
     service_cache: tauri::State<'_, ServicesCache>,
     db_cache: tauri::State<'_, DatabasesCache>,
+    home_cache: tauri::State<'_, HomeCache>,
 ) -> Result<(), BError> {
     let mut app_state = app_state.0.lock().await;
     app_state.active_profile = None;
-    cluster_cache.0.lock().await.clear();
     service_cache.0.lock().await.clear();
     db_cache.0.lock().await.clear();
+    home_cache.0.lock().await.databases.clear();
+    home_cache.0.lock().await.services.clear();
     Ok(())
+}
+
+async fn populate_db_cache(active_profile: &str, databases_cache: &mut Vec<DbInstance>) {
+    databases_cache.clear();
+    let databases = aws::databases(&aws::rds_client(&active_profile).await).await;
+    for db in databases {
+        databases_cache.push(db);
+    }
+}
+
+async fn populate_cluster_cache(active_profile: &str, cluster_cache: &mut Vec<Cluster>) {
+    cluster_cache.clear();
+    let clusters = aws::clusters(&aws::ecs_client(&active_profile).await).await;
+    for cluster in clusters {
+        cluster_cache.push(cluster);
+    }
+}
+
+async fn populate_services_cache(
+    active_profile: &str,
+    clusters: &[Cluster],
+    services_cache: &mut HashMap<Env, Vec<EcsService>>,
+) {
+    services_cache.clear();
+    for cluster in clusters {
+        let services = aws::services(&aws::ecs_client(&active_profile).await, cluster).await;
+        services_cache.insert(cluster.env.clone(), services);
+    }
 }
 
 #[tauri::command]
@@ -113,32 +155,32 @@ async fn home(
         let user = user_config.0.lock().await;
         let ecs_client = aws::ecs_client(&active_profile).await;
 
-        let mut databases_cache = databases_cache.0.lock().await;
-        {
-            if databases_cache.is_empty() {
-                let databases = aws::databases(&aws::rds_client(&active_profile).await).await;
-                for db in databases {
-                    databases_cache.push(db);
-                }
-            }
-        }
-
+        let databases_cache = databases_cache.0.lock().await;
         let dbs_list: Vec<aws::DbInstance> = databases_cache
             .iter()
             .filter(|db| user.rds.contains(&db.arn))
             .cloned()
             .collect();
         home_cache.databases = dbs_list;
+
         let ecs_arns = &user.ecs;
+        let mut ecs_list: Vec<ServiceDetails> = home_cache
+            .services
+            .iter()
+            .filter(|e| ecs_arns.contains(&e.arn))
+            .cloned()
+            .collect();
+
         let cached_services = &mut home_cache.services;
         for ecs in ecs_arns.into_iter() {
             if !cached_services
                 .into_iter()
                 .any(|cached_ecs| cached_ecs.arn == *ecs)
             {
-                cached_services.push(aws::service_details(&ecs_client, ecs).await);
+                ecs_list.push(aws::service_details(&ecs_client, ecs).await);
             }
         }
+        home_cache.services = ecs_list;
 
         Ok(home_cache.clone())
     } else {
@@ -220,8 +262,45 @@ async fn databases(
 }
 
 #[tauri::command]
-async fn discover() -> Result<(), BError> {
-    todo!()
+async fn discover(
+    name: &str,
+    db_cache: tauri::State<'_, DatabasesCache>,
+    service_cache: tauri::State<'_, ServicesCache>,
+) -> Result<Vec<(String, aws::Env, String, String)>, BError> {
+    let name = &name.to_lowercase();
+    let mut records: Vec<(String, aws::Env, String, String)> = vec![];
+    db_cache
+        .0
+        .lock()
+        .await
+        .iter()
+        .filter(|db| db.arn.contains(name))
+        .map(|db| {
+            (
+                "Database".to_owned(),
+                db.env.clone(),
+                db.arn.to_owned(),
+                db.name.to_owned(),
+            )
+        })
+        .for_each(|r| records.push(r));
+    for entry in service_cache.0.lock().await.iter() {
+        entry
+            .1
+            .iter()
+            .filter(|s| s.arn.contains(name))
+            .map(|s| {
+                (
+                    "Service".to_owned(),
+                    s.env.clone(),
+                    s.arn.to_owned(),
+                    s.name.to_owned(),
+                )
+            })
+            .for_each(|r| records.push(r));
+    }
+
+    Ok(records)
 }
 
 #[tauri::command]
@@ -261,6 +340,32 @@ async fn start_db_proxy(
     } else {
         Err(BError::new("start_db_proxy", "Failed to start"))
     }
+}
+
+#[tauri::command]
+async fn refresh_cache(
+    window: Window,
+    app_state: tauri::State<'_, AppContextState>,
+    databse_cache: tauri::State<'_, DatabasesCache>,
+    cluster_cache: tauri::State<'_, ClustersCache>,
+    service_cache: tauri::State<'_, ServicesCache>,
+    home_cache: tauri::State<'_, HomeCache>,
+) -> Result<(), ()> {
+    let profile = &app_state.0.lock().await.active_profile.clone().unwrap();
+
+    let db_cache = &mut databse_cache.0.lock().await;
+    populate_db_cache(profile, db_cache).await;
+
+    let cluster_cache = &mut cluster_cache.0.lock().await;
+    populate_cluster_cache(profile, cluster_cache).await;
+
+    let service_cache = &mut service_cache.0.lock().await;
+    populate_services_cache(profile, &cluster_cache, service_cache).await;
+
+    home_cache.0.lock().await.services.clear();
+    home_cache.0.lock().await.databases.clear();
+    window.emit("cache-refreshed", ()).unwrap();
+    Ok(())
 }
 
 #[tauri::command]
@@ -475,10 +580,9 @@ async fn main() {
     tauri::Builder::default()
         .manage(UserConfigState(Arc::new(Mutex::new(UserConfig::default()))))
         .manage(AppContextState::default())
-        .manage(BastionsCache::default())
-        .manage(ClustersCache::default())
         .manage(DatabasesCache::default())
         .manage(ServicesCache::default())
+        .manage(ClustersCache::default())
         .manage(HomeCache(Arc::new(Mutex::new(HomePage {
             services: Vec::new(),
             databases: Vec::new(),
@@ -497,7 +601,8 @@ async fn main() {
             start_service_proxy,
             open_dbeaver,
             home,
-            discover
+            discover,
+            refresh_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -505,8 +610,6 @@ async fn main() {
 
 struct HomeCache(Arc<Mutex<HomePage>>);
 
-#[derive(Default)]
-struct BastionsCache(Arc<Mutex<Vec<aws::Bastion>>>);
 #[derive(Default)]
 struct ClustersCache(Arc<Mutex<Vec<aws::Cluster>>>);
 #[derive(Default)]
