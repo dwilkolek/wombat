@@ -343,6 +343,32 @@ async fn start_db_proxy(
 }
 
 #[tauri::command]
+async fn refresh_cache(
+    window: Window,
+    app_state: tauri::State<'_, AppContextState>,
+    databse_cache: tauri::State<'_, DatabasesCache>,
+    cluster_cache: tauri::State<'_, ClustersCache>,
+    service_cache: tauri::State<'_, ServicesCache>,
+    home_cache: tauri::State<'_, HomeCache>,
+) -> Result<(), ()> {
+    let profile = &app_state.0.lock().await.active_profile.clone().unwrap();
+
+    let db_cache = &mut databse_cache.0.lock().await;
+    populate_db_cache(profile, db_cache).await;
+
+    let cluster_cache = &mut cluster_cache.0.lock().await;
+    populate_cluster_cache(profile, cluster_cache).await;
+
+    let service_cache = &mut service_cache.0.lock().await;
+    populate_services_cache(profile, &cluster_cache, service_cache).await;
+
+    home_cache.0.lock().await.services.clear();
+    home_cache.0.lock().await.databases.clear();
+    window.emit("cache-refreshed", ()).unwrap();
+    Ok(())
+}
+
+#[tauri::command]
 async fn start_service_proxy(
     window: Window,
     service: aws::EcsService,
@@ -575,7 +601,8 @@ async fn main() {
             start_service_proxy,
             open_dbeaver,
             home,
-            discover
+            discover,
+            refresh_cache
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
