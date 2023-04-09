@@ -8,6 +8,8 @@
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
 	import { open } from '@tauri-apps/api/shell';
+	import StarIcon from '$lib/star-icon.svelte';
+	import { listen } from '@tauri-apps/api/event';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -15,6 +17,9 @@
 		return !!user.ecs.find((ecsArn) => ecsArn == arn);
 	};
 	$: activeCluser = envStore.activeCluser;
+	$: listen('cache-refreshed', () => {
+		services = execute<EcsService[]>('services', { cluster: $activeCluser }, true);
+	});
 
 	$: services = $activeCluser
 		? execute<EcsService[]>('services', { cluster: $activeCluser }, true)
@@ -62,12 +67,7 @@
 											userStore.favoriteEcs(service.arn);
 										}}
 									>
-										<Icon
-											data={star}
-											size="2.2em"
-											fill={isFavourite(service.arn) ? 'yellow' : 'accent'}
-											stroke={isFavourite(service.arn) ? 'yellow' : 'accent'}
-										/>
+										<StarIcon state={isFavourite(service.arn)} />
 									</button>
 
 									<div class="flex flex-col">
