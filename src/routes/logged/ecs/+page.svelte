@@ -8,6 +8,7 @@
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
 	import { open } from '@tauri-apps/api/shell';
+	import StarIcon from '$lib/star-icon.svelte';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -62,12 +63,7 @@
 											userStore.favoriteEcs(service.arn);
 										}}
 									>
-										<Icon
-											data={star}
-											size="2.2em"
-											fill={isFavourite(service.arn) ? 'yellow' : 'accent'}
-											stroke={isFavourite(service.arn) ? 'yellow' : 'accent'}
-										/>
+										<StarIcon state={isFavourite(service.arn)} />
 									</button>
 
 									<div class="flex flex-col">
