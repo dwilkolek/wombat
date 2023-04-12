@@ -2,8 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use aws::{ecs_client, Cluster, DbInstance, EcsService, Env, ServiceDetails};
+
+use chrono::prelude::*;
 use shared::BError;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{collections::HashMap, process::Command};
 use tauri::Window;
 use tokio::sync::Mutex;
@@ -51,10 +54,13 @@ async fn favorite_rds(
 #[tauri::command]
 async fn login(
     profile: &str,
+    window: Window,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
 
-    databse_cache: tauri::State<'_, DatabasesCache>,
+    home_cache: tauri::State<'_, HomeCache>,
+    task_tracker: tauri::State<'_, AsyncTaskManager>, 
+    database_cache: tauri::State<'_, DatabasesCache>,
     cluster_cache: tauri::State<'_, ClustersCache>,
     service_cache: tauri::State<'_, ServicesCache>,
 ) -> Result<UserConfig, BError> {
@@ -74,14 +80,50 @@ async fn login(
     user_config.use_profile(profile);
     app_state.0.lock().await.active_profile = Some(profile.to_owned());
 
-    let db_cache = &mut databse_cache.0.lock().await;
+    let db_cache = &mut database_cache.0.lock().await;
     populate_db_cache(profile, db_cache).await;
+    dbg!("Done db services");
 
     let cluster_cache = &mut cluster_cache.0.lock().await;
     populate_cluster_cache(profile, cluster_cache).await;
+    dbg!("Done clusters services");
+    
+    let service_job_cache = Arc::clone(&service_cache.0);
+    let cluster_cache = cluster_cache.clone();
+    let service_job_profile = profile.to_owned();
+    tokio::task::spawn(async move {
+        dbg!("Start services");
+        let service_cache = &mut service_job_cache.lock().await;
+        populate_services_cache(&service_job_profile, &cluster_cache, service_cache).await;
+        dbg!("End services");
+    });
 
-    let service_cache = &mut service_cache.0.lock().await;
-    populate_services_cache(profile, &cluster_cache, service_cache).await;
+    let home_page_ref = Arc::clone(&home_cache.0);
+    let job_profile = profile.to_owned();
+    task_tracker.0.lock().await.home_details_refresher = Some(tokio::task::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            let mut home_page = home_page_ref.lock().await;
+            let ecs_client = aws::ecs_client(&job_profile).await;
+            let mut new_services = vec![];
+            for service in home_page.services.iter() {
+                dbg!(Utc::now().signed_duration_since(service.timestamp).num_minutes());
+                if Utc::now().signed_duration_since(service.timestamp).num_minutes() > 2 {
+                    new_services.push(aws::service_details(&ecs_client, &service.arn).await)
+                } else {
+                    new_services.push(service.clone())
+                }
+            }
+            home_page.services = new_services;
+            window.emit(
+                "new-home-cache",
+                home_page.clone(),
+            )
+            .unwrap();
+        }
+          
+    }));
 
     Ok(user_config.clone())
 }
@@ -101,6 +143,7 @@ async fn logout(
     service_cache: tauri::State<'_, ServicesCache>,
     db_cache: tauri::State<'_, DatabasesCache>,
     home_cache: tauri::State<'_, HomeCache>,
+    task_tracker: tauri::State<'_, AsyncTaskManager>, 
 ) -> Result<(), BError> {
     let mut app_state = app_state.0.lock().await;
     app_state.active_profile = None;
@@ -108,6 +151,11 @@ async fn logout(
     db_cache.0.lock().await.clear();
     home_cache.0.lock().await.databases.clear();
     home_cache.0.lock().await.services.clear();
+    if let Some(handler) = &task_tracker.0.lock().await.home_details_refresher {
+        handler.abort()
+    }
+    task_tracker.0.lock().await.home_details_refresher = None;
+
     Ok(())
 }
 
@@ -583,6 +631,7 @@ async fn main() {
         .manage(DatabasesCache::default())
         .manage(ServicesCache::default())
         .manage(ClustersCache::default())
+        .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker { home_details_refresher: None }))))
         .manage(HomeCache(Arc::new(Mutex::new(HomePage {
             services: Vec::new(),
             databases: Vec::new(),
@@ -631,4 +680,9 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 struct HomePage {
     services: Vec<aws::ServiceDetails>,
     databases: Vec<aws::DbInstance>,
+}
+struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
+
+struct TaskTracker {
+    home_details_refresher: Option<tokio::task::JoinHandle<()>>
 }
