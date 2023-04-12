@@ -3,7 +3,6 @@
 	import { userStore } from '$lib/user-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
-	import { prevent_default } from 'svelte/internal';
 
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');

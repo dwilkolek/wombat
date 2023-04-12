@@ -1,6 +1,4 @@
 <script lang="ts">
-	import Icon from 'svelte-icon/Icon.svelte';
-	import star from '$lib/images/star-solid.svg?raw';
 	import dbeaver from '$lib/images/dbeaver-head.png';
 	import type { DbInstance } from '$lib/types';
 	import { userStore } from '$lib/user-store';
