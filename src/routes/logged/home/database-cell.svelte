@@ -4,6 +4,7 @@
 	import type { DbInstance } from '$lib/types';
 
 	import dbeaver from '$lib/images/dbeaver-head.png';
+	import { userStore } from '$lib/user-store';
 	export let database: DbInstance | undefined;
 </script>
 
@@ -23,24 +24,26 @@
 				{database.environment_tag.toUpperCase()} Port: {$taskStore.find(
 					(t) => t.arn == database?.arn
 				)?.port}
-				<button
-					class={`btn btn-sm btn-circle ${
-						!$taskStore.find((t) => t.arn == database?.arn) ? 'opacity-25' : ''
-					}`}
-					disabled={!$taskStore.find((t) => t.arn == database?.arn)}
-					on:click={() => {
-						execute(
-							'open_dbeaver',
-							{
-								db: database,
-								port: $taskStore.find((t) => t.arn == database?.arn)?.port
-							},
-							false
-						);
-					}}
-				>
-					<img width="24" src={dbeaver} alt="open dbeaver" />
-				</button>
+				{#if $userStore.dbeaver_path} 
+					<button
+						class={`btn btn-sm btn-circle ${
+							!$taskStore.find((t) => t.arn == database?.arn) ? 'opacity-25' : ''
+						}`}
+						disabled={!$taskStore.find((t) => t.arn == database?.arn)}
+						on:click={() => {
+							execute(
+								'open_dbeaver',
+								{
+									db: database,
+									port: $taskStore.find((t) => t.arn == database?.arn)?.port
+								},
+								false
+							);
+						}}
+					>
+						<img width="24" src={dbeaver} alt="open dbeaver" />
+					</button>
+				{/if}
 			</div>
 		{/if}
 	</div>
