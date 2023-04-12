@@ -1,5 +1,5 @@
 import { execute } from '$lib/error-store';
-import type { AwsEnv, DbInstance, ServiceDetails } from '$lib/types';
+import type { DbInstance, ServiceDetails } from '$lib/types';
 import { listen } from '@tauri-apps/api/event';
 import { readable, writable } from 'svelte/store';
 type HomePage = {
@@ -20,9 +20,19 @@ const createHome = () => {
 	listen('cache-refreshed', () => {
 		refresh();
 	});
+	listen<HomePage>('new-home-cache', (e) => {
+		console.log('new-home-cache', e)
+		handleNewHome(e.payload)
+	});
 	const refresh = (tracking = false) => {
 		execute<HomePage>('home', undefined, tracking).then((home) => {
-			const newEntries: HomeEntries = {};
+			handleNewHome(home)
+		});
+	};
+
+	const handleNewHome = (home: HomePage) => {
+		console.log('handleNewHome', home);
+		const newEntries: HomeEntries = {};
 			const newArnList: string[] = [];
 			home.services.forEach((v) => {
 				if (!newEntries[v.name]) {
@@ -46,8 +56,7 @@ const createHome = () => {
 				newEntries[v.name][v.environment_tag.toUpperCase()].db = v;
 			});
 			entries.set(newEntries);
-		});
-	};
+	}
 	const entriesReadable = readable({} as HomeEntries, (set) => {
 		set({});
 		entries.subscribe((s) => {

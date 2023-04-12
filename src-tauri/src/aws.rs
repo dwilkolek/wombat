@@ -8,7 +8,7 @@ use aws_sdk_ssm as ssm;
 use ec2::types::Filter;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-
+use chrono::prelude::*;
 use crate::shared::BError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -112,6 +112,7 @@ pub struct EcsService {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDetails {
+    pub timestamp: DateTime<Utc>,
     pub arn: String,
     pub name: String,
     pub version: String,
@@ -237,6 +238,7 @@ pub async fn service_details(ecs: &ecs::Client, service_arn: &str) -> ServiceDet
         .unwrap()
         .to_owned();
     ServiceDetails {
+        timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap().to_owned(),
         version: version,
