@@ -59,7 +59,7 @@ async fn login(
     user_config: tauri::State<'_, UserConfigState>,
 
     home_cache: tauri::State<'_, HomeCache>,
-    task_tracker: tauri::State<'_, AsyncTaskManager>, 
+    task_tracker: tauri::State<'_, AsyncTaskManager>,
     database_cache: tauri::State<'_, DatabasesCache>,
     cluster_cache: tauri::State<'_, ClustersCache>,
     service_cache: tauri::State<'_, ServicesCache>,
@@ -80,22 +80,19 @@ async fn login(
     user_config.use_profile(profile);
     app_state.0.lock().await.active_profile = Some(profile.to_owned());
 
-    let db_cache = &mut database_cache.0.lock().await;
-    populate_db_cache(profile, db_cache).await;
-    dbg!("Done db services");
-
-    let cluster_cache = &mut cluster_cache.0.lock().await;
-    populate_cluster_cache(profile, cluster_cache).await;
-    dbg!("Done clusters services");
-    
-    let service_job_cache = Arc::clone(&service_cache.0);
-    let cluster_cache = cluster_cache.clone();
-    let service_job_profile = profile.to_owned();
+    let database_cache = Arc::clone(&database_cache.0);
+    let db_profile = profile.to_owned().clone();
     tokio::task::spawn(async move {
-        dbg!("Start services");
-        let service_cache = &mut service_job_cache.lock().await;
-        populate_services_cache(&service_job_profile, &cluster_cache, service_cache).await;
-        dbg!("End services");
+        let db_cache = &mut database_cache.lock().await;
+        populate_db_cache(&db_profile, db_cache).await;
+    });
+
+    let cluster_cache = Arc::clone(&cluster_cache.0);
+    let cache_profile = profile.to_owned().clone();
+    let cluster_handle = tokio::task::spawn(async move {
+        let cluster_cache = &mut cluster_cache.lock().await;
+        populate_cluster_cache(&cache_profile, cluster_cache).await;
+        cluster_cache.clone()
     });
 
     let home_page_ref = Arc::clone(&home_cache.0);
@@ -105,25 +102,45 @@ async fn login(
         loop {
             interval.tick().await;
             let mut home_page = home_page_ref.lock().await;
-            let ecs_client = aws::ecs_client(&job_profile).await;
-            let mut new_services = vec![];
-            for service in home_page.services.iter() {
-                dbg!(Utc::now().signed_duration_since(service.timestamp).num_minutes());
-                if Utc::now().signed_duration_since(service.timestamp).num_minutes() > 2 {
-                    new_services.push(aws::service_details(&ecs_client, &service.arn).await)
-                } else {
-                    new_services.push(service.clone())
+            if Utc::now()
+                .signed_duration_since(home_page.timestamp)
+                .num_minutes()
+                > 2
+            {
+                let arns_to_update = home_page
+                    .services
+                    .iter()
+                    .map(|s| s.arn.to_owned())
+                    .collect::<Vec<String>>();
+                let handles: Vec<_> = arns_to_update
+                    .into_iter()
+                    .map(|service| {
+                        let job_profile = job_profile.clone();
+                        return tokio::task::spawn(async move {
+                            let ecs_client = aws::ecs_client(&job_profile).await;
+                            aws::service_details(&ecs_client, &service).await
+                        });
+                    })
+                    .collect();
+                let mut new_services = vec![];
+                for handle in handles {
+                    new_services.push(handle.await.unwrap())
                 }
+
+                home_page.services = new_services
             }
-            home_page.services = new_services;
-            window.emit(
-                "new-home-cache",
-                home_page.clone(),
-            )
-            .unwrap();
+
+            window.emit("new-home-cache", home_page.clone()).unwrap();
         }
-          
     }));
+
+    let service_job_cache = Arc::clone(&service_cache.0);
+    let service_job_profile = profile.to_owned();
+    tokio::task::spawn(async move {
+        let cluster_cache = cluster_handle.await.unwrap();
+        let service_cache = &mut service_job_cache.lock().await;
+        populate_services_cache(&service_job_profile, &cluster_cache, service_cache).await;
+    });
 
     Ok(user_config.clone())
 }
@@ -143,7 +160,7 @@ async fn logout(
     service_cache: tauri::State<'_, ServicesCache>,
     db_cache: tauri::State<'_, DatabasesCache>,
     home_cache: tauri::State<'_, HomeCache>,
-    task_tracker: tauri::State<'_, AsyncTaskManager>, 
+    task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
     let mut app_state = app_state.0.lock().await;
     app_state.active_profile = None;
@@ -201,7 +218,6 @@ async fn home(
     if let Some(active_profile) = active_profile {
         let mut home_cache = home_cache.0.lock().await;
         let user = user_config.0.lock().await;
-        let ecs_client = aws::ecs_client(&active_profile).await;
 
         let databases_cache = databases_cache.0.lock().await;
         let dbs_list: Vec<aws::DbInstance> = databases_cache
@@ -211,7 +227,7 @@ async fn home(
             .collect();
         home_cache.databases = dbs_list;
 
-        let ecs_arns = &user.ecs;
+        let ecs_arns = user.ecs.clone();
         let mut ecs_list: Vec<ServiceDetails> = home_cache
             .services
             .iter()
@@ -220,14 +236,22 @@ async fn home(
             .collect();
 
         let cached_services = &mut home_cache.services;
+        let mut handles: Vec<_> = vec![];
         for ecs in ecs_arns.into_iter() {
             if !cached_services
                 .into_iter()
                 .any(|cached_ecs| cached_ecs.arn == *ecs)
             {
-                ecs_list.push(aws::service_details(&ecs_client, ecs).await);
+                let ecs_client = aws::ecs_client(&active_profile.clone()).await;
+                handles.push(tokio::task::spawn(async move {
+                    aws::service_details(&ecs_client, &ecs).await
+                }));
             }
         }
+        for handle in handles {
+            ecs_list.push(handle.await.unwrap())
+        }
+
         home_cache.services = ecs_list;
 
         Ok(home_cache.clone())
@@ -631,8 +655,11 @@ async fn main() {
         .manage(DatabasesCache::default())
         .manage(ServicesCache::default())
         .manage(ClustersCache::default())
-        .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker { home_details_refresher: None }))))
+        .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
+            home_details_refresher: None,
+        }))))
         .manage(HomeCache(Arc::new(Mutex::new(HomePage {
+            timestamp: Utc::now(),
             services: Vec::new(),
             databases: Vec::new(),
         }))))
@@ -678,11 +705,12 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct HomePage {
+    timestamp: DateTime<Utc>,
     services: Vec<aws::ServiceDetails>,
     databases: Vec<aws::DbInstance>,
 }
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct TaskTracker {
-    home_details_refresher: Option<tokio::task::JoinHandle<()>>
+    home_details_refresher: Option<tokio::task::JoinHandle<()>>,
 }
