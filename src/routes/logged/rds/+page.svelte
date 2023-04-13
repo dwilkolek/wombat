@@ -71,24 +71,26 @@
 								</div>
 							</td>
 							<td>
-								<button
-									class={`btn btn-circle ${
-										!$taskStore.find((t) => t.arn == db.arn) ? 'opacity-25' : ''
-									}`}
-									disabled={!$taskStore.find((t) => t.arn == db.arn)}
-									on:click={() => {
-										execute(
-											'open_dbeaver',
-											{
-												db,
-												port: $taskStore.find((t) => t.arn == db.arn)?.port
-											},
-											false
-										);
-									}}
-								>
-									<img width="48" src={dbeaver} alt="download icon" />
-								</button>
+								{#if $userStore.dbeaver_path} 
+									<button
+										class={`btn btn-circle ${
+											!$taskStore.find((t) => t.arn == db.arn) ? 'opacity-25' : ''
+										}`}
+										disabled={!$taskStore.find((t) => t.arn == db.arn)}
+										on:click={() => {
+											execute(
+												'open_dbeaver',
+												{
+													db,
+													port: $taskStore.find((t) => t.arn == db.arn)?.port
+												},
+												false
+											);
+										}}
+									>
+										<img width="48" src={dbeaver} alt="download icon" />
+									</button>
+								{/if}
 							</td>
 
 							<td>
