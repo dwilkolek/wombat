@@ -3,17 +3,24 @@
 	import { userStore } from '$lib/user-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
-
+	import { fetch } from '@tauri-apps/api/http';
+	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest')
+		.then(r => {
+			return (r as any).data.html_url.split("/v").at(-1) as string
+		});
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
 	};
+	const openGithubPageRelease = () => {
+		open('https://github.com/dwilkolek/wombat/releases/latest');
+	};
+	
 	let { subscribe, login } = userStore;
 	let profile: string = '';
 
 	$: subscribe((userConfig) => {
 		profile = userConfig?.last_used_profile ?? '';
 	});
-
 	let loading = false;
 </script>
 
@@ -69,16 +76,31 @@
 					</form>
 				</div>
 			</div>
-			<div class="flex justify-center gap-2 my-2">
-				<span>Source code:</span>
-				<a
-					href="https://github.com/dwilkolek/wombat"
-					on:click|preventDefault={() => {
-						openGithubPage();
-					}}
-					target="_blank"
-					>https://github.com/dwilkolek/wombat v{version}
-				</a>
+			<div class="flex flex-col justify-center items-center gap-2 my-2">
+				{#await latest then latest}
+					{#if (latest ?? "0.0.0").split(".").map((v, i) => parseInt(v)*Math.pow(1000, 3-i)).reduce((acc, v) => acc + v, 0) > version.split(".").map((v, i) => parseInt(v)*Math.pow(1000, 3-i)).reduce((acc, v) => acc + v, 0)} 
+						<a class="underline text-accent"
+							href="https://github.com/dwilkolek/wombat/releases/latest"
+							on:click|preventDefault={() => {
+								openGithubPageRelease();
+							}}
+							target="_blank"
+							>New version v{latest} available!
+						</a>
+					{/if}
+				{/await}
+				<div>
+					<span>Source code:</span>
+					<a class="underline"
+						href="https://github.com/dwilkolek/wombat"
+						on:click|preventDefault={() => {
+							openGithubPage();
+						}}
+						target="_blank"
+						>https://github.com/dwilkolek/wombat v{version} 
+					</a>
+				</div>
+				
 			</div>
 		</div>
 	</div>
