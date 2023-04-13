@@ -3,7 +3,6 @@
 	import { writable } from 'svelte/store';
 	import { version } from '$app/environment';
 	import { userStore } from '$lib/user-store';
-	import type { UserConfig } from './types';
 	let last_push = writable<any>();
 	$: user = userStore;
 	$: {
@@ -26,7 +25,7 @@
 				appVersion: version
 			});
 			gtag('config', 'G-VD6DFXWQH0', {
-				page_title: document.title,
+				page_title: `${document.title} v${version}`,
 				page_path: $page.url.pathname,
 				user_id: $user.id,
 				appName: 'wombat',

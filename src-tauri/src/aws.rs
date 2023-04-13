@@ -1,15 +1,15 @@
 use std::fmt;
 
+use crate::shared::BError;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
 use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
+use chrono::prelude::*;
 use ec2::types::Filter;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-
-use crate::shared::BError;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Env {
@@ -112,6 +112,7 @@ pub struct EcsService {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDetails {
+    pub timestamp: DateTime<Utc>,
     pub arn: String,
     pub name: String,
     pub version: String,
@@ -219,7 +220,6 @@ pub async fn service_details(ecs: &ecs::Client, service_arn: &str) -> ServiceDet
     let service = service.services().unwrap();
     let service = &service[0];
     let task_def_arn = service.task_definition().unwrap();
-
     let task_def = ecs
         .describe_task_definition()
         .task_definition(task_def_arn)
@@ -237,6 +237,7 @@ pub async fn service_details(ecs: &ecs::Client, service_arn: &str) -> ServiceDet
         .unwrap()
         .to_owned();
     ServiceDetails {
+        timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap().to_owned(),
         version: version,
