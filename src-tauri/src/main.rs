@@ -105,7 +105,7 @@ async fn login(
             if Utc::now()
                 .signed_duration_since(home_page.timestamp)
                 .num_minutes()
-                > 2
+                > 10
             {
                 let arns_to_update = home_page
                     .services
