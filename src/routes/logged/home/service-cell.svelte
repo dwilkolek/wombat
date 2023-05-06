@@ -5,25 +5,26 @@
 	import { AwsEnv, type ServiceDetails } from '$lib/types';
 	import { open } from '@tauri-apps/api/shell';
 
-	$: entries = $homeStore;
+	$: entries = Object.values($homeStore.find(e => e.tracked_name == service?.name)?.services ?? []) as ServiceDetails[];
 	$: lower_rank_env =
-		service?.env == AwsEnv.PROD ? AwsEnv.DEMO : service?.env == AwsEnv.DEMO ? AwsEnv.DEV : '';
+		service?.env == AwsEnv.PROD ? AwsEnv.DEMO : service?.env == AwsEnv.DEMO ? AwsEnv.DEV : undefined;
+	$: lower_rank_service_version = entries.find(s => s.env == lower_rank_env)?.version;
 	export let service: ServiceDetails | undefined;
 </script>
-
 {#if service}
+
 	<div class="flex flex-row gap-2 items-start pr-4">
 		<span
 			class={`${
-				entries[service?.name][lower_rank_env] &&
-				entries[service?.name][lower_rank_env]?.service?.version != 'latest' &&
-				entries[service?.name][lower_rank_env]?.service?.version !=
-					entries[service?.name][service?.env]?.service?.version
+				lower_rank_service_version &&
+				lower_rank_service_version != 'latest' &&
+				lower_rank_service_version != service.version
 					? 'text-warning'
 					: ''
 			}`}
 		>
-			{service?.version ?? '??'}</span
+	
+		{service.version ?? '??'}</span
 		>
 		{#if !$taskStore.find((t) => t.arn == service?.arn)}
 			<button

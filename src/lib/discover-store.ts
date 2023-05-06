@@ -17,7 +17,7 @@ const createDiscoverStore = () => {
 		});
 	};
 	userStore.subscribe((userConfig) => {
-		favoriteArns = [...userConfig.ecs, ...userConfig.rds];
+		favoriteArns = [...userConfig.tracked_names];
 		refresh(false);
 	});
 

@@ -1,10 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use aws::{ecs_client, Cluster, DbInstance, EcsService, Env, ServiceDetails};
+use aws::{ecs_client, Cluster, DbInstance, EcsService, ServiceDetails};
+use shared::{Env};
 
 use chrono::prelude::*;
 use shared::BError;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
@@ -34,12 +36,21 @@ async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<U
 }
 
 #[tauri::command]
+async fn favorite(
+    name: &str,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<UserConfig, BError> {
+    let mut user_config = user_config.0.lock().await;
+    user_config.favorite(name.to_owned())
+}
+
+#[tauri::command]
 async fn favorite_ecs(
     arn: &str,
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.favorite_ecs(arn)
+    user_config.favorite(shared::ecs_arn_to_name(arn))
 }
 
 #[tauri::command]
@@ -48,7 +59,7 @@ async fn favorite_rds(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.favorite_rds(arn)
+    user_config.favorite(shared::rds_arn_to_name(arn))    
 }
 
 #[tauri::command]
@@ -108,9 +119,11 @@ async fn login(
                 > 10
             {
                 let arns_to_update = home_page
-                    .services
+                    .entries
                     .iter()
-                    .map(|s| s.arn.to_owned())
+                    .map(|entry| &entry.services)
+                    .flatten()
+                    .map(|s| s.0.to_owned())
                     .collect::<Vec<String>>();
                 let handles: Vec<_> = arns_to_update
                     .into_iter()
@@ -122,12 +135,20 @@ async fn login(
                         });
                     })
                     .collect();
-                let mut new_services = vec![];
-                for handle in handles {
-                    new_services.push(handle.await.unwrap())
+                let mut updated_service_details = vec![];
+                for handle in handles {                    
+                    updated_service_details.push(handle.await.unwrap())
                 }
 
-                home_page.services = new_services
+                for updated_service_detail in updated_service_details.into_iter() {
+                    for entry in home_page.entries.iter_mut() {                        
+                        let arn = updated_service_detail.arn.to_owned();
+                        if let Some(_) = entry.services.remove(&arn) {
+                            entry.services.insert(arn, updated_service_detail.clone());
+                        }
+                    }
+                }
+                
             }
 
             window.emit("new-home-cache", home_page.clone()).unwrap();
@@ -166,8 +187,7 @@ async fn logout(
     app_state.active_profile = None;
     service_cache.0.lock().await.clear();
     db_cache.0.lock().await.clear();
-    home_cache.0.lock().await.databases.clear();
-    home_cache.0.lock().await.services.clear();
+    home_cache.0.lock().await.entries.clear();
     if let Some(handler) = &task_tracker.0.lock().await.home_details_refresher {
         handler.abort()
     }
@@ -210,6 +230,7 @@ async fn home(
     user_config: tauri::State<'_, UserConfigState>,
     home_cache: tauri::State<'_, HomeCache>,
     databases_cache: tauri::State<'_, DatabasesCache>,
+    services_cache: tauri::State<'_, ServicesCache>,
 ) -> Result<HomePage, BError> {
     let active_profile = {
         let app_state = app_state.0.lock().await;
@@ -218,41 +239,55 @@ async fn home(
     if let Some(active_profile) = active_profile {
         let mut home_cache = home_cache.0.lock().await;
         let user = user_config.0.lock().await;
-
+        
         let databases_cache = databases_cache.0.lock().await;
+        
         let dbs_list: Vec<aws::DbInstance> = databases_cache
             .iter()
-            .filter(|db| user.rds.contains(&db.arn))
+            .filter(|db| user.tracked_names.contains(&shared::rds_arn_to_name(&db.arn)))
             .cloned()
             .collect();
-        home_cache.databases = dbs_list;
+     
 
-        let ecs_arns = user.ecs.clone();
-        let mut ecs_list: Vec<ServiceDetails> = home_cache
-            .services
-            .iter()
-            .filter(|e| ecs_arns.contains(&e.arn))
-            .cloned()
+        let mut cached_ecs_services: HashMap<String, ServiceDetails> = home_cache.entries.iter()
+            .map(|entry| &entry.services)
+            .flatten()
+            .map(|entry| (entry.0.clone(), entry.1.clone()))
             .collect();
 
-        let cached_services = &mut home_cache.services;
+        let required_ecs_arns: Vec<String> = services_cache.0.lock().await.values().into_iter()
+            .flatten()
+            .filter(|service| user.tracked_names.contains(&shared::ecs_arn_to_name(&service.arn)))
+            .map(|service| service.arn.to_owned())
+            .collect();
+        
         let mut handles: Vec<_> = vec![];
-        for ecs in ecs_arns.into_iter() {
-            if !cached_services
-                .into_iter()
-                .any(|cached_ecs| cached_ecs.arn == *ecs)
-            {
-                let ecs_client = aws::ecs_client(&active_profile.clone()).await;
-                handles.push(tokio::task::spawn(async move {
-                    aws::service_details(&ecs_client, &ecs).await
-                }));
+        for ecs_arn in required_ecs_arns.into_iter() {
+            if cached_ecs_services.get(&ecs_arn).is_none() {
+                        let ecs_client = aws::ecs_client(&active_profile.clone()).await;
+                        handles.push(tokio::task::spawn(async move {
+                            aws::service_details(&ecs_client, &ecs_arn).await
+                        }));
+        
             }
         }
         for handle in handles {
-            ecs_list.push(handle.await.unwrap())
+            let service_details: ServiceDetails = handle.await.unwrap();
+            cached_ecs_services.insert(service_details.arn.clone(), service_details);
         }
 
-        home_cache.services = ecs_list;
+        
+        home_cache.entries = user.tracked_names.iter().map(|tracked_name| HomeEntry{
+            tracked_name: tracked_name.clone(),
+            services: cached_ecs_services.iter()
+                .filter(|service| tracked_name == &shared::ecs_arn_to_name(&service.0))
+                .map(|entry| (entry.0.clone(), entry.1.clone()))
+                .collect(),
+            dbs: dbs_list.iter()
+                .filter(|db| tracked_name == &shared::rds_arn_to_name(&db.arn))
+                .cloned()
+                .collect(),
+        }).collect();
 
         Ok(home_cache.clone())
     } else {
@@ -310,7 +345,7 @@ async fn services(
 
 #[tauri::command]
 async fn databases(
-    env: aws::Env,
+    env: shared::Env,
     app_state: tauri::State<'_, AppContextState>,
     cache: tauri::State<'_, DatabasesCache>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
@@ -338,9 +373,9 @@ async fn discover(
     name: &str,
     db_cache: tauri::State<'_, DatabasesCache>,
     service_cache: tauri::State<'_, ServicesCache>,
-) -> Result<Vec<(String, aws::Env, String, String)>, BError> {
+) -> Result<Vec<(String, shared::Env, String, String)>, BError> {
     let name = &name.to_lowercase();
-    let mut records: Vec<(String, aws::Env, String, String)> = vec![];
+    let mut records: Vec<(String, shared::Env, String, String)> = vec![];
     db_cache
         .0
         .lock()
@@ -434,8 +469,7 @@ async fn refresh_cache(
     let service_cache = &mut service_cache.0.lock().await;
     populate_services_cache(profile, &cluster_cache, service_cache).await;
 
-    home_cache.0.lock().await.services.clear();
-    home_cache.0.lock().await.databases.clear();
+    home_cache.0.lock().await.entries.clear();
     window.emit("cache-refreshed", ()).unwrap();
     Ok(())
 }
@@ -660,8 +694,7 @@ async fn main() {
         }))))
         .manage(HomeCache(Arc::new(Mutex::new(HomePage {
             timestamp: Utc::now(),
-            services: Vec::new(),
-            databases: Vec::new(),
+            entries: Vec::new(),
         }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
@@ -671,6 +704,7 @@ async fn main() {
             services,
             databases,
             set_dbeaver_path,
+            favorite,
             favorite_ecs,
             favorite_rds,
             start_db_proxy,
@@ -691,7 +725,7 @@ struct ClustersCache(Arc<Mutex<Vec<aws::Cluster>>>);
 #[derive(Default)]
 struct DatabasesCache(Arc<Mutex<Vec<aws::DbInstance>>>);
 #[derive(Default)]
-struct ServicesCache(Arc<Mutex<HashMap<aws::Env, Vec<aws::EcsService>>>>);
+struct ServicesCache(Arc<Mutex<HashMap<shared::Env, Vec<aws::EcsService>>>>);
 
 #[derive(Default)]
 struct AppContext {
@@ -706,11 +740,17 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct HomePage {
     timestamp: DateTime<Utc>,
-    services: Vec<aws::ServiceDetails>,
-    databases: Vec<aws::DbInstance>,
+    entries: Vec<HomeEntry>
 }
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct TaskTracker {
     home_details_refresher: Option<tokio::task::JoinHandle<()>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct HomeEntry {
+    tracked_name: shared::TrackedName,
+    services: HashMap<String, aws::ServiceDetails>,
+    dbs: Vec<aws::DbInstance>,
 }

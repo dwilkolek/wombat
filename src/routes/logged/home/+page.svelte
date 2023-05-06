@@ -8,8 +8,12 @@
 	import ServiceCell from './service-cell.svelte';
 	import { userStore } from '$lib/user-store';
 	import StarIcon from '$lib/star-icon.svelte';
+	import { envStore } from '$lib/env-store';
 	$: homeStore.init();
-	$: keys = $homeStore ? Object.keys($homeStore).sort((a, b) => a.localeCompare(b)) : [];
+	$: homeEntries = $homeStore ? $homeStore.sort((a, b) => a.tracked_name.localeCompare(b.tracked_name)) : [];
+	$: clusters = envStore.clusters
+	$: usedEnvs = homeEntries.flatMap(e => [...e.dbs.map(db => db.env), ...Object.values(e.services).map(s => s.env)])
+	$: clustersFiltered = $clusters.filter(cluster =>usedEnvs.includes(cluster.env));
 
 	let discoverValue: string = '';
 </script>
@@ -101,6 +105,13 @@
 			<hr />
 		{/if}
 	</div>
+	{#if homeEntries.length == 0}
+	<h1 class="text-center text-lg">
+		Nothing here. Visit Services & Databases tabs and start things you want to track
+		from each environemnt. 👻 
+	</h1>
+	{/if}
+
 	<div class="flex flex-row gap-2">
 		<table class="table w-full table-zebra table-compact">
 			<thead class="sticky top-0">
@@ -108,82 +119,43 @@
 					<th>
 						<div class="flex gap-2">Service</div>
 					</th>
-					<th class="w-40">ECS DEV</th>
-					<th class="w-40">ECS DEMO</th>
-					<th class="w-40">ECS PROD</th>
-					<th class="w-40">RDS DEV</th>
-					<th class="w-40">RDS DEMO</th>
-					<th class="w-40">RDS PROD</th>
+					{#each clustersFiltered as cluster}
+						<th class="w-40">{cluster.arn.split("/")[1]}</th>
+					{/each}
 					<th class="w-10" />
 				</tr>
 			</thead>
 			<tbody class="overflow-y-auto max-h-96">
-				{#if keys.length === 0}
-					<tr>
-						<td colspan="8">
-							<h1 class="text-center text-lg">
-								Nothing here. Visit Services & Databases tabs and start things you want to track
-								from each environemnt. 👻
-							</h1>
-						</td>
-					</tr>
-				{/if}
-				{#each keys as key}
+				{#each homeEntries as entry}
 					<tr>
 						<td>
 							<span class="font-bold flex flex-row align-middle gap-1">
-								{key}
+								{entry.tracked_name}
 							</span>
 						</td>
-						<td class="align-top">
-							<ServiceCell service={$homeStore[key][AwsEnv.DEV]?.service} />
-						</td>
-						<td class="align-top">
-							<ServiceCell service={$homeStore[key][AwsEnv.DEMO]?.service} />
-						</td>
-						<td class="align-top">
-							<ServiceCell service={$homeStore[key][AwsEnv.PROD]?.service} />
-						</td>
-						<td class="align-top">
-							<DatabaseCell database={$homeStore[key][AwsEnv.DEV]?.db} />
-						</td>
-						<td class="align-top">
-							<DatabaseCell database={$homeStore[key][AwsEnv.DEMO]?.db} />
-						</td>
-						<td class="align-top">
-							<DatabaseCell database={$homeStore[key][AwsEnv.PROD]?.db} />
-						</td>
+						{#each clustersFiltered as cluster}
+							<td>
+								<div class="flex flex-col gap-1">
+								{#each Object.values(entry.services) as service}
+									{#if service.arn.includes(cluster.arn.split("/")[1])}
+										
+											<ServiceCell service={service} />
+									{/if}
+								{/each}
+								{#each entry.dbs as db}
+										{#if db.env == cluster.env}
+												<DatabaseCell database={db} />
+										{/if}
+									{/each}
+								</div>
+							</td>
+						{/each}
 						<td>
 							<span class="font-bold flex flex-row align-middle gap-1">
 								<button
 									on:click={() => {
-										discoverValue = key;
-										discoverStore.discover(key);
-									}}
-									><svg
-										xmlns="http://www.w3.org/2000/svg"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										class="w-5 h-5"
-									>
-										<path d="M6.5 9a2.5 2.5 0 115 0 2.5 2.5 0 01-5 0z" />
-										<path
-											fill-rule="evenodd"
-											d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 5a4 4 0 102.248 7.309l1.472 1.471a.75.75 0 101.06-1.06l-1.471-1.472A4 4 0 009 5z"
-											clip-rule="evenodd"
-										/>
-									</svg>
-								</button>
-								<button
-									on:click={() => {
-										for (let entry of Object.values($homeStore[key])) {
-											if (entry.db) {
-												userStore.favoriteRds(entry.db.arn);
-											}
-											if (entry.service) {
-												userStore.favoriteEcs(entry.service.arn);
-											}
-										}
+										userStore.favoriteTrackedName(entry.tracked_name)
+										
 									}}
 									><svg
 										xmlns="http://www.w3.org/2000/svg"
