@@ -3,7 +3,6 @@ use core::fmt;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-
 pub type TrackedName = String;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,7 +18,6 @@ impl BError {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Env {
@@ -42,6 +40,7 @@ impl fmt::Display for Env {
         }
     }
 }
+
 impl Env {
     pub fn from_exact(str: &str) -> Env {
         match str {
@@ -70,5 +69,16 @@ pub fn ecs_arn_to_name(arn: &str) -> TrackedName {
 }
 
 pub fn rds_arn_to_name(arn: &str) -> TrackedName {
-    arn.split(":").last().unwrap().split("-").skip(2).into_iter().collect::<Vec<&str>>().join("-")
+    arn.split(":")
+        .last()
+        .unwrap()
+        .split("-")
+        .skip(2)
+        .into_iter()
+        .collect::<Vec<&str>>()
+        .join("-")
+}
+
+pub fn cluster_arn_to_name(arn: &str) -> TrackedName {
+    arn.split("/").last().unwrap().to_owned()
 }

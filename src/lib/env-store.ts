@@ -11,30 +11,8 @@ const envImportance = {
 	[AwsEnv.PROD]: 5,
 }
 const envStoreCreate = () => {
-	const currentEnv = writable<AwsEnv>();
-	const activeCluser = writable<Cluster>();
-	let clusterLists: Cluster[] = [];
-	const clusters = readable(clusterLists);
-	invoke<Cluster[]>('clusters').then((resp) => {
-		clusterLists.push(...resp.sort((a, b) => (envImportance[a.env] - envImportance[b.env])));
-		currentEnv.set(AwsEnv.DEV);
-	});
-	listen('cache-refreshed', () => {
-		refresh();
-	});
-	const refresh = () => {
-		invoke<Cluster[]>('clusters').then((resp) => {
-			clusterLists = [];
-			clusterLists.push(...resp.sort((a, b) => (envImportance[a.env] - envImportance[b.env])));
-		});
-	};
-	currentEnv.subscribe((env) => {
-		const active = clusterLists.find((cluster) => cluster.env == env);
-		if (active) {
-			activeCluser.set(active);
-		}
-	});
-	return { clusters, activeCluser, currentEnv, refresh };
+	const currentEnv = writable<AwsEnv>(AwsEnv.DEV);
+	return { currentEnv, envs: Object.values(AwsEnv).sort((a, b) => envImportance[a] - envImportance[b]) };
 };
 
 export const envStore = envStoreCreate();

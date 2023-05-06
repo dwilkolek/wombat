@@ -3,10 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use crate::shared::{BError,Env,TrackedName,rds_arn_to_name,ecs_arn_to_name};
+use crate::shared::{ecs_arn_to_name, rds_arn_to_name, BError, Env, TrackedName};
 use uuid::Uuid;
-
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserConfigOld {
@@ -35,7 +33,6 @@ impl UserConfigOld {
     fn config_path() -> PathBuf {
         home::home_dir().unwrap().as_path().join(".wombat")
     }
-
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -44,7 +41,7 @@ pub struct UserConfig {
     verson: i8,
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
-    pub tracked_names: HashSet<TrackedName>,   
+    pub tracked_names: HashSet<TrackedName>,
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     pub dbeaver_path: Option<String>,
@@ -54,30 +51,39 @@ impl UserConfig {
     pub fn default() -> UserConfig {
         let old_config = UserConfigOld::default();
         if let Some(old) = old_config {
-            let ecs_tracked_names:HashSet<TrackedName> = old.ecs.iter().map(|arn| ecs_arn_to_name(arn)).collect();
-            let rds_tracked_names:HashSet<TrackedName> = old.rds.iter().map(|arn| rds_arn_to_name(arn)).collect();
-            let mut tracked_names:HashSet<TrackedName> = HashSet::new();
+            let ecs_tracked_names: HashSet<TrackedName> =
+                old.ecs.iter().map(|arn| ecs_arn_to_name(arn)).collect();
+            let rds_tracked_names: HashSet<TrackedName> =
+                old.rds.iter().map(|arn| rds_arn_to_name(arn)).collect();
+            let mut tracked_names: HashSet<TrackedName> = HashSet::new();
             tracked_names.extend(ecs_tracked_names);
             tracked_names.extend(rds_tracked_names);
 
             let mut db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>> = HashMap::new();
             for old_entry in old.db_proxy_port_map.iter() {
-                let tracked_name= rds_arn_to_name(old_entry.0);
-                let env= Env::from_any(old_entry.0);
+                let tracked_name = rds_arn_to_name(old_entry.0);
+                let env = Env::from_any(old_entry.0);
                 if !db_proxy_port_map.contains_key(&tracked_name) {
                     db_proxy_port_map.insert(tracked_name.clone(), HashMap::new());
                 }
-                db_proxy_port_map.get_mut(&tracked_name).unwrap().insert(env, *old_entry.1);
+                db_proxy_port_map
+                    .get_mut(&tracked_name)
+                    .unwrap()
+                    .insert(env, *old_entry.1);
             }
-             
-            let mut service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>> = HashMap::new();
+
+            let mut service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>> =
+                HashMap::new();
             for old_entry in old.service_proxy_port_map.iter() {
-                let tracked_name= ecs_arn_to_name(old_entry.0);
-                let env= Env::from_any(old_entry.0);
+                let tracked_name = ecs_arn_to_name(old_entry.0);
+                let env = Env::from_any(old_entry.0);
                 if !service_proxy_port_map.contains_key(&tracked_name) {
                     service_proxy_port_map.insert(tracked_name.clone(), HashMap::new());
                 }
-                service_proxy_port_map.get_mut(&tracked_name).unwrap().insert(env, *old_entry.1);
+                service_proxy_port_map
+                    .get_mut(&tracked_name)
+                    .unwrap()
+                    .insert(env, *old_entry.1);
             }
 
             let new_config = UserConfig {
@@ -115,33 +121,41 @@ impl UserConfig {
         home::home_dir().unwrap().as_path().join(".wombat")
     }
 
-    fn get_port(map: &mut HashMap<TrackedName, HashMap<Env, u16>>, tracked_name: TrackedName, env: Env) -> (u16, bool) {
-        
+    fn get_port(
+        map: &mut HashMap<TrackedName, HashMap<Env, u16>>,
+        tracked_name: TrackedName,
+        env: Env,
+    ) -> (u16, bool) {
         if let Some(mapping) = map.get(&tracked_name) {
             if let Some(port) = mapping.get(&env) {
                 return (*port, false);
-            }     
+            }
         }
 
-        let used_ports: Vec<u16> = map.values().map(|e| e.values()).flatten().copied().collect();
-        
+        let used_ports: Vec<u16> = map
+            .values()
+            .map(|e| e.values())
+            .flatten()
+            .copied()
+            .collect();
+
         let mut possible_port = rand::thread_rng().gen_range(52000..53000);
-            while used_ports.iter().any(|p| *p == possible_port) {
-                possible_port = rand::thread_rng().gen_range(52000..53000);
-            }
-            if !map.contains_key(&tracked_name) {
-                map.insert(tracked_name.clone(), HashMap::new());
-            }
-            if let Some(mapping) = map.get_mut(&tracked_name) {
-                mapping.insert(env, possible_port) ; 
-            }
-           
-            (possible_port, true)
+        while used_ports.iter().any(|p| *p == possible_port) {
+            possible_port = rand::thread_rng().gen_range(52000..53000);
+        }
+        if !map.contains_key(&tracked_name) {
+            map.insert(tracked_name.clone(), HashMap::new());
+        }
+        if let Some(mapping) = map.get_mut(&tracked_name) {
+            mapping.insert(env, possible_port);
+        }
+
+        (possible_port, true)
     }
 
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
         let env = Env::from_any(db_arn);
-        let tracked_name= rds_arn_to_name(db_arn);
+        let tracked_name = rds_arn_to_name(db_arn);
         let port = Self::get_port(&mut self.db_proxy_port_map, tracked_name, env);
         if port.1 {
             self.save()
@@ -149,10 +163,10 @@ impl UserConfig {
         return port.0;
     }
 
-    pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {        
+    pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {
         let env = Env::from_any(ecs_arn);
-        let tracked_name= ecs_arn_to_name(ecs_arn);
-        let port =  Self::get_port(&mut self.service_proxy_port_map, tracked_name, env);
+        let tracked_name = ecs_arn_to_name(ecs_arn);
+        let port = Self::get_port(&mut self.service_proxy_port_map, tracked_name, env);
         if port.1 {
             self.save()
         }
@@ -175,9 +189,9 @@ impl UserConfig {
         self.save()
     }
 
-    pub fn favorite(&mut self, trackedName: TrackedName) -> Result<UserConfig, BError> {
-        if !self.tracked_names.remove(&trackedName) {
-            self.tracked_names.insert(trackedName);
+    pub fn favorite(&mut self, tracked_nme: TrackedName) -> Result<UserConfig, BError> {
+        if !self.tracked_names.remove(&tracked_nme) {
+            self.tracked_names.insert(tracked_nme);
         }
 
         self.save();

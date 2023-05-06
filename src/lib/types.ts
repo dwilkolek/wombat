@@ -8,6 +8,7 @@ export enum AwsEnv {
 }
 
 export type Cluster = {
+	name: string;
 	arn: string;
 	env: AwsEnv;
 };

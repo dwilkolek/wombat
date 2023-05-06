@@ -3,26 +3,27 @@ import { execute } from './error-store';
 
 import type { AwsEnv } from './types';
 import { userStore } from './user-store';
+import type { HomeEntry } from './home-store';
 
 const createDiscoverStore = () => {
-	let favoriteArns: string[] = [];
-	let allDiscovered: [string, AwsEnv, string, string][] | undefined = undefined;
-	const discovered = writable<[string, AwsEnv, string, string][] | undefined>();
+	let favorite_names: string[] = [];
+	let allDiscovered: HomeEntry[] | undefined = undefined;
+	const discovered = writable<HomeEntry[] | undefined>();
 	const refresh = (newSearch: boolean) => {
 		discovered.update((old) => {
 			if (!newSearch && old == undefined) {
 				return old;
 			}
-			return allDiscovered?.filter((d) => !favoriteArns.includes(d[2]));
+			return allDiscovered?.filter((d) => !favorite_names.includes(d.tracked_name));
 		});
 	};
 	userStore.subscribe((userConfig) => {
-		favoriteArns = [...userConfig.tracked_names];
+		favorite_names = [...userConfig.tracked_names];
 		refresh(false);
 	});
 
 	const discover = async (name: string) => {
-		const new_options = await execute<[string, AwsEnv, string, string][]>(
+		const new_options = await execute<HomeEntry[]>(
 			'discover',
 			{ name },
 			true
