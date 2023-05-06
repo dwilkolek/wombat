@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::shared::BError;
+use crate::shared::{BError, Env, self};
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
@@ -11,49 +11,6 @@ use ec2::types::Filter;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum Env {
-    DEVNULL,
-    PLAY,
-    LAB,
-    DEV,
-    DEMO,
-    PROD,
-}
-impl fmt::Display for Env {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Env::DEVNULL => write!(f, "devnull"),
-            Env::PLAY => write!(f, "play"),
-            Env::LAB => write!(f, "lab"),
-            Env::DEV => write!(f, "dev"),
-            Env::DEMO => write!(f, "demo"),
-            Env::PROD => write!(f, "prod"),
-        }
-    }
-}
-impl Env {
-    pub fn from_exact(str: &str) -> Env {
-        match str {
-            "play" => Env::PLAY,
-            "lab" => Env::LAB,
-            "dev" => Env::DEV,
-            "demo" => Env::DEMO,
-            "prod" => Env::PROD,
-            _ => Env::DEVNULL,
-        }
-    }
-    pub fn from_any(str: &str) -> Env {
-        let env_regex = Regex::new(".*(play|lab|dev|demo|prod).*").unwrap();
-        let captures = env_regex.captures(str);
-        let env = captures
-            .and_then(|c| c.get(1))
-            .and_then(|e| Some(e.as_str().to_owned()))
-            .unwrap_or("".to_owned());
-
-        Env::from_exact(&env)
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
@@ -114,7 +71,7 @@ pub struct EcsService {
 pub struct ServiceDetails {
     pub timestamp: DateTime<Utc>,
     pub arn: String,
-    pub name: String,
+    pub name: shared::TrackedName,
     pub version: String,
     pub cluster_arn: String,
     pub env: Env,
@@ -237,12 +194,12 @@ pub async fn service_details(ecs: &ecs::Client, service_arn: &str) -> ServiceDet
         .unwrap()
         .to_owned();
     ServiceDetails {
+        name: shared::ecs_arn_to_name(&service_arn),
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap().to_owned(),
         version: version,
         env: Env::from_any(&service_arn),
-        name: service_arn.split("/").last().unwrap().to_owned(),
     }
 }
 

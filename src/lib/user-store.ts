@@ -8,8 +8,7 @@ const createUserStore = () => {
 	const { subscribe, set } = writable<UserConfig>({
 		id: undefined,
 		dbeaver_path: undefined,
-		ecs: [],
-		rds: [],
+		tracked_names: [],
 		known_profiles: [],
 		last_used_profile: undefined
 	});
@@ -43,6 +42,14 @@ const createUserStore = () => {
 		homeStore.refresh(false);
 	};
 
-	return { subscribe, login, setDbeaverPath, favoriteEcs, favoriteRds };
+	const favoriteTrackedName = async (name: string) => {
+		const config = await execute<UserConfig>('favorite', {
+			name
+		});
+		set(config);
+		homeStore.refresh(false);
+	};
+
+	return { subscribe, login, setDbeaverPath, favoriteEcs, favoriteRds, favoriteTrackedName };
 };
 export const userStore = createUserStore();
