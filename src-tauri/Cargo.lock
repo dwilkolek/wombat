@@ -4826,7 +4826,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "0.0.7"
+version = "0.1.0"
 dependencies = [
  "aws-config",
  "aws-sdk-ec2",
