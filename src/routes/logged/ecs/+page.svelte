@@ -1,10 +1,7 @@
 <script lang="ts">
-	import Icon from 'svelte-icon/Icon.svelte';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import star from '$lib/images/star-solid.svg?raw';
 	import type { EcsService } from '$lib/types';
 	import { userStore } from '$lib/user-store';
-	import { envStore } from '$lib/env-store';
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
 	import { open } from '@tauri-apps/api/shell';

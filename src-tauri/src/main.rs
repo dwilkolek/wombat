@@ -1,11 +1,14 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use aws::{Cluster, DbInstance, EcsService, ServiceDetails};
-use shared::{ecs_arn_to_name, rds_arn_to_name};
-
+use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
 use chrono::prelude::*;
+use regex::Regex;
 use shared::BError;
+use shared::{ecs_arn_to_name, rds_arn_to_name};
+use shared_child::SharedChild;
+use std::io::{BufRead, BufReader};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
@@ -147,6 +150,84 @@ async fn set_dbeaver_path(
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
     user_config.set_dbeaver_path(dbeaver_path)
+}
+
+#[tauri::command]
+async fn credentials(
+    db: aws::DbInstance,
+    app_state: tauri::State<'_, AppContextState>,
+    db_state: tauri::State<'_, RdsClientState>,
+) -> Result<DbSecret, BError> {
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check = aws::check_login_and_trigger(&profile).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
+    let secret = db_state.0.lock().await.db_secret(&db.name, &db.env).await;
+    dbg!(&secret);
+    return secret;
+}
+
+#[tauri::command]
+async fn stop_job(
+    arn: &str,
+    app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+) -> Result<(), BError> {
+    dbg!(arn, &async_task_tracker.0.lock().await.proxies_handlers);
+
+    if let Some(job) = async_task_tracker
+        .0
+        .lock()
+        .await
+        .proxies_handlers
+        .remove(arn)
+    {
+        let _ = job.kill();
+        let _ = job.wait();
+        let mut out = job.take_stdout();
+        let mut session_id: Option<String> = None;
+        let session_regex = Regex::new("Starting session with SessionId: (.*)").unwrap();
+
+        if let Some(stdout) = &mut out {
+            let lines = BufReader::new(stdout).lines().enumerate().take(10);
+            for (counter, line) in lines {
+                if let Ok(line) = line {
+                    let captures = session_regex.captures(&line);
+                    let found_session_id = captures
+                        .and_then(|c| c.get(1))
+                        .and_then(|e| Some(e.as_str().to_owned()));
+                    if found_session_id.is_some() {
+                        session_id = found_session_id;
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(session_id) = session_id {
+            let app_ctx = app_state.0.lock().await;
+            let profile = app_ctx.active_profile.as_ref().unwrap();
+            let killed_session_output = Command::new("aws")
+                .args([
+                    "ssm",
+                    "terminate-session",
+                    "--session-id",
+                    &session_id,
+                    "--profile",
+                    &profile,
+                ])
+                .output();
+            match killed_session_output {
+                Ok(output) => println!("Attempted to kill session in SSM: {:?}", output),
+                Err(e) => println!("Failed to kill session in SSM {}", e),
+            };
+        } else {
+            println!("SessionId to kill not found")
+        }
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -359,37 +440,39 @@ async fn start_db_proxy(
     db: aws::DbInstance,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check = aws::check_login_and_trigger(&profile).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
+
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
 
-    if let Some(active_profile) = active_profile {
-        let ec2_client = aws::ec2_client(&active_profile).await;
-        let bastions = aws::bastions(&ec2_client).await;
-        let bastion = bastions
-            .into_iter()
-            .find(|b| b.env == db.env)
-            .expect("No bastion found");
+    let ec2_client = aws::ec2_client(profile).await;
+    let bastions = aws::bastions(&ec2_client).await;
+    let bastion = bastions
+        .into_iter()
+        .find(|b| b.env == db.env)
+        .expect("No bastion found");
 
-        start_aws_ssm_proxy(
-            db.arn,
-            window,
-            bastion.instance_id,
-            active_profile,
-            db.endpoint.address,
-            db.endpoint.port,
-            local_port,
-            None,
-            local_port,
-        );
+    start_aws_ssm_proxy(
+        db.arn,
+        window,
+        bastion.instance_id,
+        profile.to_owned(),
+        db.endpoint.address,
+        db.endpoint.port,
+        local_port,
+        None,
+        local_port,
+        async_task_tracker,
+    )
+    .await;
 
-        Ok(())
-    } else {
-        Err(BError::new("start_db_proxy", "Failed to start"))
-    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -419,6 +502,7 @@ async fn start_service_proxy(
     service: aws::EcsService,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
     let aws_local_port = local_port + 10000;
@@ -447,7 +531,9 @@ async fn start_service_proxy(
         aws_local_port,
         Some(handle),
         local_port,
-    );
+        async_task_tracker,
+    )
+    .await;
 
     Ok(())
 }
@@ -545,7 +631,7 @@ async fn start_proxy_to_aws_proxy(
     })
 }
 
-fn start_aws_ssm_proxy(
+async fn start_aws_ssm_proxy(
     arn: String,
     window: Window,
     bastion: String,
@@ -556,7 +642,36 @@ fn start_aws_ssm_proxy(
 
     abort_on_exit: Option<tokio::task::JoinHandle<()>>,
     access_port: u16,
+    async_task_manager: tauri::State<'_, AsyncTaskManager>,
 ) {
+    let mut command = Command::new("aws");
+    command.args([
+        "ssm",
+        "start-session",
+        "--target",
+        &bastion,
+        "--profile",
+        &profile,
+        "--document-name",
+        "AWS-StartPortForwardingSessionToRemoteHost",
+        "--parameters",
+        &format!(
+            "{{\"host\":[\"{}\"], \"portNumber\":[\"{}\"], \"localPortNumber\":[\"{}\"]}}",
+            target, target_port, local_port
+        ),
+    ]);
+    command.stdout(Stdio::piped());
+    let shared_child = SharedChild::spawn(&mut command).unwrap();
+    let shared_child_arc = Arc::new(shared_child);
+    let child_arc_clone = shared_child_arc.clone();
+
+    async_task_manager
+        .0
+        .lock()
+        .await
+        .proxies_handlers
+        .insert(arn.clone(), shared_child_arc);
+
     tokio::task::spawn(async move {
         // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
         // aws ssm start-session \
@@ -574,26 +689,10 @@ fn start_aws_ssm_proxy(
                 },
             )
             .unwrap();
-        Command::new("aws")
-            .args([
-                "ssm",
-                "start-session",
-                "--target",
-                &bastion,
-                "--profile",
-                &profile,
-                "--document-name",
-                "AWS-StartPortForwardingSessionToRemoteHost",
-                "--parameters",
-                &format!(
-                    "{{\"host\":[\"{}\"], \"portNumber\":[\"{}\"], \"localPortNumber\":[\"{}\"]}}",
-                    target, target_port, local_port
-                ),
-            ])
-            .output()
-            .expect("failed to execute process");
+        let _ = child_arc_clone.wait();
 
         if let Some(handle) = abort_on_exit {
+            println!("Killing dependant job");
             handle.abort()
         }
         window
@@ -620,6 +719,7 @@ async fn main() {
         .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             home_details_refresher: None,
+            proxies_handlers: HashMap::new(),
         }))))
         .manage(HomeCache(Arc::new(Mutex::new(HomePage {
             timestamp: Utc::now(),
@@ -639,7 +739,9 @@ async fn main() {
             open_dbeaver,
             home,
             discover,
-            refresh_cache
+            refresh_cache,
+            credentials,
+            stop_job
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -671,6 +773,7 @@ struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct TaskTracker {
     home_details_refresher: Option<tokio::task::JoinHandle<()>>,
+    proxies_handlers: HashMap<String, Arc<SharedChild>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
