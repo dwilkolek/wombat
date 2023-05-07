@@ -20,6 +20,13 @@
         "scope": [],
         "sidecar": false
       },
+      "clipboard": {
+        "writeText": true
+      },
+      "dialog": {
+        "ask": true,
+        "message": true
+      },
       "http": {
         "request": true,
         "scope": [

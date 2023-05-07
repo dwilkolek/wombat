@@ -7,6 +7,7 @@
 	import { execute } from '$lib/error-store';
 	import StarIcon from '$lib/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
+	import DbSecretBtn from '$lib/db-secret-btn.svelte';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -39,7 +40,7 @@
 	<table class="table w-full table-zebra table-compact">
 		<thead class="sticky top-0">
 			<tr>
-				<th colspan="3">
+				<th>
 					<div class="flex gap-2">
 						Info
 						<input
@@ -54,6 +55,8 @@
 						/>
 					</div>
 				</th>
+				<td>Engine</td>
+				<td colspan="2">Proxy</td>
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
@@ -77,6 +80,12 @@
 										<span class="text-xs">{db.endpoint.address}:{db.endpoint.port}</span>
 									</div>
 								</div>
+							</td>
+							<td>								
+								<span>
+									<DbSecretBtn database={db} />
+									{db.engine}
+								</span>
 							</td>
 							<td>
 								{#if $userStore.dbeaver_path} 

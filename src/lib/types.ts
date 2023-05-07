@@ -41,12 +41,20 @@ export type Endpoint = {
 
 export type DbInstance = {
 	name: string;
+	engine: string,
 	endpoint: Endpoint;
 	env: AwsEnv;
 	arn: string;
 	environment_tag: string;
 	appname_tag: string;
 };
+
+export type DatabaseCredentials = {
+    dbname: string;
+    password: string;
+    username: string;
+    auto_rotated: Boolean;
+}
 
 export type MonitoringConfig = {
 	service_arn: string | undefined;

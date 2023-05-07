@@ -94,14 +94,14 @@ impl UserConfig {
                 tracked_names,
                 db_proxy_port_map,
                 service_proxy_port_map,
-                dbeaver_path: old.dbeaver_path,
+                dbeaver_path: UserConfig::recheck_dbeaver_path(old.dbeaver_path),
             };
             new_config.save();
             return new_config;
         }
 
         let config_file = UserConfig::config_path();
-        let user_config = match std::fs::read_to_string(config_file) {
+        let mut user_config = match std::fs::read_to_string(config_file) {
             Ok(json) => serde_json::from_str::<UserConfig>(&json).unwrap(),
             Err(_) => UserConfig {
                 id: Uuid::new_v4(),
@@ -114,11 +114,28 @@ impl UserConfig {
                 dbeaver_path: None,
             },
         };
+        user_config.dbeaver_path = UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
         user_config
     }
 
     fn config_path() -> PathBuf {
         home::home_dir().unwrap().as_path().join(".wombat")
+    }
+
+    fn recheck_dbeaver_path(original_path: Option<String>) -> Option<String> {
+        if let Some(path) = original_path {
+            if std::path::Path::new(&path).exists() {
+                return Some(path.to_owned())
+            }
+        }
+        if std::path::Path::new(r"/Applications/DBeaver.app/Contents/MacOS/dbeaver").exists() {
+            return Some(r"/Applications/DBeaver.app/Contents/MacOS/dbeaver".to_owned())
+        }
+        if std::path::Path::new(r"C:\Program Files\DBeaver\dbeaver.exe").exists() {
+            return Some(r"C:\Program Files\DBeaver\dbeaver.exe".to_owned())
+        }
+        
+        None        
     }
 
     fn get_port(

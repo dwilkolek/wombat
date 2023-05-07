@@ -35,8 +35,8 @@
 				>
 			</li>
 			<li>
-				<a class={$page.url.pathname === '/logged/profile' ? 'active' : ''} href="/logged/profile"
-					>Profile</a
+				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
+					>Config</a
 				>
 			</li>
 		</ul>
