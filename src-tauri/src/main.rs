@@ -7,6 +7,7 @@ use regex::Regex;
 use shared::BError;
 use shared::{ecs_arn_to_name, rds_arn_to_name};
 use shared_child::SharedChild;
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -192,7 +193,7 @@ async fn stop_job(
 
         if let Some(stdout) = &mut out {
             let lines = BufReader::new(stdout).lines().enumerate().take(10);
-            for (counter, line) in lines {
+            for (_counter, line) in lines {
                 if let Ok(line) = line {
                     let captures = session_regex.captures(&line);
                     let found_session_id = captures
@@ -366,8 +367,10 @@ async fn discover(
     let name = &name.to_lowercase();
     let tracked_names = user_config.0.lock().await.tracked_names.clone();
     let mut records: Vec<HomeEntry> = vec![];
-    let mut found_names = Vec::new();
-
+    let mut found_names = HashSet::new();
+    if name.len() < 3 {
+        return Ok(Vec::new());
+    }
     let mut dbs: HashMap<String, Vec<aws::DbInstance>> = HashMap::new();
     {
         let rds_client = &mut db_cache.0.lock().await;

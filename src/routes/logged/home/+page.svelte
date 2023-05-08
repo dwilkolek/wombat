@@ -1,21 +1,42 @@
 <script lang="ts">
-	import Icon from 'svelte-icon/Icon.svelte';
-	import star from '$lib/images/star-solid.svg?raw';
 	import { AwsEnv } from '$lib/types';
-	import { homeStore } from '$lib/home-store';
+	import { homeStore, type HomeEntry } from '$lib/home-store';
 	import { discoverStore } from '$lib/discover-store';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import { userStore } from '$lib/user-store';
-	import { envStore } from '$lib/env-store';
 	import { clusterStore } from '$lib/cluster-store';
 	import StarIcon from '$lib/star-icon.svelte';
+	type ListType = HomeEntry & { id: string };
 	$: homeStore.init();
-	$: homeEntries = $homeStore ? $homeStore.sort((a, b) => a.tracked_name.localeCompare(b.tracked_name)) : [];
-	$: clusters = clusterStore.clusters
-	$: usedEnvs = homeEntries.flatMap(e => [...e.dbs.map(db => db.env), ...Object.values(e.services).map(s => s.env)])
-	$: clustersFiltered = $clusters.filter(cluster =>usedEnvs.includes(cluster.env));
+	$: homeEntries = $homeStore
+		? $homeStore.sort((a, b) => a.tracked_name.localeCompare(b.tracked_name))
+		: [];
+	$: clusters = clusterStore.clusters;
+	$: selectedClusters = new Map<string, boolean>([
+		[AwsEnv.LAB, false],
+		[AwsEnv.PLAY, false],
+		[AwsEnv.DEV, true],
+		[AwsEnv.DEMO, true],
+		[AwsEnv.PROD, true]
+	]);
+	$: allEntries = [
+		...($discoverStore ?? []).map((e) => ({
+			...e,
+			id: `proposed#${e.tracked_name}`
+		})),
+		($discoverStore?.length ?? 0) > 0 ? { id: `break` } : undefined,
+		...homeEntries.map((e) => ({
+			...e,
+			id: `${e.tracked_name}`
+		}))
+	].filter((e) => !!e) as ListType[];
+	const columnToggleHandler = (clusterName: string, e: any) => {
+		selectedClusters.set(clusterName, e.currentTarget.checked);
+		selectedClusters = selectedClusters;
+	};
 
+	const envs = [AwsEnv.PLAY, AwsEnv.LAB, AwsEnv.DEV, AwsEnv.DEMO, AwsEnv.PROD];
 	let discoverValue: string = '';
 </script>
 
@@ -24,7 +45,7 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="h-full block">
-	<div class="my-4 p-2 pb-5">
+	<div class="my-4 p-2 pb-5 flex flex-row justify-between">
 		<form
 			class="flex flex-row gap-1 mb-2"
 			on:submit|preventDefault={async () => {
@@ -54,74 +75,29 @@
 				</button>
 			{/if}
 		</form>
-		{#if $discoverStore}
-			<table class="table w-full table-zebra table-compact">
-				<thead class="sticky top-0">
-					<tr>
-						<th>
-							<div class="flex gap-2">APP</div>
-						</th>						
-						{#each clustersFiltered as cluster}
-							<th class="w-40">{cluster.arn.split("/")[1]}</th>
-						{/each}
-						<th class="w-40">{AwsEnv.DEV}</th>
-						<th class="w-40">{AwsEnv.DEMO}</th>
-						<th class="w-40">{AwsEnv.PROD}</th>
-						<th class="w-10" />
-					</tr>
-				</thead>
-				<tbody class="overflow-y-auto max-h-96">
-					{#if $discoverStore.length == 0}
-						<tr>
-							<td colspan="4">Nothing new was found</td>
-						</tr>
-					{/if}
-					{#each $discoverStore as entry}
-					<tr>
-						<td>
-							<span class="font-bold flex flex-row align-middle gap-1">
-								<button
-										on:click={() => {
-											userStore.favoriteTrackedName(entry.tracked_name);
-										}}
-									>
-										<StarIcon state={false} />
-								</button>
-								{entry.tracked_name}
-							</span>
-						</td>
-											
-						{#each clustersFiltered as cluster}
-							<td>
-								<div class="flex flex-col gap-1">
-								{#each Object.values(entry.services) as service}
-									{#if service.arn.includes(cluster.name)}										
-										<ServiceCell service={service} />
-									{/if}
-								{/each}
-								</div>
-							</td>
-						{/each}
-						<td>
-							<DatabaseCell database={entry.dbs.find(db => db.env == AwsEnv.DEV)} />
-						</td>
-						<td>
-							<DatabaseCell database={entry.dbs.find(db => db.env == AwsEnv.DEMO)} />
-						</td>
-						<td>
-							<DatabaseCell database={entry.dbs.find(db => db.env == AwsEnv.PROD)} />
-						</td>	
-					</tr>
-					{/each}
-				</tbody>
-			</table>
-			<hr />
-		{/if}
+		<div class="flex flex-row flex-wrap gap-5">
+			{#each envs as env (env)}
+				<div class="form-control">
+					<!-- svelte-ignore a11y-click-events-have-key-events -->
+					<label class="cursor-pointer label flex flex-row gap-2">
+						<input
+							type="checkbox"
+							class="toggle toggle-accent"
+							checked={selectedClusters.get(env)}
+							on:change={(e) => {
+								columnToggleHandler(env, e);
+							}}
+						/>
+						<span class="label-text">{env}</span>
+					</label>
+				</div>
+			{/each}
+		</div>
 	</div>
 	{#if homeEntries.length == 0}
 		<h1 class="text-center text-lg">
-			Nothing here. Visit Services & Databases tabs and start things you want to track
-			from each environemnt. 👻 
+			Nothing here. Visit Services & Databases tabs and start things you want to track from each
+			environemnt. 👻
 		</h1>
 	{/if}
 
@@ -132,53 +108,88 @@
 					<th>
 						<div class="flex gap-2">APP</div>
 					</th>
-					
-					{#each clustersFiltered as cluster}
-						<th class="w-40">{cluster.name}</th>
+
+					{#each $clusters as cluster}
+						{#if selectedClusters.get(cluster.env)}
+							<th class="w-40">{cluster.name}</th>
+						{/if}
 					{/each}
-					
-					<th class="w-40">{AwsEnv.DEV}</th>
-					<th class="w-40">{AwsEnv.DEMO}</th>
-					<th class="w-40">{AwsEnv.PROD}</th>
+					{#each envs as env}
+						{#if selectedClusters.get(env)}
+							<th class="w-40">{env}</th>
+						{/if}
+					{/each}
 				</tr>
 			</thead>
 			<tbody class="overflow-y-auto max-h-96">
-				{#each homeEntries as entry}
+				{#if $discoverStore && $discoverStore.length == 0}
 					<tr>
-						<td>
-							<span class="font-bold flex flex-row align-middle gap-1">
-								<button
+						<td colspan="4">Nothing new was found</td>
+					</tr>
+				{/if}
+
+				{#each allEntries as entry (entry.id)}
+					{#if entry.id === 'break'}
+						<tr>
+							<td colspan={$clusters.length + 4}>
+								<hr />
+							</td>
+						</tr>
+					{/if}
+					{#if entry.id !== 'break'}
+						<tr>
+							<td>
+								<span class="font-bold flex flex-row align-middle gap-1">
+									<button
 										on:click={() => {
 											userStore.favoriteTrackedName(entry.tracked_name);
 										}}
 									>
-										<StarIcon state={true} />
-								</button>
-								{entry.tracked_name}
-							</span>
-						</td>						
-						{#each clustersFiltered as cluster}
-							<td>
-								<div class="flex flex-col gap-1">
-									{#each Object.values(entry.services) as service}
-										{#if service.arn.includes(cluster.arn.split("/")[1])}
-											
-												<ServiceCell service={service} />
-										{/if}
-									{/each}
-								</div>
+										<StarIcon state={$userStore.tracked_names.includes(entry.tracked_name)} />
+									</button>
+									{entry.tracked_name}
+								</span>
 							</td>
-						{/each}
-						<td>
-							<DatabaseCell database={entry.dbs.find(db => db.env == AwsEnv.DEV)} />
-						</td>
-						<td>
-							<DatabaseCell database={entry.dbs.find(db => db.env == AwsEnv.DEMO)} />
-						</td>
-						<td>
-							<DatabaseCell database={entry.dbs.find(db => db.env == AwsEnv.PROD)} />
-						</td>
-					</tr>
+							{#each $clusters as cluster}
+								{#if selectedClusters.get(cluster.env)}
+									<td>
+										<div class="flex flex-col gap-1">
+											{#each Object.values(entry.services) as service}
+												{#if service.arn.includes(cluster.name)}
+													<ServiceCell {service} />
+												{/if}
+											{/each}
+										</div>
+									</td>
+								{/if}
+							{/each}
+							{#if selectedClusters.get(AwsEnv.PLAY)}
+								<td>
+									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.PLAY)} />
+								</td>
+							{/if}
+							{#if selectedClusters.get(AwsEnv.LAB)}
+								<td>
+									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.LAB)} />
+								</td>
+							{/if}
+							{#if selectedClusters.get(AwsEnv.DEV)}
+								<td>
+									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.DEV)} />
+								</td>
+							{/if}
+							{#if selectedClusters.get(AwsEnv.DEMO)}
+								<td>
+									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.DEMO)} />
+								</td>
+							{/if}
+							{#if selectedClusters.get(AwsEnv.PROD)}
+								<td>
+									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.PROD)} />
+								</td>
+							{/if}
+						</tr>
+					{/if}
 				{/each}
 			</tbody>
 		</table>
