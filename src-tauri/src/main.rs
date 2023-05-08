@@ -9,6 +9,7 @@ use shared::{ecs_arn_to_name, rds_arn_to_name};
 use shared::{BError, Env};
 use shared_child::SharedChild;
 use std::collections::HashSet;
+use std::env;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
 use std::sync::Arc;
@@ -1000,8 +1001,8 @@ async fn start_aws_ssm_proxy(
 
 #[tokio::main]
 async fn main() {
-    let axiom_token = env!("AXIOM_TOKEN");
-    let axiom_org = "wilkolek.eu";
+    let axiom_token = env::var("AXIOM_TOKEN").unwrap_or_default();
+    let axiom_org = env::var("AXIOM_ORG").unwrap_or_default();
     let user = UserConfig::default();
     let client = Client::builder()
         .with_token(axiom_token)
@@ -1102,6 +1103,7 @@ struct ActionLog {
     profile: String,
     error_message: Option<String>,
     record_count: Option<usize>,
+    target: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1191,7 +1193,8 @@ async fn ingest_log_with_client(
                 error_message,
                 record_count,
                 app_version: env!("CARGO_PKG_VERSION").to_owned(),
-                profile: env!("PROFILE").to_owned(),
+                profile: env::var("PROFILE").unwrap_or("unknown".to_owned()),
+                target: env::var("TARGET").unwrap_or("unknown".to_owned()),
             })],
         )
         .await
