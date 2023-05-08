@@ -154,6 +154,15 @@ async fn set_dbeaver_path(
 }
 
 #[tauri::command]
+async fn save_preffered_envs(
+    envs: Vec<shared::Env>,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<UserConfig, BError> {
+    let mut user_config = user_config.0.lock().await;
+    user_config.save_preffered_envs(envs)
+}
+
+#[tauri::command]
 async fn credentials(
     db: aws::DbInstance,
     app_state: tauri::State<'_, AppContextState>,
@@ -730,12 +739,13 @@ async fn main() {
         }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
+            set_dbeaver_path,
+            save_preffered_envs,
             login,
             logout,
             clusters,
             services,
             databases,
-            set_dbeaver_path,
             favorite,
             start_db_proxy,
             start_service_proxy,

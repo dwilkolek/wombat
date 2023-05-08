@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { execute } from './error-store';
-import type { UserConfig } from './types';
+import type { AwsEnv, UserConfig } from './types';
 import { homeStore } from './home-store';
 
 const createUserStore = () => {
@@ -10,7 +10,8 @@ const createUserStore = () => {
 		dbeaver_path: undefined,
 		tracked_names: [],
 		known_profiles: [],
-		last_used_profile: undefined
+		last_used_profile: undefined,
+		preffered_environments: []
 	});
 	execute<UserConfig>('user_config').then((userConfig) => {
 		set(userConfig);
@@ -27,21 +28,6 @@ const createUserStore = () => {
 		loggedIn.set(true);
 	};
 
-	const favoriteEcs = async (arn: string) => {
-		const config = await execute<UserConfig>('favorite_ecs', {
-			arn
-		});
-		set(config);
-		homeStore.refresh(false);
-	};
-	const favoriteRds = async (arn: string) => {
-		const config = await execute<UserConfig>('favorite_rds', {
-			arn
-		});
-		set(config);
-		homeStore.refresh(false);
-	};
-
 	const favoriteTrackedName = async (name: string) => {
 		const config = await execute<UserConfig>('favorite', {
 			name
@@ -50,6 +36,14 @@ const createUserStore = () => {
 		homeStore.refresh(false);
 	};
 
-	return { subscribe, login, setDbeaverPath, favoriteEcs, favoriteRds, favoriteTrackedName };
+	const savePrefferedEnvs = async (envs: AwsEnv[]) => {
+		const config = await execute<UserConfig>('save_preffered_envs', {
+			envs
+		});
+		console.log('new config', config);
+		set(config);
+	};
+
+	return { subscribe, login, setDbeaverPath, favoriteTrackedName, savePrefferedEnvs };
 };
 export const userStore = createUserStore();

@@ -13,13 +13,7 @@
 		? $homeStore.sort((a, b) => a.tracked_name.localeCompare(b.tracked_name))
 		: [];
 	$: clusters = clusterStore.clusters;
-	$: selectedClusters = new Map<string, boolean>([
-		[AwsEnv.LAB, false],
-		[AwsEnv.PLAY, false],
-		[AwsEnv.DEV, true],
-		[AwsEnv.DEMO, true],
-		[AwsEnv.PROD, true]
-	]);
+	$: selectedClusters = $userStore.preffered_environments;
 	$: allEntries = [
 		...($discoverStore ?? []).map((e) => ({
 			...e,
@@ -31,9 +25,14 @@
 			id: `${e.tracked_name}`
 		}))
 	].filter((e) => !!e) as ListType[];
-	const columnToggleHandler = (clusterName: string, e: any) => {
-		selectedClusters.set(clusterName, e.currentTarget.checked);
-		selectedClusters = selectedClusters;
+	$: columnToggleHandler = (env: AwsEnv, e: any) => {
+		if (!e.currentTarget.checked) {
+			userStore.savePrefferedEnvs([
+				...selectedClusters.filter((selectedEnv) => env != selectedEnv)
+			]);
+		} else {
+			userStore.savePrefferedEnvs([...selectedClusters, env]);
+		}
 	};
 
 	const envs = [AwsEnv.PLAY, AwsEnv.LAB, AwsEnv.DEV, AwsEnv.DEMO, AwsEnv.PROD];
@@ -83,7 +82,7 @@
 						<input
 							type="checkbox"
 							class="toggle toggle-accent"
-							checked={selectedClusters.get(env)}
+							checked={selectedClusters.includes(env)}
 							on:change={(e) => {
 								columnToggleHandler(env, e);
 							}}
@@ -110,12 +109,12 @@
 					</th>
 
 					{#each $clusters as cluster}
-						{#if selectedClusters.get(cluster.env)}
+						{#if selectedClusters.includes(cluster.env)}
 							<th class="w-40">{cluster.name}</th>
 						{/if}
 					{/each}
 					{#each envs as env}
-						{#if selectedClusters.get(env)}
+						{#if selectedClusters.includes(env)}
 							<th class="w-40">{env}</th>
 						{/if}
 					{/each}
@@ -151,7 +150,7 @@
 								</span>
 							</td>
 							{#each $clusters as cluster}
-								{#if selectedClusters.get(cluster.env)}
+								{#if selectedClusters.includes(cluster.env)}
 									<td>
 										<div class="flex flex-col gap-1">
 											{#each Object.values(entry.services) as service}
@@ -163,27 +162,27 @@
 									</td>
 								{/if}
 							{/each}
-							{#if selectedClusters.get(AwsEnv.PLAY)}
+							{#if selectedClusters.includes(AwsEnv.PLAY)}
 								<td>
 									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.PLAY)} />
 								</td>
 							{/if}
-							{#if selectedClusters.get(AwsEnv.LAB)}
+							{#if selectedClusters.includes(AwsEnv.LAB)}
 								<td>
 									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.LAB)} />
 								</td>
 							{/if}
-							{#if selectedClusters.get(AwsEnv.DEV)}
+							{#if selectedClusters.includes(AwsEnv.DEV)}
 								<td>
 									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.DEV)} />
 								</td>
 							{/if}
-							{#if selectedClusters.get(AwsEnv.DEMO)}
+							{#if selectedClusters.includes(AwsEnv.DEMO)}
 								<td>
 									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.DEMO)} />
 								</td>
 							{/if}
-							{#if selectedClusters.get(AwsEnv.PROD)}
+							{#if selectedClusters.includes(AwsEnv.PROD)}
 								<td>
 									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.PROD)} />
 								</td>

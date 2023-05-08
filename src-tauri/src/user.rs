@@ -45,6 +45,7 @@ pub struct UserConfig {
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     pub dbeaver_path: Option<String>,
+    pub preffered_environments: Vec<Env>,
 }
 
 impl UserConfig {
@@ -95,6 +96,7 @@ impl UserConfig {
                 db_proxy_port_map,
                 service_proxy_port_map,
                 dbeaver_path: UserConfig::recheck_dbeaver_path(old.dbeaver_path),
+                preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
             };
             new_config.save();
             return new_config;
@@ -112,30 +114,38 @@ impl UserConfig {
                 db_proxy_port_map: HashMap::new(),
                 service_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
+                preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
             },
         };
-        user_config.dbeaver_path = UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
+        user_config.dbeaver_path =
+            UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
         user_config
     }
 
     fn config_path() -> PathBuf {
-        home::home_dir().unwrap().as_path().join(".wombat")
+        home::home_dir().unwrap().as_path().join(".wombat_v1")
     }
 
     fn recheck_dbeaver_path(original_path: Option<String>) -> Option<String> {
         if let Some(path) = original_path {
             if std::path::Path::new(&path).exists() {
-                return Some(path.to_owned())
+                return Some(path.to_owned());
             }
         }
         if std::path::Path::new(r"/Applications/DBeaver.app/Contents/MacOS/dbeaver").exists() {
-            return Some(r"/Applications/DBeaver.app/Contents/MacOS/dbeaver".to_owned())
+            return Some(r"/Applications/DBeaver.app/Contents/MacOS/dbeaver".to_owned());
         }
         if std::path::Path::new(r"C:\Program Files\DBeaver\dbeaver.exe").exists() {
-            return Some(r"C:\Program Files\DBeaver\dbeaver.exe".to_owned())
+            return Some(r"C:\Program Files\DBeaver\dbeaver.exe".to_owned());
         }
-        
-        None        
+
+        None
+    }
+
+    pub fn save_preffered_envs(&mut self, envs: Vec<Env>) -> Result<UserConfig, BError> {
+        self.preffered_environments = envs;
+        self.save();
+        Ok(self.clone())
     }
 
     fn get_port(
