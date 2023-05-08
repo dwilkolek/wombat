@@ -1,18 +1,15 @@
 <script lang="ts">
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
-	import { writeText } from '@tauri-apps/api/clipboard';
-	import type { DatabaseCredentials, DbInstance } from '$lib/types';
-	import { ask } from '@tauri-apps/api/dialog';
+	import type { DbInstance } from '$lib/types';
 	import { userStore } from '$lib/user-store';
-	import { invoke } from '@tauri-apps/api/tauri';
 	import DbSecretBtn from '$lib/db-secret-btn.svelte';
 	export let database: DbInstance | undefined;
 </script>
 
 {#if database}
 	<div class="flex flex-row items-center gap-1">
-		<DbSecretBtn database={database} />
+		<DbSecretBtn {database} />
 		{#if !$taskStore.find((t) => t.arn == database?.arn)}
 			<button
 				class="flex flex-row gap-1"
@@ -35,9 +32,11 @@
 			>
 		{/if}
 		{#if $taskStore.find((t) => t.arn == database?.arn)}
-			<button on:click={async () => {
-				await execute('stop_job', { arn: database?.arn });
-			}}>
+			<button
+				on:click={async () => {
+					await execute('stop_job', { arn: database?.arn });
+				}}
+			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
@@ -75,5 +74,5 @@
 	</div>
 {/if}
 {#if !database}
-	<div>N/A</div>
+	<div />
 {/if}
