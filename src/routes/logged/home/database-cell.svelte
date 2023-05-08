@@ -70,6 +70,13 @@
 					)?.port}
 				</button>
 			{/if}
+			{#if !$userStore.dbeaver_path}
+				<span class={`${!$taskStore.find((t) => t.arn == database?.arn) ? 'opacity-25' : ''}`}>
+					{database.environment_tag.toUpperCase()} @ :{$taskStore.find(
+						(t) => t.arn == database?.arn
+					)?.port}
+				</span>
+			{/if}
 		{/if}
 	</div>
 {/if}

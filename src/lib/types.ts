@@ -18,6 +18,7 @@ export type UserConfig = {
 	known_profiles: string[];
 	tracked_names: string[];
 	dbeaver_path: string | undefined;
+	preffered_environments: AwsEnv[];
 };
 
 export type EcsService = {
@@ -41,7 +42,7 @@ export type Endpoint = {
 
 export type DbInstance = {
 	name: string;
-	engine: string,
+	engine: string;
 	endpoint: Endpoint;
 	env: AwsEnv;
 	arn: string;
@@ -50,11 +51,11 @@ export type DbInstance = {
 };
 
 export type DatabaseCredentials = {
-    dbname: string;
-    password: string;
-    username: string;
-    auto_rotated: Boolean;
-}
+	dbname: string;
+	password: string;
+	username: string;
+	auto_rotated: boolean;
+};
 
 export type MonitoringConfig = {
 	service_arn: string | undefined;
