@@ -1,14 +1,21 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-use aws::{ecs_client, Cluster, DbInstance, EcsService, Env, ServiceDetails};
-
+use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
+use axiom_rs::Client;
 use chrono::prelude::*;
-use shared::BError;
+use regex::Regex;
+use serde_json::json;
+use shared::{ecs_arn_to_name, rds_arn_to_name};
+use shared::{BError, Env};
+use shared_child::SharedChild;
+use std::collections::HashSet;
+use std::env;
+use std::io::{BufRead, BufReader};
+use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
-use tauri::Window;
+use tauri::{Manager, Window};
 use tokio::sync::Mutex;
 use urlencoding::encode;
 use user::UserConfig;
@@ -34,21 +41,23 @@ async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<U
 }
 
 #[tauri::command]
-async fn favorite_ecs(
-    arn: &str,
+async fn favorite(
+    name: &str,
     user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    user_config.favorite_ecs(arn)
-}
 
-#[tauri::command]
-async fn favorite_rds(
-    arn: &str,
-    user_config: tauri::State<'_, UserConfigState>,
-) -> Result<UserConfig, BError> {
-    let mut user_config = user_config.0.lock().await;
-    user_config.favorite_rds(arn)
+    ingest_log(
+        &axiom,
+        &user_config.id,
+        Action::UpdateTrackedNames(name.to_owned()),
+        None,
+        None,
+    )
+    .await;
+
+    user_config.favorite(name.to_owned())
 }
 
 #[tauri::command]
@@ -57,90 +66,171 @@ async fn login(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
 
     home_cache: tauri::State<'_, HomeCache>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
-    database_cache: tauri::State<'_, DatabasesCache>,
-    cluster_cache: tauri::State<'_, ClustersCache>,
-    service_cache: tauri::State<'_, ServicesCache>,
+    rds_state: tauri::State<'_, RdsClientState>,
+    ecs_state: tauri::State<'_, EcsClientState>,
 ) -> Result<UserConfig, BError> {
-    let ecs_client = aws::ecs_client(profile).await;
-    if !aws::is_logged(&ecs_client).await {
-        println!("Trigger log in into AWS");
-        Command::new("aws")
-            .args(["sso", "login", "--profile", &profile])
-            .output()
-            .expect("failed to execute process");
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
-    if !aws::is_logged(&ecs_client).await {
-        return Err(BError::new("login", "Failed to log in"));
-    }
+
+    ingest_log(
+        &axiom,
+        &user_config.0.lock().await.id,
+        Action::Login(profile.to_owned()),
+        None,
+        None,
+    )
+    .await;
 
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
     app_state.0.lock().await.active_profile = Some(profile.to_owned());
 
-    let database_cache = Arc::clone(&database_cache.0);
-    let db_profile = profile.to_owned().clone();
-    tokio::task::spawn(async move {
-        let db_cache = &mut database_cache.lock().await;
-        populate_db_cache(&db_profile, db_cache).await;
-    });
+    {
+        let rds_client = &mut rds_state.0.lock().await;
+        rds_client.init(profile).await;
+        println!("rds_client loaded!");
+        rds_client.databases().await;
+        println!("dbs fetched!");
+    }
 
-    let cluster_cache = Arc::clone(&cluster_cache.0);
-    let cache_profile = profile.to_owned().clone();
-    let cluster_handle = tokio::task::spawn(async move {
-        let cluster_cache = &mut cluster_cache.lock().await;
-        populate_cluster_cache(&cache_profile, cluster_cache).await;
-        cluster_cache.clone()
-    });
-
-    let home_page_ref = Arc::clone(&home_cache.0);
-    let job_profile = profile.to_owned();
-    task_tracker.0.lock().await.home_details_refresher = Some(tokio::task::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(60));
+    {
+        let mut ecs_client = ecs_state.0.lock().await;
+        ecs_client.init(profile).await;
+        println!("ecs_client loaded!")
+    }
+    {
+        let clusters = ecs_state.0.lock().await.clusters().await;
+        println!("clusters fetched!");
+        for cluster in clusters {
+            ecs_state.0.lock().await.services(&cluster).await;
+            println!("services fetched! {}", &cluster.arn);
+        }
+    }
+    let ecs_arc_clone = Arc::clone(&ecs_state.0);
+    let rds_arc_clone = Arc::clone(&rds_state.0);
+    let refresher_axiom = Arc::clone(&axiom.0);
+    let refresher_user_id = user_config.id.clone();
+    task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
+        let initial_wait = tokio::time::sleep(Duration::from_secs(30 * 60));
+        initial_wait.await;
         loop {
+            let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
             interval.tick().await;
-            let mut home_page = home_page_ref.lock().await;
-            if Utc::now()
-                .signed_duration_since(home_page.timestamp)
-                .num_minutes()
-                > 10
             {
-                let arns_to_update = home_page
-                    .services
-                    .iter()
-                    .map(|s| s.arn.to_owned())
-                    .collect::<Vec<String>>();
-                let handles: Vec<_> = arns_to_update
-                    .into_iter()
-                    .map(|service| {
-                        let job_profile = job_profile.clone();
-                        return tokio::task::spawn(async move {
-                            let ecs_client = aws::ecs_client(&job_profile).await;
-                            aws::service_details(&ecs_client, &service).await
-                        });
-                    })
-                    .collect();
-                let mut new_services = vec![];
-                for handle in handles {
-                    new_services.push(handle.await.unwrap())
+                let rds = &mut rds_arc_clone.lock().await;
+                rds.clear();
+                let dbs = rds.databases().await;
+                println!("databases refetched!");
+                if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
+                    ingest_log_with_client(
+                        axiom,
+                        &refresher_user_id,
+                        Action::RefreshRdsList,
+                        None,
+                        Some(dbs.len()),
+                    )
+                    .await;
+                }
+            }
+            {
+                let ecs = &mut ecs_arc_clone.lock().await;
+                ecs.clear_shallow();
+                let clusters = ecs.clusters().await;
+                if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
+                    ingest_log_with_client(
+                        axiom,
+                        &refresher_user_id,
+                        Action::RefreshClusterList,
+                        None,
+                        Some(clusters.len()),
+                    )
+                    .await;
                 }
 
-                home_page.services = new_services
+                for cluster in clusters {
+                    let services = ecs_arc_clone.lock().await.services(&cluster).await;
+                    println!("services refetched! {}", &cluster.arn);
+                    if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
+                        ingest_log_with_client(
+                            axiom,
+                            &refresher_user_id,
+                            Action::RefreshEcsList(cluster.name, cluster.env),
+                            None,
+                            Some(services.len()),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
+    }));
+
+    let ecs_client_arc_c = Arc::clone(&ecs_state.0);
+    let home_page_ref = Arc::clone(&home_cache.0);
+    let tracker_axiom = Arc::clone(&axiom.0);
+    let tracker_user_id = user_config.id.clone();
+    task_tracker.0.lock().await.home_details_refresher = Some(tokio::task::spawn(async move {
+        let initial_wait = tokio::time::sleep(Duration::from_secs(60));
+        initial_wait.await;
+        let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
+        loop {
+            interval.tick().await;
+
+            let mut home_page = home_page_ref.lock().await;
+
+            let arns_to_update = home_page
+                .entries
+                .iter()
+                .map(|entry| &entry.services)
+                .flatten()
+                .map(|s| s.0.to_owned())
+                .collect::<Vec<String>>();
+            let handles: Vec<_> = arns_to_update
+                .into_iter()
+                .map(|service| {
+                    let ecs_client = Arc::clone(&ecs_client_arc_c);
+                    return tokio::task::spawn(async move {
+                        ecs_client
+                            .lock()
+                            .await
+                            .service_details(&service, true)
+                            .await
+                    });
+                })
+                .collect();
+            let mut updated_service_details = vec![];
+            for handle in handles {
+                updated_service_details.push(handle.await.unwrap())
+            }
+            if let Some(axiom) = tracker_axiom.lock().await.as_ref() {
+                ingest_log_with_client(
+                    axiom,
+                    &tracker_user_id,
+                    Action::RefreshServiceDetails,
+                    None,
+                    Some(updated_service_details.len()),
+                )
+                .await;
+            }
+            for updated_service_detail in updated_service_details.into_iter() {
+                for entry in home_page.entries.iter_mut() {
+                    let arn = updated_service_detail.arn.to_owned();
+                    if let Some(_) = entry.services.remove(&arn) {
+                        entry.services.insert(arn, updated_service_detail.clone());
+                    }
+                }
             }
 
             window.emit("new-home-cache", home_page.clone()).unwrap();
         }
     }));
-
-    let service_job_cache = Arc::clone(&service_cache.0);
-    let service_job_profile = profile.to_owned();
-    tokio::task::spawn(async move {
-        let cluster_cache = cluster_handle.await.unwrap();
-        let service_cache = &mut service_job_cache.lock().await;
-        populate_services_cache(&service_job_profile, &cluster_cache, service_cache).await;
-    });
 
     Ok(user_config.clone())
 }
@@ -149,228 +239,428 @@ async fn login(
 async fn set_dbeaver_path(
     dbeaver_path: &str,
     user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
+    ingest_log(
+        &axiom,
+        &user_config.id,
+        Action::SetDbeaverPath(dbeaver_path.to_owned()),
+        None,
+        None,
+    )
+    .await;
     user_config.set_dbeaver_path(dbeaver_path)
+}
+
+#[tauri::command]
+async fn save_preffered_envs(
+    envs: Vec<shared::Env>,
+    user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+) -> Result<UserConfig, BError> {
+    let mut user_config = user_config.0.lock().await;
+    ingest_log(
+        &axiom,
+        &user_config.id,
+        Action::SetPrefferedEnvs(envs.clone()),
+        None,
+        None,
+    )
+    .await;
+    user_config.save_preffered_envs(envs)
+}
+
+#[tauri::command]
+async fn credentials(
+    db: aws::DbInstance,
+    user_config: tauri::State<'_, UserConfigState>,
+    app_state: tauri::State<'_, AppContextState>,
+    db_state: tauri::State<'_, RdsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+) -> Result<DbSecret, BError> {
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let user_id = &user_config.0.lock().await.id.clone();
+    let login_check = check_login_and_trigger(user_id, &profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
+    let secret = db_state.0.lock().await.db_secret(&db.name, &db.env).await;
+    match &secret {
+        Ok(_) => {
+            ingest_log(
+                &axiom,
+                user_id,
+                Action::FetchCredentials(db.name, db.env),
+                None,
+                None,
+            )
+            .await
+        }
+        Err(err) => {
+            ingest_log(
+                &axiom,
+                user_id,
+                Action::FetchCredentials(db.name, db.env),
+                Some(err.message.clone()),
+                None,
+            )
+            .await
+        }
+    };
+    return secret;
+}
+
+#[tauri::command]
+async fn stop_job(
+    arn: &str,
+    app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+
+    user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+) -> Result<(), BError> {
+    let user_id = &user_config.0.lock().await.id.clone();
+    if let Some(job) = async_task_tracker
+        .0
+        .lock()
+        .await
+        .proxies_handlers
+        .remove(arn)
+    {
+        ingest_log(
+            &axiom,
+            &user_id,
+            Action::StopJob(
+                shared::arn_to_name(arn).to_owned(),
+                Env::from_any(arn).to_owned(),
+                shared::arn_resource_type(arn).to_owned(),
+            ),
+            None,
+            None,
+        )
+        .await;
+        let _ = job.kill();
+        let _ = job.wait();
+        let mut out = job.take_stdout();
+        let mut session_id: Option<String> = None;
+        let session_regex = Regex::new("Starting session with SessionId: (.*)").unwrap();
+
+        if let Some(stdout) = &mut out {
+            let lines = BufReader::new(stdout).lines().enumerate().take(10);
+            for (_counter, line) in lines {
+                if let Ok(line) = line {
+                    let captures = session_regex.captures(&line);
+                    let found_session_id = captures
+                        .and_then(|c| c.get(1))
+                        .and_then(|e| Some(e.as_str().to_owned()));
+                    if found_session_id.is_some() {
+                        session_id = found_session_id;
+                        break;
+                    }
+                }
+            }
+        }
+        if let Some(session_id) = session_id {
+            let app_ctx = app_state.0.lock().await;
+            let profile = app_ctx.active_profile.as_ref().unwrap();
+            let killed_session_output = Command::new("aws")
+                .args([
+                    "ssm",
+                    "terminate-session",
+                    "--session-id",
+                    &session_id,
+                    "--profile",
+                    &profile,
+                ])
+                .output();
+            match killed_session_output {
+                Ok(output) => println!("Attempted to kill session in SSM: {:?}", output),
+                Err(e) => println!("Failed to kill session in SSM {}", e),
+            };
+        } else {
+            println!("SessionId to kill not found")
+        }
+    } else {
+        ingest_log(
+            &axiom,
+            &user_id,
+            Action::StopJob(
+                shared::arn_to_name(arn).to_owned(),
+                Env::from_any(arn).to_owned(),
+                shared::arn_resource_type(arn).to_owned(),
+            ),
+            Some(String::from("No matching job running!")),
+            None,
+        )
+        .await;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
-    service_cache: tauri::State<'_, ServicesCache>,
-    db_cache: tauri::State<'_, DatabasesCache>,
-    home_cache: tauri::State<'_, HomeCache>,
+    ecs_state: tauri::State<'_, EcsClientState>,
+    rds_state: tauri::State<'_, RdsClientState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_state: tauri::State<'_, UserConfigState>,
 ) -> Result<(), BError> {
     let mut app_state = app_state.0.lock().await;
+    if let Some(profile) = app_state.active_profile.as_ref() {
+        ingest_log(
+            &axiom,
+            &user_state.0.lock().await.id,
+            Action::Logout(profile.clone()),
+            None,
+            None,
+        )
+        .await;
+    }
     app_state.active_profile = None;
-    service_cache.0.lock().await.clear();
-    db_cache.0.lock().await.clear();
-    home_cache.0.lock().await.databases.clear();
-    home_cache.0.lock().await.services.clear();
+    ecs_state.0.lock().await.shutdown();
+    rds_state.0.lock().await.shutdown();
+
     if let Some(handler) = &task_tracker.0.lock().await.home_details_refresher {
         handler.abort()
+    }
+    if let Some(handler) = &task_tracker.0.lock().await.aws_resource_refresher {
+        handler.abort()
+    }
+    let jobs = &mut task_tracker.0.lock().await.proxies_handlers;
+    for job in jobs.drain() {
+        let _ = job.1.kill();
+        let _ = job.1.wait();
     }
     task_tracker.0.lock().await.home_details_refresher = None;
 
     Ok(())
 }
 
-async fn populate_db_cache(active_profile: &str, databases_cache: &mut Vec<DbInstance>) {
-    databases_cache.clear();
-    let databases = aws::databases(&aws::rds_client(&active_profile).await).await;
-    for db in databases {
-        databases_cache.push(db);
-    }
-}
-
-async fn populate_cluster_cache(active_profile: &str, cluster_cache: &mut Vec<Cluster>) {
-    cluster_cache.clear();
-    let clusters = aws::clusters(&aws::ecs_client(&active_profile).await).await;
-    for cluster in clusters {
-        cluster_cache.push(cluster);
-    }
-}
-
-async fn populate_services_cache(
-    active_profile: &str,
-    clusters: &[Cluster],
-    services_cache: &mut HashMap<Env, Vec<EcsService>>,
-) {
-    services_cache.clear();
-    for cluster in clusters {
-        let services = aws::services(&aws::ecs_client(&active_profile).await, cluster).await;
-        services_cache.insert(cluster.env.clone(), services);
-    }
-}
-
 #[tauri::command]
 async fn home(
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
+    databases_cache: tauri::State<'_, RdsClientState>,
     home_cache: tauri::State<'_, HomeCache>,
-    databases_cache: tauri::State<'_, DatabasesCache>,
+    services_cache: tauri::State<'_, EcsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<HomePage, BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
-    if let Some(active_profile) = active_profile {
-        let mut home_cache = home_cache.0.lock().await;
-        let user = user_config.0.lock().await;
-
-        let databases_cache = databases_cache.0.lock().await;
-        let dbs_list: Vec<aws::DbInstance> = databases_cache
-            .iter()
-            .filter(|db| user.rds.contains(&db.arn))
-            .cloned()
-            .collect();
-        home_cache.databases = dbs_list;
-
-        let ecs_arns = user.ecs.clone();
-        let mut ecs_list: Vec<ServiceDetails> = home_cache
-            .services
-            .iter()
-            .filter(|e| ecs_arns.contains(&e.arn))
-            .cloned()
-            .collect();
-
-        let cached_services = &mut home_cache.services;
-        let mut handles: Vec<_> = vec![];
-        for ecs in ecs_arns.into_iter() {
-            if !cached_services
-                .into_iter()
-                .any(|cached_ecs| cached_ecs.arn == *ecs)
-            {
-                let ecs_client = aws::ecs_client(&active_profile.clone()).await;
-                handles.push(tokio::task::spawn(async move {
-                    aws::service_details(&ecs_client, &ecs).await
-                }));
-            }
-        }
-        for handle in handles {
-            ecs_list.push(handle.await.unwrap())
-        }
-
-        home_cache.services = ecs_list;
-
-        Ok(home_cache.clone())
-    } else {
-        Err(BError::new("home", "Login required"))
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
+    let user = user_config.0.lock().await;
+
+    let mut databases_cache = databases_cache.0.lock().await;
+    let dbs_list: Vec<aws::DbInstance> = databases_cache
+        .databases()
+        .await
+        .iter()
+        .filter(|db| {
+            user.tracked_names
+                .contains(&shared::rds_arn_to_name(&db.arn))
+        })
+        .cloned()
+        .collect();
+
+    let mut services = services_cache
+        .0
+        .lock()
+        .await
+        .service_details_for_names(&user.tracked_names, false)
+        .await;
+
+    home_cache.0.lock().await.entries = user
+        .tracked_names
+        .iter()
+        .map(|tracked_name| HomeEntry {
+            tracked_name: tracked_name.clone(),
+            services: services
+                .remove(tracked_name)
+                .unwrap()
+                .into_iter()
+                .map(|s| (s.arn.clone(), s))
+                .collect(),
+            dbs: dbs_list
+                .iter()
+                .filter(|db| tracked_name == &shared::rds_arn_to_name(&db.arn))
+                .cloned()
+                .collect(),
+        })
+        .collect();
+
+    Ok(home_cache.0.lock().await.clone())
 }
 
 #[tauri::command]
 async fn clusters(
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, ClustersCache>,
+    ecs_state: tauri::State<'_, EcsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::Cluster>, BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
-    if let Some(active_profile) = active_profile {
-        let mut cache = cache.0.lock().await;
-        if cache.is_empty() {
-            let clusters = aws::clusters(&ecs_client(&active_profile).await).await;
-
-            for cluser in clusters.clone() {
-                cache.push(cluser);
-            }
-        }
-
-        Ok(cache.clone())
-    } else {
-        Err(BError::new("clusters", "Login required"))
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
+
+    Ok(ecs_state.0.lock().await.clusters().await)
 }
 
 #[tauri::command]
 async fn services(
     cluster: Cluster,
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, ServicesCache>,
+    cache: tauri::State<'_, EcsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::EcsService>, BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
-    if let Some(active_profile) = active_profile {
-        let mut cache = cache.0.lock().await;
-        if cache.get(&cluster.env).is_none() {
-            let services = aws::services(&ecs_client(&active_profile).await, &cluster).await;
-            cache.insert(cluster.env.clone(), services);
-        }
-
-        Ok(cache.get(&cluster.env).unwrap().clone())
-    } else {
-        Err(BError::new("services", "Login required"))
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
+
+    Ok(cache.0.lock().await.services(&cluster).await)
 }
 
 #[tauri::command]
 async fn databases(
-    env: aws::Env,
+    env: shared::Env,
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, DatabasesCache>,
+    cache: tauri::State<'_, RdsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
-    if let Some(active_profile) = active_profile {
-        let mut cache = cache.0.lock().await;
-        if cache.is_empty() {
-            let databases = aws::databases(&aws::rds_client(&active_profile).await).await;
-            for db in databases {
-                cache.push(db);
-            }
-        }
-
-        Ok(cache.iter().filter(|db| db.env == env).cloned().collect())
-    } else {
-        Err(BError::new("databases", "Login required"))
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
+
+    let dbs = cache.0.lock().await.databases().await;
+
+    Ok(dbs.into_iter().filter(|db| db.env == env).collect())
 }
 
 #[tauri::command]
 async fn discover(
     name: &str,
-    db_cache: tauri::State<'_, DatabasesCache>,
-    service_cache: tauri::State<'_, ServicesCache>,
-) -> Result<Vec<(String, aws::Env, String, String)>, BError> {
-    let name = &name.to_lowercase();
-    let mut records: Vec<(String, aws::Env, String, String)> = vec![];
-    db_cache
-        .0
-        .lock()
-        .await
-        .iter()
-        .filter(|db| db.arn.contains(name))
-        .map(|db| {
-            (
-                "Database".to_owned(),
-                db.env.clone(),
-                db.arn.to_owned(),
-                db.name.to_owned(),
-            )
-        })
-        .for_each(|r| records.push(r));
-    for entry in service_cache.0.lock().await.iter() {
-        entry
-            .1
-            .iter()
-            .filter(|s| s.arn.contains(name))
-            .map(|s| {
-                (
-                    "Service".to_owned(),
-                    s.env.clone(),
-                    s.arn.to_owned(),
-                    s.name.to_owned(),
-                )
-            })
-            .for_each(|r| records.push(r));
+    app_state: tauri::State<'_, AppContextState>,
+    db_cache: tauri::State<'_, RdsClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
+    service_cache: tauri::State<'_, EcsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_state: tauri::State<'_, UserConfigState>,
+) -> Result<Vec<HomeEntry>, BError> {
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
+
+    let name = &name.to_lowercase();
+    let tracked_names = user_config.0.lock().await.tracked_names.clone();
+    let mut records: Vec<HomeEntry> = vec![];
+    let mut found_names = HashSet::new();
+    if name.len() < 3 {
+        ingest_log(
+            &axiom,
+            &user_state.0.lock().await.id,
+            Action::Discover(name.to_owned()),
+            None,
+            Some(0),
+        )
+        .await;
+        return Ok(Vec::new());
+    }
+    let mut dbs: HashMap<String, Vec<aws::DbInstance>> = HashMap::new();
+    {
+        let rds_client = &mut db_cache.0.lock().await;
+        let found_dbs: Vec<DbInstance> = rds_client
+            .databases()
+            .await
+            .into_iter()
+            .filter(|db| {
+                db.arn.contains(name) && !tracked_names.contains(&rds_arn_to_name(&db.arn))
+            })
+            .collect();
+
+        for db in found_dbs {
+            let name = rds_arn_to_name(&db.arn);
+            if !dbs.contains_key(&name) {
+                dbs.insert(name, vec![db]);
+            } else {
+                dbs.get_mut(&name).unwrap().push(db);
+            }
+        }
+    }
+
+    let mut services: HashMap<String, Vec<ServiceDetails>> = HashMap::new();
+    {
+        let ecs_client = &mut service_cache.0.lock().await;
+        let clusters = ecs_client.clusters().await;
+        for cluster in clusters.iter() {
+            let matching_services_at_cluster: Vec<EcsService> = ecs_client
+                .services(cluster)
+                .await
+                .into_iter()
+                .filter(|s| {
+                    s.arn.contains(name) && !tracked_names.contains(&ecs_arn_to_name(&s.arn))
+                })
+                .collect();
+            for service in matching_services_at_cluster {
+                let name = ecs_arn_to_name(&service.arn);
+                let sd = ecs_client.service_details(&service.arn, false).await;
+                if !services.contains_key(&name) {
+                    services.insert(name, vec![sd]);
+                } else {
+                    services.get_mut(&name).unwrap().push(sd);
+                }
+            }
+        }
+    }
+
+    found_names.extend(dbs.keys().cloned());
+    found_names.extend(services.keys().cloned());
+
+    for found_name in found_names {
+        records.push(HomeEntry {
+            tracked_name: found_name.clone(),
+            dbs: dbs.remove(&found_name).unwrap_or_default(),
+            services: services
+                .remove(&found_name)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|s| (s.arn.clone(), s))
+                .collect(),
+        });
+    }
+
+    ingest_log(
+        &axiom,
+        &user_state.0.lock().await.id,
+        Action::Discover(name.to_owned()),
+        None,
+        Some(records.len()),
+    )
+    .await;
 
     Ok(records)
 }
@@ -381,61 +671,88 @@ async fn start_db_proxy(
     db: aws::DbInstance,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
+
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
 
-    if let Some(active_profile) = active_profile {
-        let ec2_client = aws::ec2_client(&active_profile).await;
-        let bastions = aws::bastions(&ec2_client).await;
-        let bastion = bastions
-            .into_iter()
-            .find(|b| b.env == db.env)
-            .expect("No bastion found");
+    let ec2_client = aws::ec2_client(profile).await;
+    let bastions = aws::bastions(&ec2_client).await;
+    let bastion = bastions
+        .into_iter()
+        .find(|b| b.env == db.env)
+        .expect("No bastion found");
 
-        start_aws_ssm_proxy(
-            db.arn,
-            window,
-            bastion.instance_id,
-            active_profile,
-            db.endpoint.address,
-            db.endpoint.port,
-            local_port,
-            None,
-            local_port,
-        );
+    ingest_log(
+        &axiom,
+        &user_config.0.lock().await.id,
+        Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
+        None,
+        None,
+    )
+    .await;
 
-        Ok(())
-    } else {
-        Err(BError::new("start_db_proxy", "Failed to start"))
-    }
+    start_aws_ssm_proxy(
+        db.arn,
+        window,
+        bastion.instance_id,
+        profile.to_owned(),
+        db.endpoint.address,
+        db.endpoint.port,
+        local_port,
+        None,
+        local_port,
+        async_task_tracker,
+    )
+    .await;
+
+    Ok(())
 }
 
 #[tauri::command]
 async fn refresh_cache(
-    window: Window,
     app_state: tauri::State<'_, AppContextState>,
-    databse_cache: tauri::State<'_, DatabasesCache>,
-    cluster_cache: tauri::State<'_, ClustersCache>,
-    service_cache: tauri::State<'_, ServicesCache>,
-    home_cache: tauri::State<'_, HomeCache>,
-) -> Result<(), ()> {
-    let profile = &app_state.0.lock().await.active_profile.clone().unwrap();
+    window: Window,
+    databse_cache: tauri::State<'_, RdsClientState>,
+    service_cache: tauri::State<'_, EcsClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+) -> Result<(), BError> {
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
 
+    ingest_log(
+        &axiom,
+        &user_config.0.lock().await.id,
+        Action::ClearCache,
+        None,
+        None,
+    )
+    .await;
     let db_cache = &mut databse_cache.0.lock().await;
-    populate_db_cache(profile, db_cache).await;
-
-    let cluster_cache = &mut cluster_cache.0.lock().await;
-    populate_cluster_cache(profile, cluster_cache).await;
+    db_cache.clear();
+    db_cache.databases().await;
 
     let service_cache = &mut service_cache.0.lock().await;
-    populate_services_cache(profile, &cluster_cache, service_cache).await;
+    service_cache.clear();
+    let clusters = service_cache.clusters().await;
+    for cluster in clusters {
+        service_cache.services(&cluster).await;
+    }
 
-    home_cache.0.lock().await.services.clear();
-    home_cache.0.lock().await.databases.clear();
     window.emit("cache-refreshed", ()).unwrap();
     Ok(())
 }
@@ -446,39 +763,53 @@ async fn start_service_proxy(
     service: aws::EcsService,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
     let aws_local_port = local_port + 10000;
 
-    if let Some(active_profile) = active_profile {
-        let ec2_client = aws::ec2_client(&active_profile).await;
-        let bastions = aws::bastions(&ec2_client).await;
-        let bastion = bastions
-            .into_iter()
-            .find(|b| b.env == service.env)
-            .expect("No bastion found");
-        let host = format!("{}.service", service.name);
-        let handle = start_proxy_to_aws_proxy(Some(host.clone()), local_port, aws_local_port).await;
-        start_aws_ssm_proxy(
-            service.arn,
-            window,
-            bastion.instance_id,
-            active_profile,
-            host,
-            80,
-            aws_local_port,
-            Some(handle),
-            local_port,
-        );
-
-        Ok(())
-    } else {
-        Err(BError::new("start_service_proxy", "Failed to start"))
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
     }
+
+    let ec2_client = aws::ec2_client(profile).await;
+    let bastions = aws::bastions(&ec2_client).await;
+    let bastion = bastions
+        .into_iter()
+        .find(|b| b.env == service.env)
+        .expect("No bastion found");
+    let host = format!("{}.service", service.name);
+    ingest_log(
+        &axiom,
+        &user_config.0.lock().await.id,
+        Action::StartEcsProxy(service.name.to_owned(), service.env.clone()),
+        None,
+        None,
+    )
+    .await;
+
+    let handle = start_proxy_to_aws_proxy(Some(host.clone()), local_port, aws_local_port).await;
+
+    start_aws_ssm_proxy(
+        service.arn,
+        window,
+        bastion.instance_id,
+        profile.to_owned(),
+        host,
+        80,
+        aws_local_port,
+        Some(handle),
+        local_port,
+        async_task_tracker,
+    )
+    .await;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -487,6 +818,8 @@ async fn open_dbeaver(
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
+    rds_state: tauri::State<'_, RdsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
@@ -510,40 +843,48 @@ async fn open_dbeaver(
         .as_ref()
         .expect("DBeaver needs to be configured")
         .clone();
-    let active_profile = {
-        let app_state = app_state.0.lock().await;
-        app_state.active_profile.clone()
-    };
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
 
-    if let Some(active_profile) = active_profile {
-        let db_secret = aws::db_secret(
-            &aws::secretsmanager_client(&active_profile).await,
-            &aws::ssm_client(&active_profile).await,
-            &db.name,
-            &db.env,
+    let db_secret = rds_state.0.lock().await.db_secret(&db.name, &db.env).await;
+    if let Err(err) = db_secret {
+        ingest_log(
+            &axiom,
+            &user_config.0.lock().await.id,
+            Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
+            Some(err.message.clone()),
+            None,
         )
         .await;
-        if db_secret.is_err() {
-            return Err(db_secret.err().unwrap());
-        }
-        let db_secret = db_secret.unwrap();
-
-        Command::new(dbeaver_path)
-            .args([
-                "-con",
-                &db_beaver_con_parma(
-                    &db.arn.split(":").last().unwrap(),
-                    "localhost",
-                    port,
-                    &db_secret,
-                ),
-            ])
-            .output()
-            .expect("failed to execute process");
-        return Ok(());
-    } else {
-        Err(BError::new("open_dbeaver", "Failed to start"))
+        return Err(err);
     }
+    let db_secret = db_secret.unwrap();
+    ingest_log(
+        &axiom,
+        &user_config.0.lock().await.id,
+        Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
+        None,
+        None,
+    )
+    .await;
+    Command::new(dbeaver_path)
+        .args([
+            "-con",
+            &db_beaver_con_parma(
+                &db.arn.split(":").last().unwrap(),
+                "localhost",
+                port,
+                &db_secret,
+            ),
+        ])
+        .output()
+        .expect("failed to execute process");
+    return Ok(());
 }
 
 async fn start_proxy_to_aws_proxy(
@@ -581,7 +922,7 @@ async fn start_proxy_to_aws_proxy(
     })
 }
 
-fn start_aws_ssm_proxy(
+async fn start_aws_ssm_proxy(
     arn: String,
     window: Window,
     bastion: String,
@@ -592,7 +933,36 @@ fn start_aws_ssm_proxy(
 
     abort_on_exit: Option<tokio::task::JoinHandle<()>>,
     access_port: u16,
+    async_task_manager: tauri::State<'_, AsyncTaskManager>,
 ) {
+    let mut command = Command::new("aws");
+    command.args([
+        "ssm",
+        "start-session",
+        "--target",
+        &bastion,
+        "--profile",
+        &profile,
+        "--document-name",
+        "AWS-StartPortForwardingSessionToRemoteHost",
+        "--parameters",
+        &format!(
+            "{{\"host\":[\"{}\"], \"portNumber\":[\"{}\"], \"localPortNumber\":[\"{}\"]}}",
+            target, target_port, local_port
+        ),
+    ]);
+    command.stdout(Stdio::piped());
+    let shared_child = SharedChild::spawn(&mut command).unwrap();
+    let shared_child_arc = Arc::new(shared_child);
+    let child_arc_clone = shared_child_arc.clone();
+
+    async_task_manager
+        .0
+        .lock()
+        .await
+        .proxies_handlers
+        .insert(arn.clone(), shared_child_arc);
+
     tokio::task::spawn(async move {
         // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
         // aws ssm start-session \
@@ -610,26 +980,10 @@ fn start_aws_ssm_proxy(
                 },
             )
             .unwrap();
-        Command::new("aws")
-            .args([
-                "ssm",
-                "start-session",
-                "--target",
-                &bastion,
-                "--profile",
-                &profile,
-                "--document-name",
-                "AWS-StartPortForwardingSessionToRemoteHost",
-                "--parameters",
-                &format!(
-                    "{{\"host\":[\"{}\"], \"portNumber\":[\"{}\"], \"localPortNumber\":[\"{}\"]}}",
-                    target, target_port, local_port
-                ),
-            ])
-            .output()
-            .expect("failed to execute process");
+        let _ = child_arc_clone.wait();
 
         if let Some(handle) = abort_on_exit {
+            println!("Killing dependant job");
             handle.abort()
         }
         window
@@ -648,37 +1002,69 @@ fn start_aws_ssm_proxy(
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap();
-
     tauri::Builder::default()
-        .manage(UserConfigState(Arc::new(Mutex::new(UserConfig::default()))))
+        .setup(|app| {
+            let mut resource_path = app
+                .path_resolver()
+                .resolve_resource("resources/params-localdev.json");
+            if resource_path.is_none() {
+                resource_path = app
+                    .path_resolver()
+                    .resolve_resource("resources/params.json");
+            }
+
+            let resource_path = resource_path.expect("failed to resolve resource");
+
+            let file = std::fs::File::open(&resource_path).unwrap();
+            let params: WombatParams = serde_json::from_reader(file).unwrap();
+
+            let user = UserConfig::default();
+
+            let axiom_token = params.axiom_token.unwrap_or(String::from("token")).clone();
+            let axiom_org = params.axiom_org.unwrap_or(String::from("org")).clone();
+
+            let client = Client::builder()
+                .with_token(axiom_token)
+                .with_org_id(axiom_org)
+                .build();
+            let axiom_client = AxiomClientState(Arc::new(Mutex::new(match client {
+                Ok(client) => Some(client),
+                Err(_) => None,
+            })));
+            app.manage(UserConfigState(Arc::new(Mutex::new(user))));
+            app.manage(axiom_client);
+            Ok(())
+        })
         .manage(AppContextState::default())
-        .manage(DatabasesCache::default())
-        .manage(ServicesCache::default())
-        .manage(ClustersCache::default())
+        .manage(RdsClientState(Arc::new(Mutex::new(aws::RdsClient::new()))))
+        .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             home_details_refresher: None,
+            aws_resource_refresher: None,
+            proxies_handlers: HashMap::new(),
         }))))
         .manage(HomeCache(Arc::new(Mutex::new(HomePage {
             timestamp: Utc::now(),
-            services: Vec::new(),
-            databases: Vec::new(),
+            entries: Vec::new(),
         }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
+            set_dbeaver_path,
+            save_preffered_envs,
             login,
             logout,
             clusters,
             services,
             databases,
-            set_dbeaver_path,
-            favorite_ecs,
-            favorite_rds,
+            favorite,
             start_db_proxy,
             start_service_proxy,
             open_dbeaver,
             home,
             discover,
-            refresh_cache
+            refresh_cache,
+            credentials,
+            stop_job
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -686,12 +1072,9 @@ async fn main() {
 
 struct HomeCache(Arc<Mutex<HomePage>>);
 
-#[derive(Default)]
-struct ClustersCache(Arc<Mutex<Vec<aws::Cluster>>>);
-#[derive(Default)]
-struct DatabasesCache(Arc<Mutex<Vec<aws::DbInstance>>>);
-#[derive(Default)]
-struct ServicesCache(Arc<Mutex<HashMap<aws::Env, Vec<aws::EcsService>>>>);
+struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
+
+struct EcsClientState(Arc<Mutex<aws::EcsClient>>);
 
 #[derive(Default)]
 struct AppContext {
@@ -701,16 +1084,142 @@ struct AppContext {
 #[derive(Default)]
 struct AppContextState(Arc<Mutex<AppContext>>);
 
+struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);
+
 struct UserConfigState(Arc<Mutex<UserConfig>>);
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct HomePage {
     timestamp: DateTime<Utc>,
-    services: Vec<aws::ServiceDetails>,
-    databases: Vec<aws::DbInstance>,
+    entries: Vec<HomeEntry>,
 }
+
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct TaskTracker {
     home_details_refresher: Option<tokio::task::JoinHandle<()>>,
+    aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
+    proxies_handlers: HashMap<String, Arc<SharedChild>>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct HomeEntry {
+    tracked_name: shared::TrackedName,
+    services: HashMap<String, aws::ServiceDetails>,
+    dbs: Vec<aws::DbInstance>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct WombatParams {
+    axiom_token: Option<String>,
+    axiom_org: Option<String>,
+    target: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ActionLog {
+    user_id: uuid::Uuid,
+    action: Action,
+    app_version: String,
+    profile: String,
+    error_message: Option<String>,
+    record_count: Option<usize>,
+    target: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+enum Action {
+    Start,
+    Login(String),
+    FetchCredentials(String, Env),
+    StopJob(String, Env, String),
+    StartEcsProxy(String, Env),
+    StartRdsProxy(String, Env),
+    OpenDbeaver(String, Env),
+    LoginCheck(String),
+    RefreshServiceDetails,
+    RefreshRdsList,
+    RefreshEcsList(String, Env),
+    RefreshClusterList,
+    ClearCache,
+    UpdateTrackedNames(String),
+    SetDbeaverPath(String),
+    SetPrefferedEnvs(Vec<Env>),
+    Discover(String),
+    Logout(String),
+}
+
+async fn check_login_and_trigger(
+    user_id: &uuid::Uuid,
+    profile: &str,
+    axiom: &tauri::State<'_, AxiomClientState>,
+) -> Result<(), BError> {
+    let client = aws::ecs_client(profile).await;
+    if !aws::is_logged(&client).await {
+        println!("Trigger log in into AWS");
+        Command::new("aws")
+            .args(["sso", "login", "--profile", &profile])
+            .output()
+            .expect("failed to execute process");
+        if !aws::is_logged(&client).await {
+            ingest_log(
+                axiom,
+                user_id,
+                Action::LoginCheck(profile.to_owned()),
+                Some(String::from("Failed to log in.")),
+                None,
+            )
+            .await;
+            return Err(BError::new("login", "Failed to log in"));
+        } else {
+            ingest_log(
+                axiom,
+                user_id,
+                Action::LoginCheck(profile.to_owned()),
+                None,
+                None,
+            )
+            .await;
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+async fn ingest_log(
+    client: &tauri::State<'_, AxiomClientState>,
+    user_id: &uuid::Uuid,
+    action: Action,
+    error_message: Option<String>,
+    record_count: Option<usize>,
+) {
+    if let Some(client) = client.0.lock().await.as_ref() {
+        ingest_log_with_client(&client, user_id, action, error_message, record_count).await;
+    }
+}
+
+async fn ingest_log_with_client(
+    client: &Client,
+    user_id: &uuid::Uuid,
+    action: Action,
+    error_message: Option<String>,
+    record_count: Option<usize>,
+) {
+    if let Err(e) = client
+        .ingest(
+            "wombat",
+            vec![json!(ActionLog {
+                user_id: user_id.clone(),
+                action,
+                error_message,
+                record_count,
+                app_version: env!("CARGO_PKG_VERSION").to_owned(),
+                profile: env::var("PROFILE").unwrap_or("unknown".to_owned()),
+                target: env::var("CARGO_CFG_TARGET_OS").unwrap_or("unknown".to_owned()),
+            })],
+        )
+        .await
+    {
+        println!("Error ingesting logs {}", e)
+    }
 }

@@ -1,22 +1,20 @@
 <script lang="ts">
-	import Icon from 'svelte-icon/Icon.svelte';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import star from '$lib/images/star-solid.svg?raw';
 	import type { EcsService } from '$lib/types';
 	import { userStore } from '$lib/user-store';
-	import { envStore } from '$lib/env-store';
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
 	import { open } from '@tauri-apps/api/shell';
 	import StarIcon from '$lib/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
+	import { clusterStore } from '$lib/cluster-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
-	$: isFavourite = (arn: string): boolean => {
-		return !!user.ecs.find((ecsArn) => ecsArn == arn);
+	$: isFavourite = (name: string): boolean => {
+		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
-	$: activeCluser = envStore.activeCluser;
+	$: activeCluser = clusterStore.activeCluser;
 	$: listen('cache-refreshed', () => {
 		services = execute<EcsService[]>('services', { cluster: $activeCluser }, true);
 	});
@@ -27,12 +25,20 @@
 	$: matchesFilter = (service: EcsService): boolean => {
 		return arnFilter === '' || service.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
+	$: clusters = clusterStore.clusters
 </script>
 
 <svelte:head>
 	<title>ECS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
+<div class="my-4 p-2 pb-5">
+	<select class="select select-bordered" bind:value={$activeCluser}>
+		{#each $clusters as cluster}
+			<option value={cluster}>{cluster.name}</option>
+		{/each}
+	</select>
+</div>
 <div class="h-full block">
 	<table class="table w-full table-zebra table-compact">
 		<thead class="sticky top-0">
@@ -64,10 +70,10 @@
 								<div class="flex flex-row items-stretch gap-1">
 									<button
 										on:click={() => {
-											userStore.favoriteEcs(service.arn);
+											userStore.favoriteTrackedName(service.name);
 										}}
 									>
-										<StarIcon state={isFavourite(service.arn)} />
+										<StarIcon state={isFavourite(service.name)} />
 									</button>
 
 									<div class="flex flex-col">

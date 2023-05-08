@@ -3,18 +3,16 @@
 	import Icon from '$lib/images/32x32.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { AwsEnv, type UserConfig } from '$lib/types';
-	import { envStore } from '$lib/env-store';
 	import { execute } from '$lib/error-store';
 	import { homeStore } from '$lib/home-store';
+	import type { UserConfig } from '$lib/types';
+	import { clusterStore } from '$lib/cluster-store';
 
 	const logout = async () => {
 		await invoke('logout');
 		goto('/');
 	};
-	let currentEnv = envStore.currentEnv;
 	let userConfig = invoke<UserConfig>('user_config');
-	let envs = Object.keys(AwsEnv);
 </script>
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between">
@@ -37,27 +35,20 @@
 				>
 			</li>
 			<li>
-				<a class={$page.url.pathname === '/logged/profile' ? 'active' : ''} href="/logged/profile"
-					>Profile</a
+				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
+					>Config</a
 				>
 			</li>
 		</ul>
 	</div>
 
 	<div class="flex gap-4">
-		<select class="select select-bordered" bind:value={$currentEnv}>
-			{#each envs as env}
-				<option value={env}>{env}</option>
-			{/each}
-		</select>
 		{#await userConfig then { last_used_profile }}
 			<h6>{last_used_profile}</h6>
 		{/await}
 		<button
 			on:click={async () => {
 				await execute('refresh_cache', undefined, true);
-				await envStore.refresh();
-				await homeStore.refresh(false);
 			}}
 			><svg
 				xmlns="http://www.w3.org/2000/svg"

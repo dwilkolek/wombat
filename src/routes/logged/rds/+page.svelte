@@ -1,17 +1,18 @@
 <script lang="ts">
 	import dbeaver from '$lib/images/dbeaver-head.png';
-	import type { DbInstance } from '$lib/types';
+	import { AwsEnv, type DbInstance } from '$lib/types';
 	import { userStore } from '$lib/user-store';
 	import { envStore } from '$lib/env-store';
 	import { taskStore } from '$lib/task-store';
 	import { execute } from '$lib/error-store';
 	import StarIcon from '$lib/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
+	import DbSecretBtn from '$lib/db-secret-btn.svelte';
 
 	let arnFilter = '';
 	$: user = $userStore;
-	$: isFavourite = (arn: string): boolean => {
-		return !!user.rds.find((dbArn) => dbArn == arn);
+	$: isFavourite = (name: string): boolean => {
+		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 	$: currentEnv = envStore.currentEnv;
 	$: databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
@@ -21,17 +22,25 @@
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
+	let envs = Object.keys(AwsEnv);
 </script>
 
 <svelte:head>
 	<title>RDS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
+<div class="my-4 p-2 pb-5">
+	<select class="select select-bordered" bind:value={$currentEnv}>
+		{#each envs as env}
+			<option value={env}>{env}</option>
+		{/each}
+	</select>
+</div>
 <div class="h-full block">
 	<table class="table w-full table-zebra table-compact">
 		<thead class="sticky top-0">
 			<tr>
-				<th colspan="3">
+				<th>
 					<div class="flex gap-2">
 						Info
 						<input
@@ -46,6 +55,8 @@
 						/>
 					</div>
 				</th>
+				<td>Engine</td>
+				<td colspan="2">Proxy</td>
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
@@ -57,10 +68,10 @@
 								<div class="flex flex-row items-stretch gap-1">
 									<button
 										on:click={() => {
-											userStore.favoriteRds(db.arn);
+											userStore.favoriteTrackedName(db.name);
 										}}
 									>
-										<StarIcon state={isFavourite(db.arn)} />
+										<StarIcon state={isFavourite(db.name)} />
 									</button>
 
 									<div class="flex flex-col">
@@ -71,7 +82,13 @@
 								</div>
 							</td>
 							<td>
-								{#if $userStore.dbeaver_path} 
+								<span>
+									<DbSecretBtn database={db} />
+									{db.engine}
+								</span>
+							</td>
+							<td>
+								{#if $userStore.dbeaver_path}
 									<button
 										class={`btn btn-circle ${
 											!$taskStore.find((t) => t.arn == db.arn) ? 'opacity-25' : ''

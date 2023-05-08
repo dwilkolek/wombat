@@ -2,7 +2,7 @@ name: 'publish'
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 jobs:
   publish-tauri:
@@ -16,6 +16,13 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
+      - name: create-json
+        id: create-json
+        uses: jsdaniell/create-json@v1.2.2
+        with:
+          dir: 'src-tauri/resources/'
+          name: 'params.json'
+          json: ${{ secrets.PARAMS_JSON }}
       - name: setup node
         uses: actions/setup-node@v3
         with:
