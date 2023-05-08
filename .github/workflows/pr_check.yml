@@ -1,4 +1,4 @@
-name: "pr_check"
+name: 'pr_check'
 on: [pull_request]
 
 jobs:
@@ -7,14 +7,20 @@ jobs:
       fail-fast: false
       matrix:
         platform: [macos-latest] # ubuntu-20.04, windows-latest
-
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
+      - name: create-json
+        id: create-json
+        uses: jsdaniell/create-json@v1.2.2
+        with:
+          dir: 'src-tauri/resources/'
+          name: 'params.json'
+          json: ${{ secrets.PARAMS_JSON }}
       - name: setup node
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 18
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
       - name: install dependencies (ubuntu only)

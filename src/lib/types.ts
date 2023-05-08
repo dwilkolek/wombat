@@ -8,6 +8,7 @@ export enum AwsEnv {
 }
 
 export type Cluster = {
+	name: string;
 	arn: string;
 	env: AwsEnv;
 };
@@ -15,9 +16,9 @@ export type UserConfig = {
 	id: string | undefined;
 	last_used_profile: string | undefined;
 	known_profiles: string[];
-	ecs: string[];
-	rds: string[];
+	tracked_names: string[];
 	dbeaver_path: string | undefined;
+	preffered_environments: AwsEnv[];
 };
 
 export type EcsService = {
@@ -41,10 +42,19 @@ export type Endpoint = {
 
 export type DbInstance = {
 	name: string;
+	engine: string;
 	endpoint: Endpoint;
+	env: AwsEnv;
 	arn: string;
 	environment_tag: string;
 	appname_tag: string;
+};
+
+export type DatabaseCredentials = {
+	dbname: string;
+	password: string;
+	username: string;
+	auto_rotated: boolean;
 };
 
 export type MonitoringConfig = {

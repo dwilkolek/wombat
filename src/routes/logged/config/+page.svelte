@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { userStore } from '$lib/user-store';
+	import { open } from '@tauri-apps/api/shell';
 
 	let user = $userStore;
 	let dbeaver_path = user?.dbeaver_path ?? '';
 </script>
 
 <svelte:head>
-	<title>PROFILE</title>
+	<title>CONFIG</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="mx-auto">
@@ -35,6 +36,9 @@
 					/>
 
 					<div class="pl-2">
+						Install <a class="link link-accent" href="https://dbeaver.io/" on:click|preventDefault={() => {
+							open('https://dbeaver.io/');
+						}}>dbeaver</a> to be able to open connection to database directly from Wombat<br /><br />
 						MacOS:
 						<pre class="pl-1">/Applications/DBeaver.app/Contents/MacOS/dbeaver</pre>
 
