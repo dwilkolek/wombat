@@ -1004,10 +1004,16 @@ async fn main() {
     fix_path_env::fix().unwrap();
     tauri::Builder::default()
         .setup(|app| {
-            let resource_path = app
+            let mut resource_path = app
                 .path_resolver()
-                .resolve_resource("params.json")
-                .expect("failed to resolve resource");
+                .resolve_resource("resources/params-localdev.json");
+            if resource_path.is_none() {
+                resource_path = app
+                    .path_resolver()
+                    .resolve_resource("resources/params.json");
+            }
+
+            let resource_path = resource_path.expect("failed to resolve resource");
 
             let file = std::fs::File::open(&resource_path).unwrap();
             let params: WombatParams = serde_json::from_reader(file).unwrap();
