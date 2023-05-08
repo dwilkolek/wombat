@@ -32,6 +32,11 @@
         "scope": [
           "https://api.github.com/repos/dwilkolek/wombat/*"
         ]
+      },
+      "fs": {
+        "scope": [
+          "$RESOURCE/*"
+        ]
       }
     },
     "bundle": {
@@ -57,7 +62,9 @@
         "providerShortName": null,
         "signingIdentity": null
       },
-      "resources": [],
+      "resources": [
+        "resources/*"
+      ],
       "shortDescription": "",
       "targets": "all",
       "windows": {
@@ -75,10 +82,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 780,
         "resizable": true,
         "title": "Wombat - in combat",
-        "width": 1280
+        "width": 1280,
+        "height": 780
       }
     ]
   }

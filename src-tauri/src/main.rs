@@ -15,7 +15,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
-use tauri::Window;
+use tauri::{Manager, Window};
 use tokio::sync::Mutex;
 use urlencoding::encode;
 use user::UserConfig;
@@ -1001,26 +1001,34 @@ async fn start_aws_ssm_proxy(
 
 #[tokio::main]
 async fn main() {
-    let axiom_token = env::var("AXIOM_TOKEN").unwrap_or_default();
-    let axiom_org = env::var("AXIOM_ORG").unwrap_or_default();
-    let user = UserConfig::default();
-    let client = Client::builder()
-        .with_token(axiom_token)
-        .with_org_id(axiom_org)
-        .build();
-    let axiom_client = AxiomClientState(Arc::new(Mutex::new(match client {
-        Ok(client) => {
-            ingest_log_with_client(&client, &user.id, Action::Start, None, None).await;
-            Some(client)
-        }
-        Err(_) => None,
-    })));
-
     fix_path_env::fix().unwrap();
-
     tauri::Builder::default()
-        .manage(UserConfigState(Arc::new(Mutex::new(user))))
-        .manage(axiom_client)
+        .setup(|app| {
+            let resource_path = app
+                .path_resolver()
+                .resolve_resource("params.json")
+                .expect("failed to resolve resource");
+
+            let file = std::fs::File::open(&resource_path).unwrap();
+            let params: WombatParams = serde_json::from_reader(file).unwrap();
+
+            let user = UserConfig::default();
+
+            let axiom_token = params.axiom_token.unwrap_or(String::from("token")).clone();
+            let axiom_org = params.axiom_org.unwrap_or(String::from("org")).clone();
+
+            let client = Client::builder()
+                .with_token(axiom_token)
+                .with_org_id(axiom_org)
+                .build();
+            let axiom_client = AxiomClientState(Arc::new(Mutex::new(match client {
+                Ok(client) => Some(client),
+                Err(_) => None,
+            })));
+            app.manage(UserConfigState(Arc::new(Mutex::new(user))));
+            app.manage(axiom_client);
+            Ok(())
+        })
         .manage(AppContextState::default())
         .manage(RdsClientState(Arc::new(Mutex::new(aws::RdsClient::new()))))
         .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
@@ -1093,6 +1101,13 @@ struct HomeEntry {
     tracked_name: shared::TrackedName,
     services: HashMap<String, aws::ServiceDetails>,
     dbs: Vec<aws::DbInstance>,
+}
+
+#[derive(Clone, serde::Deserialize)]
+struct WombatParams {
+    axiom_token: Option<String>,
+    axiom_org: Option<String>,
+    target: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1194,7 +1209,7 @@ async fn ingest_log_with_client(
                 record_count,
                 app_version: env!("CARGO_PKG_VERSION").to_owned(),
                 profile: env::var("PROFILE").unwrap_or("unknown".to_owned()),
-                target: env::var("TARGET").unwrap_or("unknown".to_owned()),
+                target: env::var("CARGO_CFG_TARGET_OS").unwrap_or("unknown".to_owned()),
             })],
         )
         .await
