@@ -138,7 +138,7 @@
 					{#if entry.id !== 'break'}
 						<tr>
 							<td>
-								<span class="font-bold flex flex-row align-middle gap-1">
+								<div class="font-bold flex flex-row align-middle items-center gap-1">
 									<button
 										on:click={() => {
 											userStore.favoriteTrackedName(entry.tracked_name);
@@ -146,8 +146,8 @@
 									>
 										<StarIcon state={$userStore.tracked_names.includes(entry.tracked_name)} />
 									</button>
-									{entry.tracked_name}
-								</span>
+									<span>{entry.tracked_name}</span>
+								</div>
 							</td>
 							{#each $clusters as cluster}
 								{#if selectedClusters.includes(cluster.env)}

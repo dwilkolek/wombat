@@ -7,8 +7,8 @@ pub type TrackedName = String;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BError {
-    message: String,
-    command: String,
+    pub message: String,
+    pub command: String,
 }
 impl BError {
     pub fn new(command: &str, message: impl Into<String>) -> BError {
@@ -81,4 +81,23 @@ pub fn rds_arn_to_name(arn: &str) -> TrackedName {
 
 pub fn cluster_arn_to_name(arn: &str) -> TrackedName {
     arn.split("/").last().unwrap().to_owned()
+}
+
+pub fn arn_to_name(arn: &str) -> TrackedName {
+    if arn.starts_with("arn:aws:ecs") {
+        return ecs_arn_to_name(arn);
+    }
+    if arn.starts_with("arn:aws:rds") {
+        return rds_arn_to_name(arn);
+    }
+    return format!("unknown!#{}", arn);
+}
+pub fn arn_resource_type(arn: &str) -> TrackedName {
+    if arn.starts_with("arn:aws:ecs") {
+        return "ECS".to_owned();
+    }
+    if arn.starts_with("arn:aws:rds") {
+        return "RDS".to_owned();
+    }
+    return format!("UNKNOWN#{}", arn);
 }
