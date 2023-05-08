@@ -1,4 +1,4 @@
-name: "pr_check"
+name: 'pr_check'
 on: [pull_request]
 
 jobs:
@@ -25,5 +25,10 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
       - uses: tauri-apps/tauri-action@v0
+        args:
+          - cargo:rustc-env=AXIOM_TOKEN=${{ secrets.AXIOM_TOKEN }}
+          - cargo:rustc-env=AXIOM_ORG=${{ secrets.AXIOM_ORG }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          AXIOM_ORG: ${{ secrets.AXIOM_ORG }}
