@@ -13,7 +13,7 @@ jobs:
         id: create-json
         uses: jsdaniell/create-json@v1.2.2
         with:
-          dir: 'src-tauri/resources/'
+          dir: '../src-tauri/resources/'
           name: 'params.json'
           json: ${{ secrets.PARAMS_JSON }}
       - uses: actions/checkout@v3
