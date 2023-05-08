@@ -49,8 +49,6 @@
 		<button
 			on:click={async () => {
 				await execute('refresh_cache', undefined, true);
-				await clusterStore.refresh();
-				await homeStore.refresh(false);
 			}}
 			><svg
 				xmlns="http://www.w3.org/2000/svg"

@@ -37,7 +37,7 @@ impl UserConfigOld {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserConfig {
-    id: Uuid,
+    pub id: Uuid,
     verson: i8,
     last_used_profile: Option<String>,
     known_profiles: HashSet<String>,

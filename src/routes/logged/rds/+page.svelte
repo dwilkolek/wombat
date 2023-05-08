@@ -81,14 +81,14 @@
 									</div>
 								</div>
 							</td>
-							<td>								
+							<td>
 								<span>
 									<DbSecretBtn database={db} />
 									{db.engine}
 								</span>
 							</td>
 							<td>
-								{#if $userStore.dbeaver_path} 
+								{#if $userStore.dbeaver_path}
 									<button
 										class={`btn btn-circle ${
 											!$taskStore.find((t) => t.arn == db.arn) ? 'opacity-25' : ''

@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    process::Command,
-};
+use std::collections::{HashMap, HashSet};
 
 use crate::shared::{self, BError, Env};
 use aws_sdk_ec2 as ec2;
@@ -79,22 +76,6 @@ pub struct ServiceDetails {
     pub version: String,
     pub cluster_arn: String,
     pub env: Env,
-}
-
-pub async fn check_login_and_trigger(profile: &str) -> Result<(), BError> {
-    let client = ecs_client(profile).await;
-    if !is_logged(&client).await {
-        println!("Trigger log in into AWS");
-        Command::new("aws")
-            .args(["sso", "login", "--profile", &profile])
-            .output()
-            .expect("failed to execute process");
-    }
-    if !is_logged(&client).await {
-        Err(BError::new("login", "Failed to log in"))
-    } else {
-        Ok(())
-    }
 }
 
 pub async fn is_logged(ecs: &ecs::Client) -> bool {
@@ -351,16 +332,20 @@ impl EcsClient {
         self.clusters = Vec::new();
         self.clear();
     }
-
+    pub fn clear_shallow(&mut self) {
+        self.clusters = Vec::new();
+        self.cluster_service_map = HashMap::new();
+    }
     pub fn clear(&mut self) {
+        self.clusters = Vec::new();
         self.cluster_service_map = HashMap::new();
         self.service_details_map = HashMap::new();
     }
 
     pub async fn clusters(&mut self) -> Vec<Cluster> {
-        println!("Getting clusters!");
         let ecs_client = self.ecs_client.as_ref().unwrap();
         if self.clusters.len() == 0 {
+            println!("Fetching clusters!");
             let cluster_resp = &ecs_client
                 .list_clusters()
                 .send()
@@ -381,7 +366,6 @@ impl EcsClient {
         self.clusters.clone()
     }
     pub async fn service_details(&mut self, service_arn: &str, refresh: bool) -> ServiceDetails {
-        println!("Getting service details for {} {}", service_arn, refresh);
         let ecs_client = self.ecs_client.as_ref().unwrap();
         if refresh {
             self.service_details_map.remove(service_arn);
@@ -389,6 +373,7 @@ impl EcsClient {
         if let Some(details) = self.service_details_map.get(service_arn) {
             return details.clone();
         }
+        println!("Fetching service details for {} {}", service_arn, refresh);
         let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
         let service = ecs_client
             .describe_services()
@@ -431,13 +416,12 @@ impl EcsClient {
     }
 
     pub async fn services(&mut self, cluster: &Cluster) -> Vec<EcsService> {
-        println!("Getting services for {}", &cluster.arn);
         let ecs_client = self.ecs_client.as_ref().unwrap();
 
         if let Some(services) = self.cluster_service_map.get(cluster) {
             return services.clone();
         }
-
+        println!("Fetching services for {}", &cluster.arn);
         let mut values = vec![];
         let mut has_more = true;
         let mut next_token = None;
