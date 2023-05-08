@@ -9,13 +9,14 @@ jobs:
         platform: [macos-latest] # ubuntu-20.04, windows-latest
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: create-json
-        id: create-json
-        uses: jsdaniell/create-json@v1.2.2
-        with:
-          dir: '../src-tauri/resources/'
-          name: 'params.json'
-          json: ${{ secrets.PARAMS_JSON }}
+      - shell: bash
+        env:
+          PARAMS_JSON: ${{ secrets.PARAMS_JSON }}
+        run: |
+          pwd
+          ls -la
+          echo "$PARAMS_JSON" >> src-tauri/resources/params.json
+          cat src-tauri/resources/params.json
       - uses: actions/checkout@v3
       - name: setup node
         uses: actions/setup-node@v3
