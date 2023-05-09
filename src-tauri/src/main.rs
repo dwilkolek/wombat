@@ -15,7 +15,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
-use tauri::{Manager, Window};
+use tauri::Window;
 use tokio::sync::Mutex;
 use urlencoding::encode;
 use user::UserConfig;
@@ -91,13 +91,22 @@ async fn login(
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
     app_state.0.lock().await.active_profile = Some(profile.to_owned());
+    let user_id = user_config.id.clone();
 
     {
         let rds_client = &mut rds_state.0.lock().await;
         rds_client.init(profile).await;
         println!("rds_client loaded!");
-        rds_client.databases().await;
+        let dbs = rds_client.databases().await;
         println!("dbs fetched!");
+        ingest_log(
+            &axiom,
+            &user_id,
+            Action::RefreshRdsList,
+            None,
+            Some(dbs.len()),
+        )
+        .await;
     }
 
     {
@@ -107,9 +116,25 @@ async fn login(
     }
     {
         let clusters = ecs_state.0.lock().await.clusters().await;
+        ingest_log(
+            &axiom,
+            &user_id,
+            Action::RefreshClusterList,
+            None,
+            Some(clusters.len()),
+        )
+        .await;
         println!("clusters fetched!");
         for cluster in clusters {
-            ecs_state.0.lock().await.services(&cluster).await;
+            let services = ecs_state.0.lock().await.services(&cluster).await;
+            ingest_log(
+                &axiom,
+                &user_id,
+                Action::RefreshEcsList(cluster.name.to_owned(), cluster.env.clone()),
+                None,
+                Some(services.len()),
+            )
+            .await;
             println!("services fetched! {}", &cluster.arn);
         }
     }
@@ -420,23 +445,27 @@ async fn logout(
         )
         .await;
     }
-    app_state.active_profile = None;
-    ecs_state.0.lock().await.shutdown();
-    rds_state.0.lock().await.shutdown();
 
-    if let Some(handler) = &task_tracker.0.lock().await.home_details_refresher {
+    let home_details_refresher = &mut task_tracker.0.lock().await;
+    if let Some(handler) = &mut home_details_refresher.home_details_refresher {
         handler.abort()
     }
-    if let Some(handler) = &task_tracker.0.lock().await.aws_resource_refresher {
+    home_details_refresher.home_details_refresher = None;
+    if let Some(handler) = &home_details_refresher.aws_resource_refresher {
         handler.abort()
     }
-    let jobs = &mut task_tracker.0.lock().await.proxies_handlers;
+    let jobs = &mut home_details_refresher.proxies_handlers;
     for job in jobs.drain() {
         let _ = job.1.kill();
         let _ = job.1.wait();
     }
-    task_tracker.0.lock().await.home_details_refresher = None;
-
+    {
+        ecs_state.0.lock().await.shutdown();
+        rds_state.0.lock().await.shutdown();
+    }
+    {
+        app_state.active_profile = None;
+    }
     Ok(())
 }
 
@@ -1000,24 +1029,25 @@ async fn start_aws_ssm_proxy(
 }
 
 #[tokio::main]
-async fn main() {    
+async fn main() {
     fix_path_env::fix().unwrap();
 
-   
-    let user = UserConfig::default(); 
+    let user = UserConfig::default();
 
     let client = Client::builder()
         .with_token("%%AXIOM_TOKEN%%")
         .with_org_id("%%AXIOM_ORG%%")
         .build();
-    let axiom_client = AxiomClientState(Arc::new(Mutex::new(match client {
-        Ok(client) => {
-            ingest_log_with_client(&client, &user.id, Action::Start, None, None).await;
-            Some(client)
-        }
-        Err(_) => None,
-    })));
-    
+    let axiom_client = match format!("%%{}%%", "AXIOM_TOKEN") == "%%AXIOM_TOKEN%%" {
+        true => AxiomClientState(Arc::new(Mutex::new(None))),
+        false => AxiomClientState(Arc::new(Mutex::new(match client {
+            Ok(client) => {
+                ingest_log_with_client(&client, &user.id, Action::Start, None, None).await;
+                Some(client)
+            }
+            Err(_) => None,
+        }))),
+    };
 
     tauri::Builder::default()
         .manage(UserConfigState(Arc::new(Mutex::new(user))))

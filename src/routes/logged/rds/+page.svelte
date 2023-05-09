@@ -8,6 +8,7 @@
 	import StarIcon from '$lib/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
 	import DbSecretBtn from '$lib/db-secret-btn.svelte';
+	import { ask } from '@tauri-apps/api/dialog';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -115,7 +116,21 @@
 									<button
 										class="btn btn-focus"
 										disabled={!!$taskStore.find((t) => t.arn == db.arn)}
-										on:click={() => {
+										on:click={async () => {
+											if (db?.env == AwsEnv.PROD) {
+												let response = await ask(
+													'Understand the risks before connecting to production database.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
+													{
+														title: 'Access to PRODUCTION database.',
+														okLabel: 'Proceed',
+														cancelLabel: 'Abort',
+														type: 'warning'
+													}
+												);
+												if (!response) {
+													return;
+												}
+											}
 											execute('start_db_proxy', { db });
 										}}>START PROXY</button
 									>
