@@ -32,11 +32,6 @@
         "scope": [
           "https://api.github.com/repos/dwilkolek/wombat/*"
         ]
-      },
-      "fs": {
-        "scope": [
-          "$RESOURCE/*"
-        ]
       }
     },
     "bundle": {
@@ -62,9 +57,7 @@
         "providerShortName": null,
         "signingIdentity": null
       },
-      "resources": [
-        "resources/*"
-      ],
+      "resources": [],
       "shortDescription": "",
       "targets": "all",
       "windows": {
