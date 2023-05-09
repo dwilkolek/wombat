@@ -16,7 +16,7 @@ jobs:
           _input-file: 'src-tauri/src/main.rs'
           _output-file: 'src-tauri/src/main.rs'
           _format-key: '%%key%%'
-          PLATFORM: 'release'
+          PROFILE: 'release'
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_ORG: ${{ secrets.AXIOM_ORG }}
       - name: setup node
