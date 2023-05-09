@@ -7,6 +7,7 @@
 	import { userStore } from '$lib/user-store';
 	import { clusterStore } from '$lib/cluster-store';
 	import StarIcon from '$lib/star-icon.svelte';
+	import { each } from 'svelte/internal';
 	type ListType = HomeEntry & { id: string };
 	$: homeStore.init();
 	$: homeEntries = $homeStore
@@ -107,15 +108,12 @@
 					<th>
 						<div class="flex gap-2">APP</div>
 					</th>
-
-					{#each $clusters as cluster}
-						{#if selectedClusters.includes(cluster.env)}
-							<th class="w-40">{cluster.name}</th>
-						{/if}
-					{/each}
 					{#each envs as env}
+						{#each $clusters.filter((c) => c.env == env && selectedClusters.includes(c.env)) as cluster, i}
+							<th class={i == 0 ? 'border-l-2 w-40' : 'w-40'}>{cluster.name}</th>
+						{/each}
 						{#if selectedClusters.includes(env)}
-							<th class="w-40">{env}</th>
+							<th class="w-40"> Database@{env}</th>
 						{/if}
 					{/each}
 				</tr>
@@ -149,9 +147,9 @@
 									<span>{entry.tracked_name}</span>
 								</div>
 							</td>
-							{#each $clusters as cluster}
-								{#if selectedClusters.includes(cluster.env)}
-									<td>
+							{#each envs as env}
+								{#each $clusters.filter((c) => c.env == env && selectedClusters.includes(c.env)) as cluster, i}
+									<td class={i == 0 ? 'border-l-2' : ''}>
 										<div class="flex flex-col gap-1">
 											{#each Object.values(entry.services) as service}
 												{#if service.arn.includes(cluster.name)}
@@ -160,33 +158,11 @@
 											{/each}
 										</div>
 									</td>
-								{/if}
+									<td>
+										<DatabaseCell database={entry.dbs.find((db) => db.env == env)} />
+									</td>
+								{/each}
 							{/each}
-							{#if selectedClusters.includes(AwsEnv.PLAY)}
-								<td>
-									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.PLAY)} />
-								</td>
-							{/if}
-							{#if selectedClusters.includes(AwsEnv.LAB)}
-								<td>
-									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.LAB)} />
-								</td>
-							{/if}
-							{#if selectedClusters.includes(AwsEnv.DEV)}
-								<td>
-									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.DEV)} />
-								</td>
-							{/if}
-							{#if selectedClusters.includes(AwsEnv.DEMO)}
-								<td>
-									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.DEMO)} />
-								</td>
-							{/if}
-							{#if selectedClusters.includes(AwsEnv.PROD)}
-								<td>
-									<DatabaseCell database={entry.dbs.find((db) => db.env == AwsEnv.PROD)} />
-								</td>
-							{/if}
 						</tr>
 					{/if}
 				{/each}

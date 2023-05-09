@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/tauri';
-	import type { EcsService } from '$lib/types';
+	import { AwsEnv, type EcsService } from '$lib/types';
 	import { userStore } from '$lib/user-store';
 	import { execute } from '$lib/error-store';
 	import { taskStore } from '$lib/task-store';
@@ -8,6 +8,7 @@
 	import StarIcon from '$lib/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
 	import { clusterStore } from '$lib/cluster-store';
+	import { ask } from '@tauri-apps/api/dialog';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -25,7 +26,7 @@
 	$: matchesFilter = (service: EcsService): boolean => {
 		return arnFilter === '' || service.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
-	$: clusters = clusterStore.clusters
+	$: clusters = clusterStore.clusters;
 </script>
 
 <svelte:head>
@@ -87,7 +88,21 @@
 									{#if !$taskStore.find((t) => t.arn == service.arn)}
 										<button
 											class="btn btn-focus"
-											on:click={() => {
+											on:click={async () => {
+												if (service?.env == AwsEnv.PROD) {
+													let response = await ask(
+														'Understand the risks before connecting to production service.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
+														{
+															title: 'Access to PRODUCTION service.',
+															okLabel: 'Proceed',
+															cancelLabel: 'Abort',
+															type: 'warning'
+														}
+													);
+													if (!response) {
+														return;
+													}
+												}
 												invoke('start_service_proxy', { service });
 											}}>Start proxy</button
 										>{/if}

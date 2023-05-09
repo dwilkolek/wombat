@@ -4,15 +4,17 @@
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { execute } from '$lib/error-store';
-	import { homeStore } from '$lib/home-store';
-	import type { UserConfig } from '$lib/types';
-	import { clusterStore } from '$lib/cluster-store';
+	import { userStore } from '$lib/user-store';
 
 	const logout = async () => {
-		await invoke('logout');
-		goto('/');
+		try {
+			await invoke('logout');
+			goto('/');
+		} catch (e) {
+			console.log(e);
+		}
 	};
-	let userConfig = invoke<UserConfig>('user_config');
+	$: userConfig = $userStore;
 </script>
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between">
