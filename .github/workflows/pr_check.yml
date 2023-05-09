@@ -6,14 +6,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest] # ubuntu-20.04, windows-latest
+        platform: [macos-latest, windows-latest] # ubuntu-20.04
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
       - uses: bluwy/substitute-string-action@v1
         id: sub
         with:
-          _input-file: '/src-tauri/src/main.rs'
+          _input-file: 'src-tauri/src/main.rs'
+          _output-file: 'src-tauri/src/main.rs'
           _format-key: '%%key%%'
           PLATFORM: 'release'
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
