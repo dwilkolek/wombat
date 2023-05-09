@@ -1096,13 +1096,6 @@ struct HomeEntry {
     dbs: Vec<aws::DbInstance>,
 }
 
-#[derive(Clone, serde::Deserialize)]
-struct WombatParams {
-    axiom_token: Option<String>,
-    axiom_org: Option<String>,
-    target: Option<String>,
-}
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct ActionLog {
     user_id: uuid::Uuid,
