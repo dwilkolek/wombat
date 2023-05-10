@@ -7,7 +7,6 @@
 	import { userStore } from '$lib/user-store';
 	import { clusterStore } from '$lib/cluster-store';
 	import StarIcon from '$lib/star-icon.svelte';
-	import { each } from 'svelte/internal';
 	type ListType = HomeEntry & { id: string };
 	$: homeStore.init();
 	$: homeEntries = $homeStore
@@ -102,7 +101,7 @@
 	{/if}
 
 	<div class="flex flex-row gap-2">
-		<table class="table w-full table-zebra table-compact">
+		<table class="table border-separate w-full table-zebra table-compact">
 			<thead class="sticky top-0">
 				<tr>
 					<th>
@@ -134,7 +133,7 @@
 						</tr>
 					{/if}
 					{#if entry.id !== 'break'}
-						<tr>
+						<tr class="hover">
 							<td>
 								<div class="font-bold flex flex-row align-middle items-center gap-1">
 									<button
