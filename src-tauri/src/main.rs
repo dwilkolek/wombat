@@ -96,9 +96,7 @@ async fn login(
     {
         let rds_client = &mut rds_state.0.lock().await;
         rds_client.init(profile).await;
-        println!("rds_client loaded!");
         let dbs = rds_client.databases().await;
-        println!("dbs fetched!");
         ingest_log(
             &axiom,
             &user_id,
@@ -112,7 +110,6 @@ async fn login(
     {
         let mut ecs_client = ecs_state.0.lock().await;
         ecs_client.init(profile).await;
-        println!("ecs_client loaded!")
     }
     {
         let clusters = ecs_state.0.lock().await.clusters().await;
@@ -124,7 +121,6 @@ async fn login(
             Some(clusters.len()),
         )
         .await;
-        println!("clusters fetched!");
         for cluster in clusters {
             let services = ecs_state.0.lock().await.services(&cluster).await;
             ingest_log(
@@ -135,7 +131,6 @@ async fn login(
                 Some(services.len()),
             )
             .await;
-            println!("services fetched! {}", &cluster.arn);
         }
     }
     let ecs_arc_clone = Arc::clone(&ecs_state.0);
@@ -145,14 +140,13 @@ async fn login(
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
         let initial_wait = tokio::time::sleep(Duration::from_secs(30 * 60));
         initial_wait.await;
-        loop {
-            let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
+        let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
+        loop {            
             interval.tick().await;
             {
                 let rds = &mut rds_arc_clone.lock().await;
                 rds.clear();
                 let dbs = rds.databases().await;
-                println!("databases refetched!");
                 if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                     ingest_log_with_client(
                         axiom,
@@ -180,8 +174,7 @@ async fn login(
                 }
 
                 for cluster in clusters {
-                    let services = ecs_arc_clone.lock().await.services(&cluster).await;
-                    println!("services refetched! {}", &cluster.arn);
+                    let services = ecs.services(&cluster).await;
                     if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                         ingest_log_with_client(
                             axiom,
@@ -204,12 +197,11 @@ async fn login(
     task_tracker.0.lock().await.home_details_refresher = Some(tokio::task::spawn(async move {
         let initial_wait = tokio::time::sleep(Duration::from_secs(60));
         initial_wait.await;
-        let mut interval = tokio::time::interval(Duration::from_secs(60 * 10));
+        let mut interval = tokio::time::interval(Duration::from_secs(60 * 5));
         loop {
             interval.tick().await;
-
             let mut home_page = home_page_ref.lock().await;
-
+            
             let arns_to_update = home_page
                 .entries
                 .iter()
@@ -252,7 +244,6 @@ async fn login(
                     }
                 }
             }
-
             window.emit("new-home-cache", home_page.clone()).unwrap();
         }
     }));
@@ -1151,6 +1142,7 @@ enum Action {
     RefreshRdsList,
     RefreshEcsList(String, Env),
     RefreshClusterList,
+    Message(String),
     ClearCache,
     UpdateTrackedNames(String),
     SetDbeaverPath(String),
