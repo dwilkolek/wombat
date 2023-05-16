@@ -102,7 +102,7 @@
 
 	<div class="flex flex-row gap-2">
 		<table class="table border-separate w-full table-zebra table-compact">
-			<thead class="sticky top-0">
+			<thead class="">
 				<tr>
 					<th>
 						<div class="flex gap-2">APP</div>

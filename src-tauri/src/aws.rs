@@ -250,45 +250,96 @@ impl RdsClient {
     }
 
     pub async fn db_secret(&self, name: &str, env: &Env) -> Result<DbSecret, BError> {
-        let filter = secretsmanager::types::Filter::builder()
-            .key("name".into())
-            .values(&format!("{}-{}/db-credentials", name, env))
-            .build();
-        let secret_client = self.secret_client.as_ref().unwrap();
-        let secret_arn = secret_client.list_secrets().filters(filter).send().await;
+        let mut possible_secrets = Vec::new();
+        if name.contains("-migrated") {
+            possible_secrets.push(format!(
+                "{}-{}/db-credentials",
+                name.replace("-migrated", ""),
+                env
+            ));
+            possible_secrets.push(format!(
+                "{}-{}/spring-datasource-password",
+                name.replace("-migrated", ""),
+                env
+            ));
+            possible_secrets.push(format!(
+                "{}-{}/datasource-password",
+                name.replace("-migrated", ""),
+                env
+            ));
+        }
+        possible_secrets.push(format!("{}-{}/db-credentials", name, env));
+        possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
+        possible_secrets.push(format!("{}-{}/datasource-password", name, env));
 
-        let secret_arn = secret_arn.expect("Failed to fetch!");
-        let secret_arn = secret_arn.secret_list().expect("No arn list!");
-        if secret_arn.len() == 1 {
-            let secret_arn = secret_arn.first().unwrap();
-            let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
+        for secret in possible_secrets {
+            let filter = secretsmanager::types::Filter::builder()
+                .key("name".into())
+                .values(&secret)
+                .build();
+            let secret_client = self.secret_client.as_ref().unwrap();
+            let secret_arn = secret_client.list_secrets().filters(filter).send().await;
 
-            let secret = secret_client
-                .get_secret_value()
-                .secret_id(secret_arn.clone())
-                .send()
-                .await;
-            if secret.is_err() {
-                return Err(BError::new("db_secret", "No secrets found"));
+            let secret_arn = secret_arn.expect("Failed to fetch!");
+            let secret_arn = secret_arn.secret_list().expect("No arn list!");
+            if secret_arn.len() == 1 {
+                let secret_arn = secret_arn.first().unwrap();
+                let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
+
+                let secret = secret_client
+                    .get_secret_value()
+                    .secret_id(secret_arn.clone())
+                    .send()
+                    .await;
+                if secret.is_err() {
+                    return Err(BError::new("db_secret", "No secrets found"));
+                }
+                let secret = secret.unwrap();
+                let secret = secret.secret_string().expect("There should be a secret");
+                let secret =
+                    serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
+
+                return Ok(DbSecret {
+                    dbname: secret.dbname,
+                    password: secret.password,
+                    username: secret.username,
+                    auto_rotated: true,
+                });
             }
-            let secret = secret.unwrap();
-            let secret = secret.secret_string().expect("There should be a secret");
-            let secret =
-                serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
+        }
 
-            return Ok(DbSecret {
-                dbname: secret.dbname,
-                password: secret.password,
-                username: secret.username,
-                auto_rotated: true,
-            });
-        } else {
+        let mut possible_secrets = Vec::new();
+        if name.contains("-migrated") {
+            possible_secrets.push(format!(
+                "/config/{}_{}/db-credentials",
+                name.replace("-migrated", ""),
+                env
+            ));
+            possible_secrets.push(format!(
+                "/config/{}_{}/spring-datasource-password",
+                name.replace("-migrated", ""),
+                env
+            ));
+            possible_secrets.push(format!(
+                "/config/{}_{}/datasource-password",
+                name.replace("-migrated", ""),
+                env
+            ));
+        }
+        possible_secrets.push(format!("/config/{}_{}/db-credentials", name, env));
+        possible_secrets.push(format!(
+            "/config/{}_{}/spring-datasource-password",
+            name, env
+        ));
+        possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
+
+        for secret in possible_secrets {
             let param = self
                 .ssm_client
                 .as_ref()
                 .unwrap()
                 .get_parameter()
-                .name(&format!("/config/{}_{}/datasource-password", name, env))
+                .name(&secret)
                 .with_decryption(true)
                 .send()
                 .await;
@@ -303,8 +354,9 @@ impl RdsClient {
                     });
                 }
             }
-            return Err(BError::new("db_secret", "No secrets found"));
         }
+
+        return Err(BError::new("db_secret", "No secrets found"));
     }
 }
 

@@ -1,6 +1,7 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::path::PathBuf;
 
 use crate::shared::{ecs_arn_to_name, rds_arn_to_name, BError, Env, TrackedName};
@@ -99,6 +100,7 @@ impl UserConfig {
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
             };
             new_config.save();
+            let _ = fs::remove_file(UserConfigOld::config_path());
             return new_config;
         }
 
@@ -216,16 +218,19 @@ impl UserConfig {
         self.save()
     }
 
-    pub fn favorite(&mut self, tracked_nme: TrackedName) -> Result<UserConfig, BError> {
-        if !self.tracked_names.remove(&tracked_nme) {
-            self.tracked_names.insert(tracked_nme);
+    pub fn favorite(&mut self, tracked_name: TrackedName) -> Result<UserConfig, BError> {
+        println!("Favorite {} ", &tracked_name);
+        if !self.tracked_names.remove(&tracked_name) {
+            println!("Favorite Add {} ", &tracked_name);
+            self.tracked_names.insert(tracked_name);
         }
-
+        dbg!(&self);
         self.save();
         Ok(self.clone())
     }
 
     fn save(&self) {
+        dbg!("Storing to: {}", UserConfig::config_path());
         std::fs::write(
             UserConfig::config_path(),
             serde_json::to_string_pretty(self).expect("Failed to serialize user config"),
