@@ -141,7 +141,7 @@ async fn login(
         let initial_wait = tokio::time::sleep(Duration::from_secs(30 * 60));
         initial_wait.await;
         let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
-        loop {            
+        loop {
             interval.tick().await;
             {
                 let rds = &mut rds_arc_clone.lock().await;
@@ -201,7 +201,7 @@ async fn login(
         loop {
             interval.tick().await;
             let mut home_page = home_page_ref.lock().await;
-            
+
             let arns_to_update = home_page
                 .entries
                 .iter()
@@ -504,7 +504,7 @@ async fn home(
             tracked_name: tracked_name.clone(),
             services: services
                 .remove(tracked_name)
-                .unwrap()
+                .unwrap_or(Vec::new())
                 .into_iter()
                 .map(|s| (s.arn.clone(), s))
                 .collect(),
@@ -1125,7 +1125,6 @@ struct ActionLog {
     profile: String,
     error_message: Option<String>,
     record_count: Option<usize>,
-    target: String,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1216,8 +1215,7 @@ async fn ingest_log_with_client(
                 error_message,
                 record_count,
                 app_version: env!("CARGO_PKG_VERSION").to_owned(),
-                profile: String::from("%%PROFILE%%"),
-                target: env::var("CARGO_CFG_TARGET_OS").unwrap_or("unknown".to_owned()),
+                profile: String::from("%%PROFILE%%")
             })],
         )
         .await
