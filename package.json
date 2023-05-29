@@ -1,6 +1,6 @@
 {
 	"name": "wombat",
-	"version": "0.1.2",
+	"version": "1.0.0",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
