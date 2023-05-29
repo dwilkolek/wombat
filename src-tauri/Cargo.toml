@@ -1,6 +1,6 @@
 [package]
 name = "wombat"
-version = "0.2.0"
+version = "0.2.1"
 description = "Wombat - in combat"
 authors = ["dwilkolek@protonmail.com"]
 license = ""
@@ -33,12 +33,12 @@ home = "0.5.5"
 warp-reverse-proxy = "1.0.0"
 warp = "0.3.5"
 urlencoding = "2.1.2"
-chrono = { version = "0.4.24", features = ["serde"] }
+chrono = { version = "0.4.25", features = ["serde"] }
 shared_child = "1.0.0"
 axiom-rs = "0.8.0"
 
 [dependencies.uuid]
-version = "1.3.2"
+version = "1.3.3"
 features = [
     "v4",                # Lets you generate random UUIDs
     # "fast-rng",          # Use a faster (but still sufficiently random) RNG
