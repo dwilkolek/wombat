@@ -1,12 +1,12 @@
 [package]
 name = "wombat"
-version = "0.2.5"
+version = "1.0.0"
 description = "Wombat - in combat"
 authors = ["dwilkolek@protonmail.com"]
 license = ""
 repository = "https://github.com/dwilkolek/wombat"
 edition = "2021"
-rust-version = "1.59"
+rust-version = "1.69"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
