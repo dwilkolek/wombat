@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Wombat",
-    "version": "0.2.4"
+    "version": "0.2.5"
   },
   "tauri": {
     "allowlist": {
@@ -72,12 +72,12 @@
     "updater": {
       "active": true,
       "endpoints": [
-        "https://github.com/dwilkolek/wombat/releases/download/latest.json"
+        "https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"
       ],
       "dialog": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBOTI4MDNCMTY0RTU4NDMKUldSRFdFNFdPNENTR290QmhzTy9ZNUR1UEtTWEIrRndBdGF1OGZDYTBtTWRsdUt6b3dmd2hGV2QK",
       "windows": {
-        "installMode": "passive"
+        "installMode": "basicUi"
       }
     },
     "windows": [
