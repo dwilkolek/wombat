@@ -16,6 +16,7 @@ export async function execute<T>(
 		}
 		error.set(undefined);
 		return await invoke(cmd, args);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	} catch (e: any) {
 		console.error('Error occured', cmd, e);
 		error.set(`${e.message ?? e}`);
