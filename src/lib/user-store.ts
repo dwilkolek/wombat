@@ -13,8 +13,8 @@ const createUserStore = () => {
 		last_used_profile: undefined,
 		preffered_environments: []
 	});
-	execute<UserConfig>('user_config').then((userConfig) => {
-		set(userConfig);
+	execute<UserConfig>('user_config').then((config) => {
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	});
 
 	const setDbeaverPath = async (path: string) => {
@@ -33,7 +33,6 @@ const createUserStore = () => {
 			name
 		});
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
-		// homeStore.refresh(false);
 	};
 
 	const savePrefferedEnvs = async (envs: AwsEnv[]) => {

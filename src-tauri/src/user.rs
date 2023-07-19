@@ -230,7 +230,7 @@ impl UserConfig {
     }
 
     fn save(&self) {
-        dbg!("Storing to: {}", UserConfig::config_path());
+        println!("Storing to: {:?}", UserConfig::config_path());
         std::fs::write(
             UserConfig::config_path(),
             serde_json::to_string_pretty(self).expect("Failed to serialize user config"),
