@@ -42,7 +42,7 @@
 								loading = true;
 								await login(profile);
 								loading = false;
-								goto(`/logged/home`, { replaceState: true });
+								goto(`/logged/apps`, { replaceState: true });
 							} catch (e) {
 								console.error(e);
 								loading = false;
@@ -56,7 +56,7 @@
 							<input
 								id="aws-profile"
 								type="text"
-								autocomplete="false"
+								autocomplete="off"
 								autocorrect="off"
 								autocapitalize="off"
 								spellcheck="false"

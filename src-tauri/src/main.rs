@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
 use axiom_rs::Client;
-use chrono::prelude::*;
 use regex::Regex;
 use serde_json::json;
 use shared::{ecs_arn_to_name, rds_arn_to_name};
@@ -34,6 +33,14 @@ struct ProxyEventMessage {
     status: String,
     port: u16,
 }
+
+#[derive(Clone, serde::Serialize)]
+struct ServiceDetailsPayload {
+    app: String,
+    services: Vec<aws::ServiceDetails>,
+    dbs: Vec<aws::DbInstance>,
+}
+
 #[tauri::command]
 async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<UserConfig, BError> {
     let user_config = user_config.0.lock().await;
@@ -63,12 +70,9 @@ async fn favorite(
 #[tauri::command]
 async fn login(
     profile: &str,
-    window: Window,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
-
-    home_cache: tauri::State<'_, HomeCache>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
     rds_state: tauri::State<'_, RdsClientState>,
     ecs_state: tauri::State<'_, EcsClientState>,
@@ -187,64 +191,6 @@ async fn login(
                     }
                 }
             }
-        }
-    }));
-
-    let ecs_client_arc_c = Arc::clone(&ecs_state.0);
-    let home_page_ref = Arc::clone(&home_cache.0);
-    let tracker_axiom = Arc::clone(&axiom.0);
-    let tracker_user_id = user_config.id.clone();
-    task_tracker.0.lock().await.home_details_refresher = Some(tokio::task::spawn(async move {
-        let initial_wait = tokio::time::sleep(Duration::from_secs(60));
-        initial_wait.await;
-        let mut interval = tokio::time::interval(Duration::from_secs(60 * 5));
-        loop {
-            interval.tick().await;
-            let mut home_page = home_page_ref.lock().await;
-
-            let arns_to_update = home_page
-                .entries
-                .iter()
-                .map(|entry| &entry.services)
-                .flatten()
-                .map(|s| s.0.to_owned())
-                .collect::<Vec<String>>();
-            let handles: Vec<_> = arns_to_update
-                .into_iter()
-                .map(|service| {
-                    let ecs_client = Arc::clone(&ecs_client_arc_c);
-                    return tokio::task::spawn(async move {
-                        ecs_client
-                            .lock()
-                            .await
-                            .service_details(&service, true)
-                            .await
-                    });
-                })
-                .collect();
-            let mut updated_service_details = vec![];
-            for handle in handles {
-                updated_service_details.push(handle.await.unwrap())
-            }
-            if let Some(axiom) = tracker_axiom.lock().await.as_ref() {
-                ingest_log_with_client(
-                    axiom,
-                    &tracker_user_id,
-                    Action::RefreshServiceDetails,
-                    None,
-                    Some(updated_service_details.len()),
-                )
-                .await;
-            }
-            for updated_service_detail in updated_service_details.into_iter() {
-                for entry in home_page.entries.iter_mut() {
-                    let arn = updated_service_detail.arn.to_owned();
-                    if let Some(_) = entry.services.remove(&arn) {
-                        entry.services.insert(arn, updated_service_detail.clone());
-                    }
-                }
-            }
-            window.emit("new-home-cache", home_page.clone()).unwrap();
         }
     }));
 
@@ -438,10 +384,6 @@ async fn logout(
     }
 
     let home_details_refresher = &mut task_tracker.0.lock().await;
-    if let Some(handler) = &mut home_details_refresher.home_details_refresher {
-        handler.abort()
-    }
-    home_details_refresher.home_details_refresher = None;
     if let Some(handler) = &home_details_refresher.aws_resource_refresher {
         handler.abort()
     }
@@ -458,65 +400,6 @@ async fn logout(
         app_state.active_profile = None;
     }
     Ok(())
-}
-
-#[tauri::command]
-async fn home(
-    app_state: tauri::State<'_, AppContextState>,
-    user_config: tauri::State<'_, UserConfigState>,
-    databases_cache: tauri::State<'_, RdsClientState>,
-    home_cache: tauri::State<'_, HomeCache>,
-    services_cache: tauri::State<'_, EcsClientState>,
-    axiom: tauri::State<'_, AxiomClientState>,
-) -> Result<HomePage, BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
-    let user = user_config.0.lock().await;
-
-    let mut databases_cache = databases_cache.0.lock().await;
-    let dbs_list: Vec<aws::DbInstance> = databases_cache
-        .databases()
-        .await
-        .iter()
-        .filter(|db| {
-            user.tracked_names
-                .contains(&shared::rds_arn_to_name(&db.arn))
-        })
-        .cloned()
-        .collect();
-
-    let mut services = services_cache
-        .0
-        .lock()
-        .await
-        .service_details_for_names(&user.tracked_names, false)
-        .await;
-
-    home_cache.0.lock().await.entries = user
-        .tracked_names
-        .iter()
-        .map(|tracked_name| HomeEntry {
-            tracked_name: tracked_name.clone(),
-            services: services
-                .remove(tracked_name)
-                .unwrap_or(Vec::new())
-                .into_iter()
-                .map(|s| (s.arn.clone(), s))
-                .collect(),
-            dbs: dbs_list
-                .iter()
-                .filter(|db| tracked_name == &shared::rds_arn_to_name(&db.arn))
-                .cloned()
-                .collect(),
-        })
-        .collect();
-
-    Ok(home_cache.0.lock().await.clone())
 }
 
 #[tauri::command]
@@ -774,6 +657,65 @@ async fn refresh_cache(
     }
 
     window.emit("cache-refreshed", ()).unwrap();
+    Ok(())
+}
+
+#[tauri::command]
+async fn service_details(
+    app: String,
+    window: Window,
+    user_config: tauri::State<'_, UserConfigState>,
+    databases_cache: tauri::State<'_, RdsClientState>,
+    services_cache: tauri::State<'_, EcsClientState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+) -> Result<(), BError> {
+    let db = Arc::clone(&databases_cache.0);
+    let ecs = Arc::clone(&services_cache.0);
+    ingest_log(
+        &axiom,
+        &user_config.0.lock().await.id,
+        Action::ServiceDetails(app.to_owned()),
+        None,
+        None,
+    )
+    .await;
+    tokio::task::spawn(async move {
+        let mut dbs_list: Vec<aws::DbInstance> = vec![];
+        {
+            let databases_cache = &mut db.lock().await;
+            let databases = databases_cache.databases().await;
+            for db in databases.into_iter() {
+                if &shared::rds_arn_to_name(&db.arn) == &app {
+                    dbs_list.push(db.clone())
+                }
+            }
+        }
+
+        let mut services: Vec<ServiceDetails> = vec![];
+        {
+            let services_map = ecs
+                .lock()
+                .await
+                .service_details_for_names(&HashSet::from([app.clone()]), false)
+                .await;
+            for service_list in services_map.into_values() {
+                for service in service_list {
+                    services.push(service)
+                }
+            }
+        }
+
+        window
+            .emit(
+                "new-service-details",
+                ServiceDetailsPayload {
+                    app: app,
+                    services: services,
+                    dbs: dbs_list,
+                },
+            )
+            .unwrap();
+    });
     Ok(())
 }
 
@@ -1049,14 +991,14 @@ async fn main() {
         .manage(RdsClientState(Arc::new(Mutex::new(aws::RdsClient::new()))))
         .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
-            home_details_refresher: None,
+            // home_details_refresher: None,
             aws_resource_refresher: None,
             proxies_handlers: HashMap::new(),
         }))))
-        .manage(HomeCache(Arc::new(Mutex::new(HomePage {
-            timestamp: Utc::now(),
-            entries: Vec::new(),
-        }))))
+        // .manage(HomeCache(Arc::new(Mutex::new(HomePage {
+        //     timestamp: Utc::now(),
+        //     entries: Vec::new(),
+        // }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
@@ -1066,11 +1008,12 @@ async fn main() {
             clusters,
             services,
             databases,
+            service_details,
             favorite,
             start_db_proxy,
             start_service_proxy,
             open_dbeaver,
-            home,
+            // home,
             discover,
             refresh_cache,
             credentials,
@@ -1080,7 +1023,7 @@ async fn main() {
         .expect("error while running tauri application");
 }
 
-struct HomeCache(Arc<Mutex<HomePage>>);
+// struct HomeCache(Arc<Mutex<HomePage>>);
 
 struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
 
@@ -1098,16 +1041,9 @@ struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);
 
 struct UserConfigState(Arc<Mutex<UserConfig>>);
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct HomePage {
-    timestamp: DateTime<Utc>,
-    entries: Vec<HomeEntry>,
-}
-
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct TaskTracker {
-    home_details_refresher: Option<tokio::task::JoinHandle<()>>,
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
     proxies_handlers: HashMap<String, Arc<SharedChild>>,
 }
@@ -1136,6 +1072,7 @@ enum Action {
     FetchCredentials(String, Env),
     StopJob(String, Env, String),
     StartEcsProxy(String, Env),
+    ServiceDetails(String),
     StartRdsProxy(String, Env),
     OpenDbeaver(String, Env),
     LoginCheck(String),
