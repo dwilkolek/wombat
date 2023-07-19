@@ -6,23 +6,29 @@
 	export let database: DbInstance | undefined;
 
 	const credentialsHandler = async () => {
-		let answer = await ask("Are you alone and not sharing screen?\nAccess to credentials is recorded.\nRequires access to Secret Manager.", {
-            title: "Are you alone?", okLabel: "It's safe!", cancelLabel: "No", type: "warning"
-        });
-        if (answer) {
-            try {
-                const credentials = await invoke<DatabaseCredentials>('credentials', { db: database });
-                const copyToClipboard = await ask(
-                    `Database name: ${credentials.dbname}\nUser: ${credentials.username}\nPassword: ${credentials.password}\nRotated: ${credentials.auto_rotated}\nWhen 'Rotated'=false then User & Database name might be wrong.`,
-                    { title: 'Credentials', okLabel: 'Copy password to clipboard', cancelLabel: 'K THX BYE' }
-                );
-                if (copyToClipboard) {
-                    await writeText(credentials.password);
-                }
-            } catch (e) {
-                message(`Credentials not found for ${database?.name}`, { title: 'Ooops!', type: 'error' });
-            }
-        }
+		let answer = await ask(
+			'Are you alone and not sharing screen?\nAccess to credentials is recorded.\nRequires access to Secret Manager.',
+			{
+				title: 'Are you alone?',
+				okLabel: "It's safe!",
+				cancelLabel: 'No',
+				type: 'warning'
+			}
+		);
+		if (answer) {
+			try {
+				const credentials = await invoke<DatabaseCredentials>('credentials', { db: database });
+				const copyToClipboard = await ask(
+					`Database name: ${credentials.dbname}\nUser: ${credentials.username}\nPassword: ${credentials.password}\nRotated: ${credentials.auto_rotated}\nWhen 'Rotated'=false then User & Database name might be wrong.`,
+					{ title: 'Credentials', okLabel: 'Copy password to clipboard', cancelLabel: 'K THX BYE' }
+				);
+				if (copyToClipboard) {
+					await writeText(credentials.password);
+				}
+			} catch (e) {
+				message(`Credentials not found for ${database?.name}`, { title: 'Ooops!', type: 'error' });
+			}
+		}
 	};
 </script>
 
@@ -30,6 +36,7 @@
 	<div class="tooltip" data-tip="Search for secret">
 		<button>
 			<!-- svelte-ignore a11y-click-events-have-key-events -->
+			<!-- svelte-ignore a11y-no-static-element-interactions -->
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				viewBox="0 0 20 20"

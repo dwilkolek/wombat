@@ -18,13 +18,16 @@ const createServiceDetailsStore = () => {
 			);
 		});
 	});
-	setInterval(() => {
-		innerStore.subscribe((apps) => {
-			apps.forEach((app) => {
-				invoke('service_details', { app: app.app });
+	setInterval(
+		() => {
+			innerStore.subscribe((apps) => {
+				apps.forEach((app) => {
+					invoke('service_details', { app: app.app });
+				});
 			});
-		});
-	}, 5 * 60 * 1000);
+		},
+		5 * 60 * 1000
+	);
 	return { ...innerStore };
 };
 
