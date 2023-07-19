@@ -22,7 +22,7 @@
 				viewBox="0 0 24 24"
 				stroke-width="1.5"
 				stroke="currentColor"
-				class="w-4 h-4 absolute"
+				class="w-4 h-4 absolute text-info"
 			>
 				<path
 					stroke-linecap="round"
@@ -49,7 +49,7 @@
 				open('http://localhost:' + port);
 			}}
 		>
-			{service.version} @ :{$taskStore.find((t) => t.arn == service?.arn)?.port}</button
+			{service.version}:{port}</button
 		>
 	</div>
 </div>

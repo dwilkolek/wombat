@@ -34,6 +34,7 @@ pub struct Endpoint {
 pub struct DbInstance {
     pub name: String,
     pub engine: String,
+    pub engine_version: String,
     pub endpoint: Endpoint,
     pub arn: String,
     pub environment_tag: String,
@@ -216,11 +217,8 @@ impl RdsClient {
                         })
                         .unwrap()
                         .clone();
-                    let engine: String = format!(
-                        "{} v{}",
-                        rds.engine().unwrap_or("??"),
-                        rds.engine_version().unwrap_or("??")
-                    );
+                    let engine: String = format!("{}", rds.engine().unwrap_or("??"));
+                    let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
                     let mut env = Env::DEVNULL;
                     for t in tags {
                         if t.key().unwrap() == "AppName" {
@@ -235,6 +233,7 @@ impl RdsClient {
                     let db = DbInstance {
                         name,
                         engine,
+                        engine_version,
                         arn: db_instance_arn,
                         endpoint,
                         appname_tag,

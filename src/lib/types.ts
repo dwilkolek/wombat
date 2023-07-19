@@ -44,6 +44,7 @@ export type Endpoint = {
 export type DbInstance = {
 	name: string;
 	engine: string;
+	engine_version: string;
 	endpoint: Endpoint;
 	env: AwsEnv;
 	arn: string;
