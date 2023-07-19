@@ -21,11 +21,14 @@
 	<div class="flex-none">
 		<ul class="menu menu-horizontal px-1">
 			<li>
-				<a class={$page.url.pathname === '/logged/home' ? 'active' : ''} href="/logged/home">
+				<a class={$page.url.pathname === '/logged/apps' ? 'active' : ''} href="/logged/apps">
 					<img class="h-full" alt="wombat" src={Icon} />
 				</a>
 			</li>
-
+			<!-- <li>
+				<a class={$page.url.pathname === '/logged/apps' ? 'active' : ''} href="/logged/apps">Apps</a
+				>
+			</li> -->
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 					>Services (ECS)</a

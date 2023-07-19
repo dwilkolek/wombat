@@ -15,10 +15,10 @@
 	$: isFavourite = (name: string): boolean => {
 		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
-	$: currentEnv = envStore.currentEnv;
-	$: databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
+
+	$: databases = execute<DbInstance[]>('databases', { env: $envStore }, true);
 	$: listen('cache-refreshed', () => {
-		databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
+		databases = execute<DbInstance[]>('databases', { env: $envStore }, true);
 	});
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
@@ -31,7 +31,7 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="my-4 p-2 pb-5">
-	<select class="select select-bordered" bind:value={$currentEnv}>
+	<select class="select select-bordered" bind:value={$envStore}>
 		{#each envs as env}
 			<option value={env}>{env}</option>
 		{/each}
@@ -46,7 +46,7 @@
 						Info
 						<input
 							type="text"
-							autocomplete="false"
+							autocomplete="off"
 							autocorrect="off"
 							autocapitalize="off"
 							spellcheck="false"

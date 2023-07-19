@@ -26,7 +26,7 @@
 					<input
 						id="dbeaver_path"
 						type="text"
-						autocomplete="false"
+						autocomplete="off"
 						autocorrect="off"
 						autocapitalize="off"
 						spellcheck="false"
@@ -36,9 +36,14 @@
 					/>
 
 					<div class="pl-2">
-						Install <a class="link link-accent" href="https://dbeaver.io/" on:click|preventDefault={() => {
-							open('https://dbeaver.io/');
-						}}>dbeaver</a> to be able to open connection to database directly from Wombat<br /><br />
+						Install <a
+							class="link link-accent"
+							href="https://dbeaver.io/"
+							on:click|preventDefault={() => {
+								open('https://dbeaver.io/');
+							}}>dbeaver</a
+						>
+						to be able to open connection to database directly from Wombat<br /><br />
 						MacOS:
 						<pre class="pl-1">/Applications/DBeaver.app/Contents/MacOS/dbeaver</pre>
 

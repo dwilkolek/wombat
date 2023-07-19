@@ -49,7 +49,7 @@
 						Info
 						<input
 							type="text"
-							autocomplete="false"
+							autocomplete="off"
 							autocorrect="off"
 							autocapitalize="off"
 							spellcheck="false"
