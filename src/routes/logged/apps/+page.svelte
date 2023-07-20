@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { userStore } from '$lib/user-store';
-	import AppCard from './app-card.svelte';
+	import { userStore } from '$lib/stores/user-store';
+	import AppCard from '../../../lib/componets/app-card.svelte';
 	const user = $userStore;
 </script>
 

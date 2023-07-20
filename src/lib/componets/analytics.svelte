@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { writable } from 'svelte/store';
 	import { version } from '$app/environment';
-	import { userStore } from '$lib/user-store';
+	import { userStore } from '$lib/stores/user-store';
 	let last_push = writable<any>();
 	$: user = userStore;
 	$: {

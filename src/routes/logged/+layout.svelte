@@ -3,8 +3,8 @@
 	import Icon from '$lib/images/32x32.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { execute } from '$lib/error-store';
-	import { userStore } from '$lib/user-store';
+	import { execute } from '$lib/stores/error-store';
+	import { userStore } from '$lib/stores/user-store';
 
 	const logout = async () => {
 		try {

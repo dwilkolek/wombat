@@ -1,13 +1,13 @@
 <script lang="ts">
 	import dbeaver from '$lib/images/dbeaver-head.png';
 	import { AwsEnv, type DbInstance } from '$lib/types';
-	import { userStore } from '$lib/user-store';
-	import { envStore } from '$lib/env-store';
-	import { taskStore } from '$lib/task-store';
-	import { execute } from '$lib/error-store';
-	import StarIcon from '$lib/star-icon.svelte';
+	import { userStore } from '$lib/stores/user-store';
+	import { envStore } from '$lib/stores/env-store';
+	import { taskStore } from '$lib/stores/task-store';
+	import { execute } from '$lib/stores/error-store';
+	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
-	import DbSecretBtn from '$lib/db-secret-btn.svelte';
+	import DbSecretBtn from '$lib/componets/db-secret-btn.svelte';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	let arnFilter = '';

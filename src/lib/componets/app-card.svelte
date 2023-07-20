@@ -1,15 +1,10 @@
 <script lang="ts">
-	import { execute } from '$lib/error-store';
-	import { taskStore } from '$lib/task-store';
-	import { AwsEnv, type DbInstance } from '$lib/types';
-	import { userStore } from '$lib/user-store';
-	import DbSecretBtn from '$lib/db-secret-btn.svelte';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { userStore } from '$lib/stores/user-store';
 
-	import { serviceDetailStore } from '$lib/service-details-store';
+	import { serviceDetailStore } from '$lib/stores/service-details-store';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
-	import StarIcon from '$lib/star-icon.svelte';
+	import StarIcon from './star-icon.svelte';
 	export let app: string;
 
 	$: detailsStorr = serviceDetailStore(app);
@@ -32,7 +27,9 @@
 			>
 				<StarIcon state={isFavourite(app)} />
 			</button>
-			<h5 class="inline">{app}</h5>
+			<h5 class="inline">
+				<a href={`/logged/apps/${app}`}>{app}</a>
+			</h5>
 		</div>
 		{#if !details}
 			<span class="loading loading-dots loading-lg" />
@@ -42,10 +39,17 @@
 				<div class="flex flex-row gap-2">
 					<div class="font-bold">{env}:</div>
 					{#each value.services as service}
-						<ServiceCell {service} />
+						<div class="flex flex-row items-center gap-1">
+							<span>{service.version}</span>
+							<ServiceCell {service} />
+						</div>
 					{/each}
+					<div>|</div>
 					{#each value.dbs as db}
-						<DatabaseCell database={db} />
+						<div class="flex flex-row items-center gap-1">
+							<span>{db.engine_version}</span>
+							<DatabaseCell database={db} />
+						</div>
 					{/each}
 				</div>
 			{/each}

@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
 import { writable } from 'svelte/store';
-import { AwsEnv, type Cluster } from './types';
+import { AwsEnv, type Cluster } from '../types';
 const envImportance = {
 	[AwsEnv.DEVNULL]: 0,
 	[AwsEnv.PLAY]: 1,

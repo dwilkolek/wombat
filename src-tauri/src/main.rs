@@ -679,7 +679,10 @@ async fn service_details(
         None,
     )
     .await;
+    println!("Called service_details: {}", &app);
+
     tokio::task::spawn(async move {
+        println!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
         {
             let databases_cache = &mut db.lock().await;
@@ -705,6 +708,7 @@ async fn service_details(
             }
         }
 
+        println!("EMIT details for: {}", &app);
         window
             .emit(
                 "new-service-details",

@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { AwsEnv } from './types';
+import { AwsEnv } from '../types';
 const envImportance = {
 	[AwsEnv.DEVNULL]: 0,
 	[AwsEnv.PLAY]: 1,

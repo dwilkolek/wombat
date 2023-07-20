@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userStore } from '$lib/user-store';
+	import { userStore } from '$lib/stores/user-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
 	import { fetch } from '@tauri-apps/api/http';
