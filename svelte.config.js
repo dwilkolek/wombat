@@ -26,6 +26,16 @@ const config = {
 		adapter: adapter(),
 		version: {
 			name: pkg.version
+		},
+		prerender: {
+			entries: [
+				'/',
+				'/logged/apps',
+				'/logged/config',
+				'/logged/ecs',
+				'/logged/rds',
+				'/logged/apps/[app]'
+			]
 		}
 	}
 };
