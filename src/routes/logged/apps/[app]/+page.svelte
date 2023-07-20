@@ -1,7 +1,5 @@
 <script lang="ts">
-	import DatabaseCell from '$lib/componets/database-cell.svelte';
 	import EnvCard from '$lib/componets/env-card.svelte';
-	import ServiceCell from '$lib/componets/service-cell.svelte';
 	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { serviceDetailStore } from '$lib/stores/service-details-store';
 	import { userStore } from '$lib/stores/user-store';
@@ -17,6 +15,11 @@
 		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 </script>
+
+<svelte:head>
+	<title>APP {data.app}</title>
+	<meta name="description" content="Wombat" />
+</svelte:head>
 
 <div class="flex flex-row gap-2 items-center pl-5">
 	<button
