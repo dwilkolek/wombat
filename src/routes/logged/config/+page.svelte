@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { userStore } from '$lib/user-store';
+	import { userStore } from '$lib/stores/user-store';
 	import { open } from '@tauri-apps/api/shell';
 
 	let user = $userStore;

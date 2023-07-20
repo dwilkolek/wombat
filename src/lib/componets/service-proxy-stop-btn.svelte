@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { execute } from '$lib/error-store';
-	import { taskStore } from '$lib/task-store';
-	import type { AwsEnv, ServiceDetails } from '$lib/types';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { execute } from '$lib/stores/error-store';
+	import type { ServiceDetails } from '$lib/types';
 	import { open } from '@tauri-apps/api/shell';
 
 	export let service: ServiceDetails;
@@ -42,14 +40,12 @@
 			</svg>
 		</div>
 	</button>
-	<div class="tooltip" data-tip="Open in browser">
-		<button
-			class="link"
-			on:click|preventDefault={() => {
-				open('http://localhost:' + port);
-			}}
-		>
-			{service.version}:{port}</button
-		>
-	</div>
+</div>
+<div class="tooltip" data-tip="Open in browser">
+	<button
+		class="link"
+		on:click|preventDefault={() => {
+			open('http://localhost:' + port);
+		}}>:{port}</button
+	>
 </div>

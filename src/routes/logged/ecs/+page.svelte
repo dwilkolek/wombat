@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { AwsEnv, type EcsService } from '$lib/types';
-	import { userStore } from '$lib/user-store';
-	import { execute } from '$lib/error-store';
-	import { taskStore } from '$lib/task-store';
+	import { userStore } from '$lib/stores/user-store';
+	import { execute } from '$lib/stores/error-store';
+	import { taskStore } from '$lib/stores/task-store';
 	import { open } from '@tauri-apps/api/shell';
-	import StarIcon from '$lib/star-icon.svelte';
+	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
-	import { clusterStore } from '$lib/cluster-store';
+	import { clusterStore } from '$lib/stores/cluster-store';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	let arnFilter = '';
