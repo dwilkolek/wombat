@@ -17,10 +17,7 @@
 		);
 		if (answer) {
 			try {
-				console.log('calling for creds');
 				const credentials = await invoke<DatabaseCredentials>('credentials', { db: database });
-
-				console.log('calling for creds', credentials);
 				const copyToClipboard = await ask(
 					`Database name: ${credentials.dbname}\nUser: ${credentials.username}\nPassword: ${credentials.password}\nRotated: ${credentials.auto_rotated}\nWhen 'Rotated'=false then User & Database name might be wrong.`,
 					{ title: 'Credentials', okLabel: 'Copy password to clipboard', cancelLabel: 'K THX BYE' }

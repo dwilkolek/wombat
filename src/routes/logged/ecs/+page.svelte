@@ -2,13 +2,12 @@
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { AwsEnv, type EcsService } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';
-	import { execute } from '$lib/stores/error-store';
 	import { taskStore } from '$lib/stores/task-store';
 	import { open } from '@tauri-apps/api/shell';
 	import StarIcon from '$lib/componets/star-icon.svelte';
-	import { listen } from '@tauri-apps/api/event';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { ask } from '@tauri-apps/api/dialog';
+	import { serviceStore } from '$lib/stores/service-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -16,13 +15,8 @@
 		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 	$: activeCluser = clusterStore.activeCluser;
-	$: listen('cache-refreshed', () => {
-		services = execute<EcsService[]>('services', { cluster: $activeCluser }, true);
-	});
 
-	$: services = $activeCluser
-		? execute<EcsService[]>('services', { cluster: $activeCluser }, true)
-		: [];
+	$: services = serviceStore.getServices($activeCluser);
 	$: matchesFilter = (service: EcsService): boolean => {
 		return arnFilter === '' || service.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
@@ -63,7 +57,9 @@
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
-			{#await services then services}
+			{#await services}
+				<span class="loading loading-dots loading-lg" />
+			{:then services}
 				{#each services as service, i}
 					{#if matchesFilter(service)}
 						<tr>

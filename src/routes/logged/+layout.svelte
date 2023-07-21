@@ -5,10 +5,12 @@
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
+	import { emit } from '@tauri-apps/api/event';
 
 	const logout = async () => {
 		try {
 			await invoke('logout');
+			emit('logged-out');
 			goto('/');
 		} catch (e) {
 			console.log(e);
@@ -48,7 +50,7 @@
 	</div>
 
 	<div class="flex gap-4">
-		{#await userConfig then { last_used_profile }}
+		{#await userConfig then { last_used_profile, id }}
 			<h6>{last_used_profile}</h6>
 		{/await}
 		<button
