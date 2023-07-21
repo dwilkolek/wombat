@@ -26,7 +26,9 @@ listen<ServiceDetailsPayload>('new-service-details', (data) => {
 listen('cache-refreshed', () => {
 	serviceDetailsStore.set([]);
 });
-
+listen('logged-out', () => {
+	serviceDetailsStore.set([]);
+});
 const serviceDetailsStore = createServiceDetailsStore();
 setInterval(
 	() => {

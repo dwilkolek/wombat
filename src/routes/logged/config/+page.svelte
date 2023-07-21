@@ -19,6 +19,11 @@
 	>
 		<div class="form-control">
 			<div class="text-sm rounded p-4">
+				<div class="flex flex-row gap-2 mb-4">
+					<span class="text-lg">User Id:</span>
+					<span class="text-lg">{user.id}</span>
+				</div>
+
 				<label class="label p-0 m-0" for="dbeaver_path">
 					<span class="label-text text-lg">Path to dbeaver</span>
 				</label>

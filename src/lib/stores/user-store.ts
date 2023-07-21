@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { execute } from './error-store';
 import type { AwsEnv, UserConfig } from '../types';
+import { emit } from '@tauri-apps/api/event';
 // import { homeStore } from './home-store';
 
 const createUserStore = () => {
@@ -26,6 +27,7 @@ const createUserStore = () => {
 		const config = await execute<UserConfig>('login', { profile });
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 		loggedIn.set(true);
+		emit('logged-in');
 	};
 
 	const favoriteTrackedName = async (name: string) => {
@@ -39,7 +41,6 @@ const createUserStore = () => {
 		const config = await execute<UserConfig>('save_preffered_envs', {
 			envs
 		});
-		console.log('new config', config);
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 

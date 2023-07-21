@@ -9,6 +9,7 @@
 	import { listen } from '@tauri-apps/api/event';
 	import DbSecretBtn from '$lib/componets/db-secret-btn.svelte';
 	import { ask } from '@tauri-apps/api/dialog';
+	import { dbStore } from '$lib/stores/db-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -16,10 +17,8 @@
 		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 
-	$: databases = execute<DbInstance[]>('databases', { env: $envStore }, true);
-	$: listen('cache-refreshed', () => {
-		databases = execute<DbInstance[]>('databases', { env: $envStore }, true);
-	});
+	$: databases = dbStore.getDatabases($envStore);
+
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
@@ -61,7 +60,9 @@
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
-			{#await databases then databases}
+			{#await databases}
+				<span class="loading loading-dots loading-lg" />
+			{:then databases}
 				{#each databases as db, i}
 					{#if matchesFilter(db)}
 						<tr>
@@ -86,6 +87,7 @@
 								<span>
 									<DbSecretBtn database={db} />
 									{db.engine}
+									{db.engine_version}
 								</span>
 							</td>
 							<td>
