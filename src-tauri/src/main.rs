@@ -469,7 +469,7 @@ async fn discover(
     service_cache: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_state: tauri::State<'_, UserConfigState>,
-) -> Result<Vec<HomeEntry>, BError> {
+) -> Result<Vec<String>, BError> {
     let app_ctx = app_state.0.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap();
     let login_check =
@@ -480,7 +480,6 @@ async fn discover(
 
     let name = &name.to_lowercase();
     let tracked_names = user_config.0.lock().await.tracked_names.clone();
-    let mut records: Vec<HomeEntry> = vec![];
     let mut found_names = HashSet::new();
     if name.len() < 3 {
         ingest_log(
@@ -543,29 +542,16 @@ async fn discover(
     found_names.extend(dbs.keys().cloned());
     found_names.extend(services.keys().cloned());
 
-    for found_name in found_names {
-        records.push(HomeEntry {
-            tracked_name: found_name.clone(),
-            dbs: dbs.remove(&found_name).unwrap_or_default(),
-            services: services
-                .remove(&found_name)
-                .unwrap_or_default()
-                .into_iter()
-                .map(|s| (s.arn.clone(), s))
-                .collect(),
-        });
-    }
-
     ingest_log(
         &axiom,
         &user_state.0.lock().await.id,
         Action::Discover(name.to_owned()),
         None,
-        Some(records.len()),
+        Some(found_names.len()),
     )
     .await;
 
-    Ok(records)
+    Ok(found_names.into_iter().collect())
 }
 
 #[tauri::command]
@@ -708,7 +694,6 @@ async fn service_details(
             }
         }
 
-        println!("EMIT details for: {}", &app);
         window
             .emit(
                 "new-service-details",
@@ -995,14 +980,9 @@ async fn main() {
         .manage(RdsClientState(Arc::new(Mutex::new(aws::RdsClient::new()))))
         .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
-            // home_details_refresher: None,
             aws_resource_refresher: None,
             proxies_handlers: HashMap::new(),
         }))))
-        // .manage(HomeCache(Arc::new(Mutex::new(HomePage {
-        //     timestamp: Utc::now(),
-        //     entries: Vec::new(),
-        // }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
@@ -1017,7 +997,6 @@ async fn main() {
             start_db_proxy,
             start_service_proxy,
             open_dbeaver,
-            // home,
             discover,
             refresh_cache,
             credentials,
@@ -1026,8 +1005,6 @@ async fn main() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-// struct HomeCache(Arc<Mutex<HomePage>>);
 
 struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
 
