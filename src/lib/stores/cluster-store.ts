@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
-import { writable } from 'svelte/store';
-import { AwsEnv, type Cluster } from './types';
+import { get, writable } from 'svelte/store';
+import { AwsEnv, type Cluster } from '../types';
 const envImportance = {
 	[AwsEnv.DEVNULL]: 0,
 	[AwsEnv.PLAY]: 1,
@@ -14,7 +14,6 @@ const clusterStoreCreate = () => {
 	const activeCluser = writable<Cluster>();
 	const clusters = writable<Cluster[]>([]);
 	invoke<Cluster[]>('clusters').then((resp) => {
-		console.log('clusters', resp);
 		const clusterLists = [];
 		clusterLists.push(...resp.sort((a, b) => envImportance[a.env] - envImportance[b.env]));
 		const dev_env = clusterLists.find((it) => it.env == AwsEnv.DEV);
@@ -31,19 +30,23 @@ const clusterStoreCreate = () => {
 			const clusterLists: Cluster[] = [];
 			clusterLists.push(...resp.sort((a, b) => envImportance[a.env] - envImportance[b.env]));
 			clusters.set(clusterLists);
-			activeCluser.subscribe((c) => {
-				if (!clusterLists.includes(c)) {
-					for (const cluster of clusterLists) {
-						if (cluster.env == AwsEnv.DEV) {
-							activeCluser.set(cluster);
-						}
+			const currentActiveCluster = get(activeCluser);
+			if (!clusterLists.includes(currentActiveCluster)) {
+				for (const cluster of clusterLists) {
+					if (cluster.env == AwsEnv.DEV) {
+						activeCluser.set(cluster);
 					}
 				}
-			});
+			}
 		});
 	};
 
 	return { clusters, activeCluser, refresh };
 };
-
+listen('logged-out', () => {
+	clusterStore.clusters.set([]);
+});
+listen('logged-in', () => {
+	clusterStore.refresh();
+});
 export const clusterStore = clusterStoreCreate();

@@ -1,25 +1,24 @@
 <script lang="ts">
 	import dbeaver from '$lib/images/dbeaver-head.png';
 	import { AwsEnv, type DbInstance } from '$lib/types';
-	import { userStore } from '$lib/user-store';
-	import { envStore } from '$lib/env-store';
-	import { taskStore } from '$lib/task-store';
-	import { execute } from '$lib/error-store';
-	import StarIcon from '$lib/star-icon.svelte';
+	import { userStore } from '$lib/stores/user-store';
+	import { envStore } from '$lib/stores/env-store';
+	import { taskStore } from '$lib/stores/task-store';
+	import { execute } from '$lib/stores/error-store';
+	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { listen } from '@tauri-apps/api/event';
-	import DbSecretBtn from '$lib/db-secret-btn.svelte';
+	import DbSecretBtn from '$lib/componets/db-secret-btn.svelte';
 	import { ask } from '@tauri-apps/api/dialog';
+	import { dbStore } from '$lib/stores/db-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
 		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
 	};
-	$: currentEnv = envStore.currentEnv;
-	$: databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
-	$: listen('cache-refreshed', () => {
-		databases = execute<DbInstance[]>('databases', { env: $currentEnv }, true);
-	});
+
+	$: databases = dbStore.getDatabases($envStore);
+
 	$: matchesFilter = (databse: DbInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
@@ -31,7 +30,7 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="my-4 p-2 pb-5">
-	<select class="select select-bordered" bind:value={$currentEnv}>
+	<select class="select select-bordered" bind:value={$envStore}>
 		{#each envs as env}
 			<option value={env}>{env}</option>
 		{/each}
@@ -46,7 +45,7 @@
 						Info
 						<input
 							type="text"
-							autocomplete="false"
+							autocomplete="off"
 							autocorrect="off"
 							autocapitalize="off"
 							spellcheck="false"
@@ -61,7 +60,9 @@
 			</tr>
 		</thead>
 		<tbody class="overflow-y-auto max-h-96">
-			{#await databases then databases}
+			{#await databases}
+				<span class="loading loading-dots loading-lg" />
+			{:then databases}
 				{#each databases as db, i}
 					{#if matchesFilter(db)}
 						<tr>
@@ -86,6 +87,7 @@
 								<span>
 									<DbSecretBtn database={db} />
 									{db.engine}
+									{db.engine_version}
 								</span>
 							</td>
 							<td>

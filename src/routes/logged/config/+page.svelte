@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { userStore } from '$lib/user-store';
+	import { userStore } from '$lib/stores/user-store';
 	import { open } from '@tauri-apps/api/shell';
 
 	let user = $userStore;
@@ -19,6 +19,11 @@
 	>
 		<div class="form-control">
 			<div class="text-sm rounded p-4">
+				<div class="flex flex-row gap-2 mb-4">
+					<span class="text-lg">User Id:</span>
+					<span class="text-lg">{user.id}</span>
+				</div>
+
 				<label class="label p-0 m-0" for="dbeaver_path">
 					<span class="label-text text-lg">Path to dbeaver</span>
 				</label>
@@ -26,7 +31,7 @@
 					<input
 						id="dbeaver_path"
 						type="text"
-						autocomplete="false"
+						autocomplete="off"
 						autocorrect="off"
 						autocapitalize="off"
 						spellcheck="false"
@@ -36,9 +41,14 @@
 					/>
 
 					<div class="pl-2">
-						Install <a class="link link-accent" href="https://dbeaver.io/" on:click|preventDefault={() => {
-							open('https://dbeaver.io/');
-						}}>dbeaver</a> to be able to open connection to database directly from Wombat<br /><br />
+						Install <a
+							class="link link-accent"
+							href="https://dbeaver.io/"
+							on:click|preventDefault={() => {
+								open('https://dbeaver.io/');
+							}}>dbeaver</a
+						>
+						to be able to open connection to database directly from Wombat<br /><br />
 						MacOS:
 						<pre class="pl-1">/Applications/DBeaver.app/Contents/MacOS/dbeaver</pre>
 

@@ -3,12 +3,14 @@
 	import Icon from '$lib/images/32x32.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { execute } from '$lib/error-store';
-	import { userStore } from '$lib/user-store';
+	import { execute } from '$lib/stores/error-store';
+	import { userStore } from '$lib/stores/user-store';
+	import { emit } from '@tauri-apps/api/event';
 
 	const logout = async () => {
 		try {
 			await invoke('logout');
+			emit('logged-out');
 			goto('/');
 		} catch (e) {
 			console.log(e);
@@ -21,11 +23,14 @@
 	<div class="flex-none">
 		<ul class="menu menu-horizontal px-1">
 			<li>
-				<a class={$page.url.pathname === '/logged/home' ? 'active' : ''} href="/logged/home">
+				<a class={$page.url.pathname === '/logged/apps' ? 'active' : ''} href="/logged/apps">
 					<img class="h-full" alt="wombat" src={Icon} />
 				</a>
 			</li>
-
+			<!-- <li>
+				<a class={$page.url.pathname === '/logged/apps' ? 'active' : ''} href="/logged/apps">Apps</a
+				>
+			</li> -->
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 					>Services (ECS)</a
@@ -45,7 +50,7 @@
 	</div>
 
 	<div class="flex gap-4">
-		{#await userConfig then { last_used_profile }}
+		{#await userConfig then { last_used_profile, id }}
 			<h6>{last_used_profile}</h6>
 		{/await}
 		<button

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userStore } from '$lib/user-store';
+	import { userStore } from '$lib/stores/user-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
 	import { fetch } from '@tauri-apps/api/http';
@@ -42,7 +42,7 @@
 								loading = true;
 								await login(profile);
 								loading = false;
-								goto(`/logged/home`, { replaceState: true });
+								goto(`/logged/apps`, { replaceState: true });
 							} catch (e) {
 								console.error(e);
 								loading = false;
@@ -56,7 +56,7 @@
 							<input
 								id="aws-profile"
 								type="text"
-								autocomplete="false"
+								autocomplete="off"
 								autocorrect="off"
 								autocapitalize="off"
 								spellcheck="false"

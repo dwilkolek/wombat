@@ -1,8 +1,8 @@
 <script lang="ts">
 	import './styles.css';
-	import Analytics from '$lib/analytics.svelte';
-	import ErrorBox from '$lib/error-box.svelte';
-	import { loading } from '$lib/error-store';
+	import Analytics from '$lib/componets/analytics.svelte';
+	import ErrorBox from '$lib/componets/error-box.svelte';
+	import { loading } from '$lib/stores/error-store';
 </script>
 
 <div>

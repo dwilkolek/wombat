@@ -1,7 +1,8 @@
 import { writable } from 'svelte/store';
 import { execute } from './error-store';
-import type { AwsEnv, UserConfig } from './types';
-import { homeStore } from './home-store';
+import type { AwsEnv, UserConfig } from '../types';
+import { emit } from '@tauri-apps/api/event';
+// import { homeStore } from './home-store';
 
 const createUserStore = () => {
 	const loggedIn = writable(false);
@@ -13,35 +14,34 @@ const createUserStore = () => {
 		last_used_profile: undefined,
 		preffered_environments: []
 	});
-	execute<UserConfig>('user_config').then((userConfig) => {
-		set(userConfig);
+	execute<UserConfig>('user_config').then((config) => {
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	});
 
 	const setDbeaverPath = async (path: string) => {
 		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path }, true);
-		set(config);
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
 	const login = async (profile: string) => {
 		const config = await execute<UserConfig>('login', { profile });
-		set(config);
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 		loggedIn.set(true);
+		emit('logged-in');
 	};
 
 	const favoriteTrackedName = async (name: string) => {
 		const config = await execute<UserConfig>('favorite', {
 			name
 		});
-		set(config);
-		homeStore.refresh(false);
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
 	const savePrefferedEnvs = async (envs: AwsEnv[]) => {
 		const config = await execute<UserConfig>('save_preffered_envs', {
 			envs
 		});
-		console.log('new config', config);
-		set(config);
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
 	return { subscribe, login, setDbeaverPath, favoriteTrackedName, savePrefferedEnvs };
