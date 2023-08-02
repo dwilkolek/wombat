@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { error } from './error-store';
+	import { error } from '../stores/error-store';
 </script>
 
 {#if $error}
