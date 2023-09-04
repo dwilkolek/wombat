@@ -197,7 +197,7 @@ impl RdsClient {
             marker = resp.marker().map(|m| m.to_owned());
             let instances = resp.db_instances();
             let rdses = instances.as_deref().unwrap();
-            there_is_more = rdses.len() == 100;
+            there_is_more = rdses.len() == 100 && marker.is_some();
             rdses.into_iter().for_each(|rds| {
                 if let Some(_) = rds.db_name() {
                     let db_instance_arn = rds.db_instance_arn().unwrap().to_owned();
