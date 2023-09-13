@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
-    pub arn: String,
     pub instance_id: String,
     pub env: Env,
 }
@@ -124,15 +123,19 @@ pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
                 instances
                     .into_iter()
                     .map(|instance| {
-                        let arn = instance
-                            .iam_instance_profile()
-                            .unwrap()
-                            .arn()
-                            .unwrap()
-                            .to_owned();
-                        let env = Env::from_any(&arn);
+                        let env = Env::from_exact(
+                            instance
+                                .tags()
+                                .unwrap_or_default()
+                                .into_iter()
+                                .find(|env_tag_maybe| {
+                                    env_tag_maybe.key().unwrap_or("unknown").eq("Environment")
+                                })
+                                .map(|env_tag| env_tag.value().unwrap_or_default())
+                                .unwrap_or_default(),
+                        );
+
                         Bastion {
-                            arn,
                             instance_id: instance.instance_id().unwrap().to_owned(),
                             env,
                         }
