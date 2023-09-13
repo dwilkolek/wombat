@@ -1,3 +1,4 @@
+use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -219,18 +220,17 @@ impl UserConfig {
     }
 
     pub fn favorite(&mut self, tracked_name: TrackedName) -> Result<UserConfig, BError> {
-        println!("Favorite {} ", &tracked_name);
+        info!("Favorite {} ", &tracked_name);
         if !self.tracked_names.remove(&tracked_name) {
-            println!("Favorite Add {} ", &tracked_name);
+            info!("Favorite Add {} ", &tracked_name);
             self.tracked_names.insert(tracked_name);
         }
-        dbg!(&self);
         self.save();
         Ok(self.clone())
     }
 
     fn save(&self) {
-        println!("Storing to: {:?}", UserConfig::config_path());
+        info!("Storing to: {:?}", UserConfig::config_path());
         std::fs::write(
             UserConfig::config_path(),
             serde_json::to_string_pretty(self).expect("Failed to serialize user config"),

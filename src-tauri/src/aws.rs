@@ -8,6 +8,7 @@ use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
 use chrono::prelude::*;
 use ec2::types::Filter;
+use log::info;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -399,7 +400,7 @@ impl EcsClient {
     pub async fn clusters(&mut self) -> Vec<Cluster> {
         let ecs_client = self.ecs_client.as_ref().unwrap();
         if self.clusters.len() == 0 {
-            println!("Fetching clusters!");
+            info!("Fetching clusters!");
             let cluster_resp = &ecs_client
                 .list_clusters()
                 .send()
@@ -427,7 +428,7 @@ impl EcsClient {
         if let Some(details) = self.service_details_map.get(service_arn) {
             return details.clone();
         }
-        println!("Fetching service details for {} {}", service_arn, refresh);
+        info!("Fetching service details for {} {}", service_arn, refresh);
         let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
         let service = ecs_client
             .describe_services()
@@ -475,7 +476,7 @@ impl EcsClient {
         if let Some(services) = self.cluster_service_map.get(cluster) {
             return services.clone();
         }
-        println!("Fetching services for {}", &cluster.arn);
+        info!("Fetching services for {}", &cluster.arn);
         let mut values = vec![];
         let mut has_more = true;
         let mut next_token = None;

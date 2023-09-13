@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
 use axiom_rs::Client;
+use log::{error, info, warn, LevelFilter};
 use regex::Regex;
 use serde_json::json;
 use shared::{ecs_arn_to_name, rds_arn_to_name};
@@ -15,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
 use tauri::Window;
+use tauri_plugin_log::LogTarget;
 use tokio::sync::Mutex;
 use urlencoding::encode;
 use user::UserConfig;
@@ -338,11 +340,14 @@ async fn stop_job(
                 ])
                 .output();
             match killed_session_output {
-                Ok(output) => println!("Attempted to kill session in SSM: {:?}", output),
-                Err(e) => println!("Failed to kill session in SSM {}", e),
+                Ok(output) => info!("Attempted to kill session in SSM: {:?}", output),
+                Err(e) => warn!("Failed to kill session in SSM {}", e),
             };
         } else {
-            println!("SessionId to kill not found")
+            info!(
+                "SessionId {} to kill not found",
+                session_id.unwrap_or_default()
+            )
         }
     } else {
         ingest_log(
@@ -665,10 +670,10 @@ async fn service_details(
         None,
     )
     .await;
-    println!("Called service_details: {}", &app);
+    info!("Called service_details: {}", &app);
 
     tokio::task::spawn(async move {
-        println!("Fetching details for: {}", &app);
+        info!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
         {
             let databases_cache = &mut db.lock().await;
@@ -904,7 +909,7 @@ async fn start_aws_ssm_proxy(
     ]);
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    println!("Execudtnig cmd: {:?} ", command);
+    info!("Execudtnig cmd: {:?} ", command);
     let shared_child = SharedChild::spawn(&mut command).unwrap();
     let shared_child_arc = Arc::new(shared_child);
     let child_arc_clone = shared_child_arc.clone();
@@ -936,7 +941,7 @@ async fn start_aws_ssm_proxy(
         let _ = child_arc_clone.wait();
 
         if let Some(handle) = abort_on_exit {
-            println!("Killing dependant job");
+            info!("Killing dependant job");
             handle.abort()
         }
         window
@@ -972,8 +977,13 @@ async fn main() {
             Err(_) => None,
         }))),
     };
-
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .targets([LogTarget::LogDir, LogTarget::Stdout, LogTarget::Webview])
+                .level(LevelFilter::Info)
+                .build(),
+        )
         .manage(UserConfigState(Arc::new(Mutex::new(user))))
         .manage(axiom_client)
         .manage(AppContextState::default())
@@ -1077,7 +1087,7 @@ async fn check_login_and_trigger(
 ) -> Result<(), BError> {
     let client = aws::ecs_client(profile).await;
     if !aws::is_logged(&client).await {
-        println!("Trigger log in into AWS");
+        info!("Trigger log in into AWS");
         Command::new("aws")
             .args(["sso", "login", "--profile", &profile])
             .output()
@@ -1140,6 +1150,6 @@ async fn ingest_log_with_client(
         )
         .await
     {
-        println!("Error ingesting logs {}", e)
+        error!("Error ingesting logs {}", e)
     }
 }
