@@ -8,8 +8,10 @@ use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
 use chrono::prelude::*;
 use ec2::types::Filter;
+use log::info;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tracing_unwrap::{ResultExt, OptionExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
@@ -114,8 +116,9 @@ pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
         .values("*-bastion*")
         .build();
     let res = ec2.describe_instances().filters(filter).send().await;
-    let res = res.expect("Failed to get bastion list");
-    let res = res.reservations().unwrap();
+    
+    let res = res.expect_or_log("Failed to get ec2 bastion instances");
+    let res = res.reservations().unwrap_or_default();
     let res = res
         .iter()
         .map(|r| {
@@ -136,7 +139,7 @@ pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
                         );
 
                         Bastion {
-                            instance_id: instance.instance_id().unwrap().to_owned(),
+                            instance_id: instance.instance_id().unwrap_or_log().to_owned(),
                             env,
                         }
                     })
@@ -187,8 +190,8 @@ impl RdsClient {
 
         let mut there_is_more = true;
         let mut marker = None;
-        let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap();
-        let rds_client = self.rds_client.as_ref().unwrap();
+        let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
+        let rds_client = self.rds_client.as_ref().unwrap_or_log();
         while there_is_more {
             let resp = rds_client
                 .describe_db_instances()
@@ -196,39 +199,39 @@ impl RdsClient {
                 .max_records(100)
                 .send()
                 .await
-                .unwrap();
+                .unwrap_or_log();
             marker = resp.marker().map(|m| m.to_owned());
             let instances = resp.db_instances();
-            let rdses = instances.as_deref().unwrap();
+            let rdses = instances.as_deref().unwrap_or_log();
             there_is_more = rdses.len() == 100 && marker.is_some();
             rdses.into_iter().for_each(|rds| {
                 if let Some(_) = rds.db_name() {
-                    let db_instance_arn = rds.db_instance_arn().unwrap().to_owned();
+                    let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
                     let name = name_regex
                         .captures(&db_instance_arn)
                         .and_then(|c| c.get(2))
                         .and_then(|c| Some(c.as_str().to_owned()))
-                        .unwrap_or(db_instance_arn.split(":").last().unwrap().to_owned());
-                    let tags = rds.tag_list().unwrap();
+                        .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
+                    let tags = rds.tag_list().unwrap_or_log();
                     let mut appname_tag = String::from("");
                     let mut environment_tag = String::from("");
                     let endpoint = rds
                         .endpoint()
                         .map(|e| Endpoint {
-                            address: e.address().unwrap().to_owned(),
-                            port: u16::try_from(e.port()).unwrap(),
+                            address: e.address().unwrap_or_log().to_owned(),
+                            port: u16::try_from(e.port()).unwrap_or_log(),
                         })
-                        .unwrap()
+                        .unwrap_or_log()
                         .clone();
                     let engine: String = format!("{}", rds.engine().unwrap_or("??"));
                     let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
                     let mut env = Env::DEVNULL;
                     for t in tags {
-                        if t.key().unwrap() == "AppName" {
-                            appname_tag = t.value().unwrap().to_owned()
+                        if t.key().unwrap_or_log() == "AppName" {
+                            appname_tag = t.value().unwrap_or_log().to_owned()
                         }
-                        if t.key().unwrap() == "Environment" {
-                            environment_tag = t.value().unwrap().to_owned();
+                        if t.key().unwrap_or_log() == "Environment" {
+                            environment_tag = t.value().unwrap_or_log().to_owned();
                             env = Env::from_exact(&environment_tag);
                         }
                     }
@@ -279,13 +282,13 @@ impl RdsClient {
                 .key("name".into())
                 .values(&secret)
                 .build();
-            let secret_client = self.secret_client.as_ref().unwrap();
+            let secret_client = self.secret_client.as_ref().unwrap_or_log();
             let secret_arn = secret_client.list_secrets().filters(filter).send().await;
 
             let secret_arn = secret_arn.expect("Failed to fetch!");
             let secret_arn = secret_arn.secret_list().expect("No arn list!");
             if secret_arn.len() == 1 {
-                let secret_arn = secret_arn.first().unwrap();
+                let secret_arn = secret_arn.first().unwrap_or_log();
                 let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
 
                 let secret = secret_client
@@ -296,7 +299,7 @@ impl RdsClient {
                 if secret.is_err() {
                     return Err(BError::new("db_secret", "No secrets found"));
                 }
-                let secret = secret.unwrap();
+                let secret = secret.unwrap_or_log();
                 let secret = secret.secret_string().expect("There should be a secret");
                 let secret =
                     serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
@@ -339,7 +342,7 @@ impl RdsClient {
             let param = self
                 .ssm_client
                 .as_ref()
-                .unwrap()
+                .unwrap_or_log()
                 .get_parameter()
                 .name(&secret)
                 .with_decryption(true)
@@ -350,7 +353,7 @@ impl RdsClient {
                 if let Some(param) = param.parameter() {
                     return Ok(DbSecret {
                         dbname: name.to_owned(),
-                        password: param.value().unwrap().to_owned(),
+                        password: param.value().unwrap_or_log().to_owned(),
                         username: name.to_owned(),
                         auto_rotated: false,
                     });
@@ -397,9 +400,9 @@ impl EcsClient {
     }
 
     pub async fn clusters(&mut self) -> Vec<Cluster> {
-        let ecs_client = self.ecs_client.as_ref().unwrap();
+        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
         if self.clusters.len() == 0 {
-            println!("Fetching clusters!");
+            info!("Fetching clusters!");
             let cluster_resp = &ecs_client
                 .list_clusters()
                 .send()
@@ -419,15 +422,16 @@ impl EcsClient {
         }
         self.clusters.clone()
     }
+   
     pub async fn service_details(&mut self, service_arn: &str, refresh: bool) -> ServiceDetails {
-        let ecs_client = self.ecs_client.as_ref().unwrap();
+        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
         if refresh {
             self.service_details_map.remove(service_arn);
         }
         if let Some(details) = self.service_details_map.get(service_arn) {
             return details.clone();
         }
-        println!("Fetching service details for {} {}", service_arn, refresh);
+        info!("Fetching service details for {} {}", service_arn, refresh);
         let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
         let service = ecs_client
             .describe_services()
@@ -435,31 +439,31 @@ impl EcsClient {
             .cluster(cluster)
             .send()
             .await
-            .unwrap();
-        let service = service.services().unwrap();
+            .unwrap_or_log();
+        let service = service.services().unwrap_or_log();
         let service = &service[0];
-        let task_def_arn = service.task_definition().unwrap();
+        let task_def_arn = service.task_definition().unwrap_or_log();
         let task_def = ecs_client
             .describe_task_definition()
             .task_definition(task_def_arn)
             .send()
             .await
-            .unwrap();
+            .unwrap_or_log();
 
-        let task_def = task_def.task_definition().unwrap();
-        let container_def = &task_def.container_definitions().unwrap()[0];
+        let task_def = task_def.task_definition().unwrap_or_log();
+        let container_def = &task_def.container_definitions().unwrap_or_log()[0];
         let version = container_def
             .image()
-            .unwrap()
+            .unwrap_or_log()
             .split(":")
             .last()
-            .unwrap()
+            .unwrap_or_log()
             .to_owned();
         let details = ServiceDetails {
             name: shared::ecs_arn_to_name(&service_arn),
             timestamp: Utc::now(),
             arn: service_arn.to_owned(),
-            cluster_arn: service.cluster_arn().unwrap().to_owned(),
+            cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
             version: version,
             env: Env::from_any(&service_arn),
         };
@@ -470,12 +474,12 @@ impl EcsClient {
     }
 
     pub async fn services(&mut self, cluster: &Cluster) -> Vec<EcsService> {
-        let ecs_client = self.ecs_client.as_ref().unwrap();
+        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
 
         if let Some(services) = self.cluster_service_map.get(cluster) {
             return services.clone();
         }
-        println!("Fetching services for {}", &cluster.arn);
+        info!("Fetching services for {}", &cluster.arn);
         let mut values = vec![];
         let mut has_more = true;
         let mut next_token = None;
@@ -488,17 +492,17 @@ impl EcsClient {
                 .set_next_token(next_token)
                 .send()
                 .await
-                .unwrap();
+                .unwrap_or_log();
             next_token = services_resp.next_token().map(|t| t.to_owned());
             has_more = next_token.is_some();
 
             services_resp
                 .service_arns()
-                .unwrap()
+                .unwrap_or_log()
                 .iter()
                 .for_each(|service_arn| {
                     values.push(EcsService {
-                        name: service_arn.split("/").last().unwrap().to_owned(),
+                        name: service_arn.split("/").last().unwrap_or_log().to_owned(),
                         arn: service_arn.to_owned(),
                         cluster_arn: cluster.arn.to_owned(),
                         env: cluster.env.clone(),
@@ -530,7 +534,7 @@ impl EcsClient {
             if !result.contains_key(&sd.name) {
                 result.insert(sd.name.clone(), vec![sd]);
             } else {
-                result.get_mut(&sd.name).unwrap().push(sd);
+                result.get_mut(&sd.name).unwrap_or_log().push(sd);
             }
         }
         result

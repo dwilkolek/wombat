@@ -22,8 +22,8 @@
 </script>
 
 {#if displayConfig.favorite == null || isFavourite(app) === displayConfig.favorite}
-	<div class="card card-compact w-96 bg-base-100 shadow-xl">
-		<div class="card-body">
+	<div class="card card-compact w-80 bg-base-100 shadow-xl">
+		<div class="card-body gap-1">
 			<div class="card-title flex flex-row gap-2 items-center text-md">
 				<button
 					class="text-xs"
@@ -33,8 +33,8 @@
 				>
 					<StarIcon state={isFavourite(app)} />
 				</button>
-				<h5 class="inline">
-					<a href={`/logged/apps/${app}`}>{app}</a>
+				<h5 class="inline text-base">
+					<a class="text-primary hover:underline" href={`/logged/apps/${app}`}>{app}</a>
 				</h5>
 			</div>
 			{#if !details}
@@ -42,23 +42,25 @@
 			{/if}
 			{#if details}
 				{#each [...details.envs] as [env, value]}
-					{#if displayConfig.envs == null || displayConfig.envs.includes(env)}
-						<div class="flex flex-row gap-2">
+					{#if displayConfig.envs == null || displayConfig.envs.includes(env)}	
+						<div class="flex flex-row">		
 							<div class="font-bold">{env}:</div>
-							{#each value.services as service}
-								<div class="flex flex-row items-center gap-1">
-									<span>{service.version}</span>
-									<ServiceCell {service} />
-								</div>
-							{/each}
-							<div>|</div>
-							{#each value.dbs as db}
-								<div class="flex flex-row items-center gap-1">
-									<span>{db.engine_version}</span>
-									<DatabaseCell database={db} />
-								</div>
-							{/each}
-						</div>
+							<div class="flex flex-row divide-x">
+								{#each value.services as service}
+									<div class="flex flex-row items-center gap-1 px-1">
+										<span>{service.version}</span>
+										<ServiceCell {service} />
+									</div>
+								{/each}
+								
+								{#each value.dbs as db}
+									<div class="flex flex-row items-center gap-1 px-1">
+										<span>{db.engine_version}</span>
+										<DatabaseCell database={db} />
+									</div>
+								{/each}
+							</div>
+						</div>		
 					{/if}
 				{/each}
 			{/if}

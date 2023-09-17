@@ -16,9 +16,11 @@
 
 	let { subscribe, login } = userStore;
 	let profile: string = '';
+	let userId: string = ''
 
 	$: subscribe((userConfig) => {
 		profile = userConfig?.last_used_profile ?? '';
+		userId = userConfig?.id ?? '';
 	});
 	let loading = false;
 </script>
@@ -106,6 +108,10 @@
 						target="_blank"
 						>https://github.com/dwilkolek/wombat v{version}
 					</a>
+				</div>
+				<div class="flex gap-1">
+					<span>User Id:</span>
+					<pre>{userId}</pre>
 				</div>
 			</div>
 		</div>

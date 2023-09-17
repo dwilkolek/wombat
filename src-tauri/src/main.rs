@@ -2,11 +2,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
 use axiom_rs::Client;
+use log::{error, info, warn, LevelFilter};
 use regex::Regex;
 use serde_json::json;
 use shared::{ecs_arn_to_name, rds_arn_to_name};
 use shared::{BError, Env};
 use shared_child::SharedChild;
+use tracing_unwrap::{ResultExt, OptionExt};
 use std::collections::HashSet;
 use std::env;
 use std::io::{BufRead, BufReader};
@@ -15,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, process::Command};
 use tauri::Window;
+use tauri_plugin_log::LogTarget;
 use tokio::sync::Mutex;
 use urlencoding::encode;
 use user::UserConfig;
@@ -242,7 +245,7 @@ async fn credentials(
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<DbSecret, BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let user_id = &user_config.0.lock().await.id.clone();
     let login_check = check_login_and_trigger(user_id, &profile, &axiom).await;
     if login_check.is_err() {
@@ -307,7 +310,7 @@ async fn stop_job(
         let _ = job.wait();
         let mut out = job.take_stdout();
         let mut session_id: Option<String> = None;
-        let session_regex = Regex::new("Starting session with SessionId: (.*)").unwrap();
+        let session_regex = Regex::new("Starting session with SessionId: (.*)").unwrap_or_log();
 
         if let Some(stdout) = &mut out {
             let lines = BufReader::new(stdout).lines().enumerate().take(10);
@@ -326,7 +329,7 @@ async fn stop_job(
         }
         if let Some(session_id) = session_id {
             let app_ctx = app_state.0.lock().await;
-            let profile = app_ctx.active_profile.as_ref().unwrap();
+            let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
             let killed_session_output = Command::new("aws")
                 .args([
                     "ssm",
@@ -338,11 +341,14 @@ async fn stop_job(
                 ])
                 .output();
             match killed_session_output {
-                Ok(output) => println!("Attempted to kill session in SSM: {:?}", output),
-                Err(e) => println!("Failed to kill session in SSM {}", e),
+                Ok(output) => info!("Attempted to kill session in SSM: {:?}", output),
+                Err(e) => warn!("Failed to kill session in SSM {}", e),
             };
         } else {
-            println!("SessionId to kill not found")
+            info!(
+                "SessionId {} to kill not found",
+                session_id.unwrap_or_default()
+            )
         }
     } else {
         ingest_log(
@@ -410,7 +416,7 @@ async fn clusters(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::Cluster>, BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -429,7 +435,7 @@ async fn services(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::EcsService>, BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -448,7 +454,7 @@ async fn databases(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -471,7 +477,7 @@ async fn discover(
     user_state: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<String>, BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -481,7 +487,7 @@ async fn discover(
     let name = &name.to_lowercase();
     let tracked_names = user_config.0.lock().await.tracked_names.clone();
     let mut found_names = HashSet::new();
-    if name.len() < 3 {
+    if name.len() < 1 {
         ingest_log(
             &axiom,
             &user_state.0.lock().await.id,
@@ -509,7 +515,7 @@ async fn discover(
             if !dbs.contains_key(&name) {
                 dbs.insert(name, vec![db]);
             } else {
-                dbs.get_mut(&name).unwrap().push(db);
+                dbs.get_mut(&name).unwrap_or_log().push(db);
             }
         }
     }
@@ -564,7 +570,7 @@ async fn start_db_proxy(
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -616,7 +622,7 @@ async fn refresh_cache(
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -642,7 +648,7 @@ async fn refresh_cache(
         service_cache.services(&cluster).await;
     }
 
-    window.emit("cache-refreshed", ()).unwrap();
+    window.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
 }
 
@@ -665,10 +671,10 @@ async fn service_details(
         None,
     )
     .await;
-    println!("Called service_details: {}", &app);
+    info!("Called service_details: {}", &app);
 
     tokio::task::spawn(async move {
-        println!("Fetching details for: {}", &app);
+        info!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
         {
             let databases_cache = &mut db.lock().await;
@@ -703,7 +709,7 @@ async fn service_details(
                     dbs: dbs_list,
                 },
             )
-            .unwrap();
+            .unwrap_or_log();
     });
     Ok(())
 }
@@ -721,7 +727,7 @@ async fn start_service_proxy(
     let aws_local_port = local_port + 10000;
 
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -795,7 +801,7 @@ async fn open_dbeaver(
         .expect("DBeaver needs to be configured")
         .clone();
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
         check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
     if login_check.is_err() {
@@ -814,7 +820,7 @@ async fn open_dbeaver(
         .await;
         return Err(err);
     }
-    let db_secret = db_secret.unwrap();
+    let db_secret = db_secret.unwrap_or_log();
     ingest_log(
         &axiom,
         &user_config.0.lock().await.id,
@@ -827,7 +833,7 @@ async fn open_dbeaver(
         .args([
             "-con",
             &db_beaver_con_parma(
-                &db.arn.split(":").last().unwrap(),
+                &db.arn.split(":").last().unwrap_or_log(),
                 "localhost",
                 port,
                 &db_secret,
@@ -848,7 +854,7 @@ async fn start_proxy_to_aws_proxy(
         let header_value = service_header
             .unwrap_or(String::from(""))
             .parse::<HeaderValue>()
-            .unwrap();
+            .unwrap_or_log();
         let app = warp::any().and(request_filter).and_then(
             move |uri: warp::path::FullPath,
                   params: Option<String>,
@@ -904,8 +910,8 @@ async fn start_aws_ssm_proxy(
     ]);
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    println!("Execudtnig cmd: {:?} ", command);
-    let shared_child = SharedChild::spawn(&mut command).unwrap();
+    info!("Execudtnig cmd: {:?} ", command);
+    let shared_child = SharedChild::spawn(&mut command).unwrap_or_log();
     let shared_child_arc = Arc::new(shared_child);
     let child_arc_clone = shared_child_arc.clone();
 
@@ -932,11 +938,11 @@ async fn start_aws_ssm_proxy(
                     port: access_port,
                 },
             )
-            .unwrap();
+            .unwrap_or_log();
         let _ = child_arc_clone.wait();
 
         if let Some(handle) = abort_on_exit {
-            println!("Killing dependant job");
+            info!("Killing dependant job");
             handle.abort()
         }
         window
@@ -948,13 +954,13 @@ async fn start_aws_ssm_proxy(
                     port: access_port,
                 },
             )
-            .unwrap();
+            .unwrap_or_log();
     });
 }
 
 #[tokio::main]
 async fn main() {
-    fix_path_env::fix().unwrap();
+    fix_path_env::fix().unwrap_or_log();
 
     let user = UserConfig::default();
 
@@ -972,8 +978,13 @@ async fn main() {
             Err(_) => None,
         }))),
     };
-
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::default()
+                .targets([LogTarget::LogDir, LogTarget::Stdout, LogTarget::Webview])
+                .level(LevelFilter::Info)
+                .build(),
+        )
         .manage(UserConfigState(Arc::new(Mutex::new(user))))
         .manage(axiom_client)
         .manage(AppContextState::default())
@@ -1003,7 +1014,7 @@ async fn main() {
             stop_job
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("Error while running tauri application");
 }
 
 struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
@@ -1077,7 +1088,7 @@ async fn check_login_and_trigger(
 ) -> Result<(), BError> {
     let client = aws::ecs_client(profile).await;
     if !aws::is_logged(&client).await {
-        println!("Trigger log in into AWS");
+        info!("Trigger log in into AWS");
         Command::new("aws")
             .args(["sso", "login", "--profile", &profile])
             .output()
@@ -1140,6 +1151,6 @@ async fn ingest_log_with_client(
         )
         .await
     {
-        println!("Error ingesting logs {}", e)
+        error!("Error ingesting logs {}", e)
     }
 }
