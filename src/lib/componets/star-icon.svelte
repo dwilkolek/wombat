@@ -1,6 +1,6 @@
 <script lang="ts">
 	export let state: boolean;
-	export let size = '2.2em';
+	export let size = '1.8em';
 	import Icon from 'svelte-icon/Icon.svelte';
 	import star from '$lib/images/star-solid.svg?raw';
 	let selected = 'hsl(var(--wa))';

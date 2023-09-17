@@ -1,5 +1,7 @@
+use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use tracing_unwrap::OptionExt;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -32,7 +34,7 @@ impl UserConfigOld {
     }
 
     fn config_path() -> PathBuf {
-        home::home_dir().unwrap().as_path().join(".wombat")
+        home::home_dir().unwrap_or_log().as_path().join(".wombat")
     }
 }
 
@@ -70,7 +72,7 @@ impl UserConfig {
                 }
                 db_proxy_port_map
                     .get_mut(&tracked_name)
-                    .unwrap()
+                    .unwrap_or_log()
                     .insert(env, *old_entry.1);
             }
 
@@ -84,7 +86,7 @@ impl UserConfig {
                 }
                 service_proxy_port_map
                     .get_mut(&tracked_name)
-                    .unwrap()
+                    .unwrap_or_log()
                     .insert(env, *old_entry.1);
             }
 
@@ -125,7 +127,7 @@ impl UserConfig {
     }
 
     fn config_path() -> PathBuf {
-        home::home_dir().unwrap().as_path().join(".wombat_v1")
+        home::home_dir().unwrap_or_log().as_path().join(".wombat_v1")
     }
 
     fn recheck_dbeaver_path(original_path: Option<String>) -> Option<String> {
@@ -219,18 +221,17 @@ impl UserConfig {
     }
 
     pub fn favorite(&mut self, tracked_name: TrackedName) -> Result<UserConfig, BError> {
-        println!("Favorite {} ", &tracked_name);
+        info!("Favorite {} ", &tracked_name);
         if !self.tracked_names.remove(&tracked_name) {
-            println!("Favorite Add {} ", &tracked_name);
+            info!("Favorite Add {} ", &tracked_name);
             self.tracked_names.insert(tracked_name);
         }
-        dbg!(&self);
         self.save();
         Ok(self.clone())
     }
 
     fn save(&self) {
-        println!("Storing to: {:?}", UserConfig::config_path());
+        info!("Storing to: {:?}", UserConfig::config_path());
         std::fs::write(
             UserConfig::config_path(),
             serde_json::to_string_pretty(self).expect("Failed to serialize user config"),

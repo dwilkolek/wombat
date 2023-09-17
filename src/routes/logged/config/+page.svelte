@@ -18,10 +18,10 @@
 		}}
 	>
 		<div class="form-control">
-			<div class="text-sm rounded p-4">
-				<div class="flex flex-row gap-2 mb-4">
+			<div class=" rounded p-4">
+				<div class="flex flex-row gap-2 mb-4 items-center">
 					<span class="text-lg">User Id:</span>
-					<span class="text-lg">{user.id}</span>
+					<span class="text-base">{user.id}</span>
 				</div>
 
 				<label class="label p-0 m-0" for="dbeaver_path">
@@ -55,6 +55,14 @@
 						Windows:
 						<pre class="pl-1">C:\Program Files\DBeaver\dbeaver.exe</pre>
 					</div>
+					
+				</div>
+				
+				<div class="flex flex-col pl-2">
+					<h4 class="text-lg">Log dir</h4>
+					<div class="pl-1 flex">Windows: <pre class="pl-1">%userprofile%\AppData\Roaming\eu.wilkolek.wombat\logs</pre></div>
+					<div class="pl-1 flex">MacOS: <pre class="pl-1">~/Library/Logs/eu.wilkolek.wombat</pre></div>
+					<div class="pl-1 flex">Linux: <pre class="pl-1">~/.config/eu.wilkolek.wombat\logs</pre></div>
 				</div>
 			</div>
 		</div>

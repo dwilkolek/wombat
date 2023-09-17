@@ -2,6 +2,7 @@ use core::fmt;
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tracing_unwrap::{OptionExt, ResultExt};
 
 pub type TrackedName = String;
 
@@ -53,7 +54,7 @@ impl Env {
         }
     }
     pub fn from_any(str: &str) -> Env {
-        let env_regex = Regex::new(".*(play|lab|dev|demo|prod).*").unwrap();
+        let env_regex = Regex::new(".*(play|lab|dev|demo|prod).*").unwrap_or_log();
         let captures = env_regex.captures(str);
         let env = captures
             .and_then(|c| c.get(1))
@@ -65,13 +66,13 @@ impl Env {
 }
 
 pub fn ecs_arn_to_name(arn: &str) -> TrackedName {
-    arn.split("/").last().unwrap().to_owned()
+    arn.split("/").last().unwrap_or_log().to_owned()
 }
 
 pub fn rds_arn_to_name(arn: &str) -> TrackedName {
     arn.split(":")
         .last()
-        .unwrap()
+        .unwrap_or_log()
         .split("-")
         .skip(2)
         .into_iter()
@@ -80,7 +81,7 @@ pub fn rds_arn_to_name(arn: &str) -> TrackedName {
 }
 
 pub fn cluster_arn_to_name(arn: &str) -> TrackedName {
-    arn.split("/").last().unwrap().to_owned()
+    arn.split("/").last().unwrap_or_log().to_owned()
 }
 
 pub fn arn_to_name(arn: &str) -> TrackedName {
