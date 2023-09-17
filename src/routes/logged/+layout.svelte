@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import Icon from '$lib/images/32x32.png';
+	import Icon from '$lib/images/128x128.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { execute } from '$lib/stores/error-store';
@@ -23,14 +23,12 @@
 	<div class="flex-none">
 		<ul class="menu menu-horizontal px-1">
 			<li>
-				<a class={$page.url.pathname === '/logged/apps' ? 'active' : ''} href="/logged/apps">
-					<img class="h-full" alt="wombat" src={Icon} />
+				<a class={$page.url.pathname === '/logged/apps' ? 'active pl-10 overflow-hidden' : 'pl-10 overflow-hidden'} href="/logged/apps">
+						<img class="h-10 absolute -left-2"  alt="wombat" src={Icon} />
+						Apps
 				</a>
 			</li>
-			<!-- <li>
-				<a class={$page.url.pathname === '/logged/apps' ? 'active' : ''} href="/logged/apps">Apps</a
-				>
-			</li> -->
+			
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 					>Services (ECS)</a

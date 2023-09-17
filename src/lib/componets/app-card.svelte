@@ -34,7 +34,7 @@
 					<StarIcon state={isFavourite(app)} />
 				</button>
 				<h5 class="inline text-base">
-					<a href={`/logged/apps/${app}`}>{app}</a>
+					<a class="text-primary hover:underline" href={`/logged/apps/${app}`}>{app}</a>
 				</h5>
 			</div>
 			{#if !details}
