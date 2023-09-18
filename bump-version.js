@@ -22,6 +22,9 @@ fs.writeFileSync(
 	cargoTomlPath,
 	cargoToml.substring(0, start) + `version = "${newVersion}"` + cargoToml.substring(end)
 );
+
 cp.exec(`git commit -a -m"Release v${newVersion}"`);
+cp.exec(`git tag v${newVersion}`);
 cp.exec(`git push origin v${newVersion}`);
+
 console.log(`Done`);
