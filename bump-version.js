@@ -23,6 +23,8 @@ fs.writeFileSync(
 	cargoToml.substring(0, start) + `version = "${newVersion}"` + cargoToml.substring(end)
 );
 
+cp.exec('npm install');
+cp.exec('cd src-tauri && cargo generate-lockfile && cd ..');
 cp.exec(`git commit -a -m"Release v${newVersion}"`);
 cp.exec(`git tag v${newVersion}`);
 cp.exec(`git push origin v${newVersion}`);

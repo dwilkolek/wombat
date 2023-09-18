@@ -1,6 +1,6 @@
 {
     "name": "wombat",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "scripts": {
         "dev": "vite dev",
         "build": "vite build",
@@ -10,8 +10,7 @@
         "lint": "prettier --plugin-search-dir . --check . && eslint .",
         "format": "prettier --plugin-search-dir . --write .",
         "tauri": "tauri",
-        "bump-version": "node bump-version.js",
-        "postbump-version": "npm install && cd src-tauri && cargo generate-lockfile"
+        "bump-version": "node bump-version.js"
     },
     "dependencies": {
         "@tauri-apps/api": "^1.4.0",
