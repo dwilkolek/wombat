@@ -1,6 +1,6 @@
 [package]
 name = "wombat"
-version = "1.0.9"
+version = "1.0.10"
 description = "Wombat - in combat"
 authors = ["dwilkolek@protonmail.com"]
 license = ""
