@@ -23,12 +23,15 @@
 	<div class="flex-none">
 		<ul class="menu menu-horizontal px-1">
 			<li>
-				<a class={$page.url.pathname === '/logged/apps' ? 'active pl-10 overflow-hidden' : 'pl-10 overflow-hidden'} href="/logged/apps">
-						<img class="h-10 absolute -left-2"  alt="wombat" src={Icon} />
-						Apps
+				<a
+					class={$page.url.pathname === '/logged/apps' ? 'active pl-10 relative' : 'pl-10 relative'}
+					href="/logged/apps"
+				>
+					<img class="h-10 absolute -left-2" alt="wombat" src={Icon} />
+					Apps
 				</a>
 			</li>
-			
+
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 					>Services (ECS)</a
