@@ -1,6 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::shared::{self, BError, Env};
+use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
@@ -11,7 +15,8 @@ use ec2::types::Filter;
 use log::info;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tracing_unwrap::{ResultExt, OptionExt};
+use tokio::sync::Mutex;
+use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
@@ -110,13 +115,18 @@ pub async fn ssm_client(profile: &str) -> ssm::Client {
     ssm::Client::new(&config)
 }
 
+pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
+    let config = aws_config::from_env().profile_name(profile).load().await;
+    cloudwatchlogs::Client::new(&config)
+}
+
 pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
     let filter = Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
         .build();
     let res = ec2.describe_instances().filters(filter).send().await;
-    
+
     let res = res.expect_or_log("Failed to get ec2 bastion instances");
     let res = res.reservations().unwrap_or_default();
     let res = res
@@ -422,7 +432,7 @@ impl EcsClient {
         }
         self.clusters.clone()
     }
-   
+
     pub async fn service_details(&mut self, service_arn: &str, refresh: bool) -> ServiceDetails {
         let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
         if refresh {
@@ -539,4 +549,112 @@ impl EcsClient {
         }
         result
     }
+}
+
+pub trait OnLogFound: Send {
+    fn notify(&self, log: String);
+}
+
+pub async fn find_logs(
+    client: cloudwatchlogs::Client,
+    env: Env,
+    app: String,
+    on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
+) -> Vec<String> {
+    let response = client
+        .describe_log_groups()
+        .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
+        .send()
+        .await;
+
+    let mut logs = vec![];
+    let response_data = response.unwrap();
+
+    let groups = response_data.log_groups().unwrap_or_default();
+
+    for group in groups {
+        let group_name = group.log_group_name().unwrap_or_default();
+        println!(" Group: {}", &group_name);
+        {
+            let mut stream_names = vec![];
+            let mut streams_marker = None;
+            let mut first_streams = true;
+            while first_streams || streams_marker.is_some() {
+                {
+                    first_streams = false;
+                    let response2 = client
+                        .describe_log_streams()
+                        .set_log_group_name(Some(group_name.to_owned()))
+                        // .set_log_stream_name_prefix(Some(format!("web/{}/", app).to_owned()))
+                        // .set_descending(Some(true))
+                        .set_next_token(streams_marker)
+                        .order_by(cloudwatchlogs::types::OrderBy::LastEventTime)
+                        .send()
+                        .await;
+
+                    let response2_data = response2.unwrap();
+
+                    streams_marker = response2_data.next_token().map(|m| m.to_owned());
+
+                    let streams = response2_data.log_streams.unwrap_or_default();
+
+                    for stream in streams {
+                        let event = stream.log_stream_name.unwrap_or_default();
+                        if event.starts_with(&format!("web/{}/", &app)) {
+                            stream_names.push(event.to_owned());
+                            println!("\t Stream: {}", event);
+                        }
+                    }
+                    if (stream_names.len() > 2) {
+                        streams_marker = None;
+                    }
+                }
+            }
+            let mut marker = None;
+            let mut first = true;
+            let streamsOpt = if stream_names.len() > 0 {
+                Some(stream_names)
+            } else {
+                None
+            };
+            while (marker.as_ref().is_some() == true || first) {
+                first = false;
+                let logs_response = client
+                    .filter_log_events()
+                    .set_log_group_name(Some(group_name.to_owned()))
+                    // .set_log_stream_name_prefix(Some(format!("web/{}/", app).to_owned()))
+                    .set_log_stream_names(streamsOpt.clone())
+                    .set_next_token(marker)
+                    // .set_filter_pattern(Some(String::from(
+                    //     "{ $.app = \"ROME\" && $.level = \"ERROR\" }",
+                    // )))
+                    .set_start_time(Some(
+                        NaiveDateTime::parse_from_str("2023-09-18 20:02:21", "%Y-%m-%d %H:%M:%S")
+                            .unwrap()
+                            .timestamp_millis(),
+                    ))
+                    .set_end_time(Some(
+                        NaiveDateTime::parse_from_str("2023-09-19 22:02:21", "%Y-%m-%d %H:%M:%S")
+                            .unwrap()
+                            .timestamp_millis(),
+                    ))
+                    .send()
+                    .await;
+                let log_response_data = logs_response.unwrap();
+                marker = log_response_data.next_token().map(|m| m.to_owned());
+                let events = log_response_data.events.unwrap_or_default();
+                println!("LOGS: ");
+                for event in events {
+                    on_log_found
+                        .lock()
+                        .await
+                        .notify(event.message().unwrap_or_default().to_owned());
+                    logs.push(event.message().unwrap_or_default().to_owned());
+                }
+            }
+        }
+    }
+
+    println!("--------");
+    return logs;
 }
