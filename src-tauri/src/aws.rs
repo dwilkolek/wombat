@@ -560,14 +560,23 @@ pub async fn find_logs(
     env: Env,
     app: String,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
-) -> Vec<String> {
+) {
+    let start_date = NaiveDateTime::parse_from_str("2023-09-17 00:00:00", "%Y-%m-%d %H:%M:%S")
+        .unwrap()
+        .timestamp_millis();
+
+    let end_date = NaiveDateTime::parse_from_str("2023-09-21 23:59:59", "%Y-%m-%d %H:%M:%S")
+        .unwrap()
+        .timestamp_millis();
+
+    let mut logs = vec![];
+
     let response = client
         .describe_log_groups()
         .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
         .send()
         .await;
 
-    let mut logs = vec![];
     let response_data = response.unwrap();
 
     let groups = response_data.log_groups().unwrap_or_default();
@@ -579,16 +588,16 @@ pub async fn find_logs(
             let mut stream_names = vec![];
             let mut streams_marker = None;
             let mut first_streams = true;
+            println!("Looking for {}", format!("web/{}/", app));
             while first_streams || streams_marker.is_some() {
                 {
                     first_streams = false;
                     let response2 = client
                         .describe_log_streams()
                         .set_log_group_name(Some(group_name.to_owned()))
-                        // .set_log_stream_name_prefix(Some(format!("web/{}/", app).to_owned()))
-                        // .set_descending(Some(true))
                         .set_next_token(streams_marker)
                         .order_by(cloudwatchlogs::types::OrderBy::LastEventTime)
+                        .descending(true)
                         .send()
                         .await;
 
@@ -597,47 +606,47 @@ pub async fn find_logs(
                     streams_marker = response2_data.next_token().map(|m| m.to_owned());
 
                     let streams = response2_data.log_streams.unwrap_or_default();
-
+                    let mut is_over_time = false;
                     for stream in streams {
-                        let event = stream.log_stream_name.unwrap_or_default();
-                        if event.starts_with(&format!("web/{}/", &app)) {
-                            stream_names.push(event.to_owned());
-                            println!("\t Stream: {}", event);
+                        // println!("\t Stream: {:?}", &stream);
+                        let overlap = stream
+                            .first_event_timestamp
+                            .is_some_and(|ts| ts <= end_date)
+                            && stream
+                                .last_event_timestamp
+                                .is_some_and(|ts| ts >= start_date);
+                        is_over_time = !overlap;
+                        let stream_name = stream.log_stream_name.unwrap_or_default();
+
+                        if stream_name.starts_with(&format!("web/{}/", &app)) {
+                            stream_names.push(stream_name.to_owned());
                         }
                     }
-                    if (stream_names.len() > 2) {
+
+                    if stream_names.len() > 100 || is_over_time {
                         streams_marker = None;
                     }
                 }
             }
+            
             let mut marker = None;
             let mut first = true;
-            let streamsOpt = if stream_names.len() > 0 {
-                Some(stream_names)
-            } else {
-                None
-            };
-            while (marker.as_ref().is_some() == true || first) {
+            if stream_names.is_empty() {
+                return ();
+            }
+            
+            while marker.as_ref().is_some() == true || first {
                 first = false;
                 let logs_response = client
                     .filter_log_events()
                     .set_log_group_name(Some(group_name.to_owned()))
-                    // .set_log_stream_name_prefix(Some(format!("web/{}/", app).to_owned()))
-                    .set_log_stream_names(streamsOpt.clone())
+                    .set_log_stream_names(Some(stream_names.clone()))
                     .set_next_token(marker)
-                    // .set_filter_pattern(Some(String::from(
-                    //     "{ $.app = \"ROME\" && $.level = \"ERROR\" }",
-                    // )))
-                    .set_start_time(Some(
-                        NaiveDateTime::parse_from_str("2023-09-18 20:02:21", "%Y-%m-%d %H:%M:%S")
-                            .unwrap()
-                            .timestamp_millis(),
-                    ))
-                    .set_end_time(Some(
-                        NaiveDateTime::parse_from_str("2023-09-19 22:02:21", "%Y-%m-%d %H:%M:%S")
-                            .unwrap()
-                            .timestamp_millis(),
-                    ))
+                    .set_filter_pattern(Some(String::from(
+                        "{ $.level = \"ERROR\" }",
+                    )))
+                    .set_start_time(Some(start_date))
+                    .set_end_time(Some(end_date))
                     .send()
                     .await;
                 let log_response_data = logs_response.unwrap();
@@ -656,5 +665,4 @@ pub async fn find_logs(
     }
 
     println!("--------");
-    return logs;
 }
