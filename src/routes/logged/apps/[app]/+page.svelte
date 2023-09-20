@@ -1,5 +1,5 @@
 <script lang="ts">
-	import EnvCard from '$lib/componets/env-card.svelte';
+	import AppEnvCard from '$lib/componets/app-env-card.svelte';
 	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { serviceDetailStore } from '$lib/stores/service-details-store';
 	import { userStore } from '$lib/stores/user-store';
@@ -37,10 +37,10 @@
 {#if !details}
 	<span class="loading loading-dots loading-lg" />
 {/if}
-<div class="flex flex-row flex-wrap">
+<div class="flex flex-col">
 	{#if details}
 		{#each [...details.envs] as [env]}
-			<EnvCard app={data.app} {env} />
+			<AppEnvCard app={data.app} {env} />
 		{/each}
 	{/if}
 </div>
