@@ -422,13 +422,16 @@ impl aws::OnLogFound for WindowNotifier {
 async fn find_logs(
     app: String,
     env: Env,
+    start: i64,
+    end: i64,
+    filter: String,
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
     ecs_state: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<(), BError> {
-    println!("FIND LOGS: {} {}", app, env);
+    // println!("FIND LOGS: {} {} {} {} {}", app, env, start, end, filter);
     let app_ctx = app_state.0.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
@@ -441,6 +444,9 @@ async fn find_logs(
         cloudwatchlogs_client(profile).await,
         env,
         app,
+        start,
+        end,
+        filter,
         notifier.clone(),
     )
     .await;

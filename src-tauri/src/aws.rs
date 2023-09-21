@@ -559,16 +559,12 @@ pub async fn find_logs(
     client: cloudwatchlogs::Client,
     env: Env,
     app: String,
+    start_date: i64,
+    end_date: i64,
+    filter: String,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
 ) {
-    let start_date = NaiveDateTime::parse_from_str("2023-09-17 00:00:00", "%Y-%m-%d %H:%M:%S")
-        .unwrap()
-        .timestamp_millis();
-
-    let end_date = NaiveDateTime::parse_from_str("2023-09-21 23:59:59", "%Y-%m-%d %H:%M:%S")
-        .unwrap()
-        .timestamp_millis();
-
+   
     let mut logs = vec![];
 
     let response = client
@@ -588,7 +584,7 @@ pub async fn find_logs(
             let mut stream_names = vec![];
             let mut streams_marker = None;
             let mut first_streams = true;
-            println!("Looking for {}", format!("web/{}/", app));
+            println!("Looking for {} in {}", &filter, format!("web/{}/", app));
             while first_streams || streams_marker.is_some() {
                 {
                     first_streams = false;
@@ -628,13 +624,13 @@ pub async fn find_logs(
                     }
                 }
             }
-            
+
             let mut marker = None;
             let mut first = true;
             if stream_names.is_empty() {
                 return ();
             }
-            
+
             while marker.as_ref().is_some() == true || first {
                 first = false;
                 let logs_response = client
@@ -642,9 +638,7 @@ pub async fn find_logs(
                     .set_log_group_name(Some(group_name.to_owned()))
                     .set_log_stream_names(Some(stream_names.clone()))
                     .set_next_token(marker)
-                    .set_filter_pattern(Some(String::from(
-                        "{ $.level = \"ERROR\" }",
-                    )))
+                    .set_filter_pattern(Some(filter.clone()))
                     .set_start_time(Some(start_date))
                     .set_end_time(Some(end_date))
                     .send()

@@ -34,8 +34,8 @@ const config = {
 				'/logged/config',
 				'/logged/ecs',
 				'/logged/rds',
+				'/logged/logs',
 				'/logged/apps/[app]',
-				'/logged/apps/[app]/[env]'
 			]
 		}
 	}
