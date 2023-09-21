@@ -15,7 +15,7 @@
 		<div class="card card-compact w-full bg-base-100 shadow-xl">
 			<div class="card-body">
 				<div class="card-title flex flex-row gap-2 items-center text-md">
-					<a href={`/logged/apps/${app}/${env}`}>{env}</a>
+					{env}
 				</div>
 				<div class="flex flex-col gap-2 text-md">
 					<div class="">

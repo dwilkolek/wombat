@@ -6,8 +6,8 @@
 	import { open } from '@tauri-apps/api/shell';
 	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { clusterStore } from '$lib/stores/cluster-store';
-	import { ask } from '@tauri-apps/api/dialog';
 	import { serviceStore } from '$lib/stores/service-store';
+	import { ask } from '@tauri-apps/api/dialog';
 
 	let arnFilter = '';
 	$: user = $userStore;
