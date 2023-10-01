@@ -173,13 +173,13 @@
 					{#await services then services}
 						<option value={undefined}> -- favorite -- </option>
 						{#each services[0] as service}
-							<option value={service} selected={$selectedService?.name === service.name}
+							<option value={service} selected={$selectedService?.arn === service.arn}
 								>{service.name}</option
 							>
 						{/each}
 						<option value={undefined}> -- rest -- </option>
 						{#each services[1] as service}
-							<option value={service} selected={$selectedService?.name === service.name}
+							<option value={service} selected={$selectedService?.arn === service.arn}
 								>{service.name}</option
 							>
 						{/each}
@@ -223,7 +223,9 @@
 			/>
 			<button
 				class="btn btn-active btn-primary"
-				disabled={!$selectedService || isLookingForLogs}
+				disabled={!$selectedService ||
+					$selectedService?.env !== $activeCluser.env ||
+					isLookingForLogs}
 				on:click={() => {
 					isLookingForLogs = true;
 					searchError = undefined;
@@ -231,7 +233,7 @@
 					selectedLog.set(undefined);
 					invoke('find_logs', {
 						app: $selectedService?.name,
-						env: $selectedService?.env,
+						env: $activeCluser?.env,
 						start: $startDate.getTime(),
 						end: $endDate.getTime(),
 						filter: $filterString
@@ -389,7 +391,7 @@
 						stroke="currentColor"
 						class="w-6 h-6"
 					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
 					</svg>
 				</button>
 			{/if}
@@ -403,7 +405,7 @@
 						stroke="currentColor"
 						class="w-6 h-6"
 					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
 					</svg>
 				</button>
 			{/if}
