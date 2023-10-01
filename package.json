@@ -14,7 +14,9 @@
     },
     "dependencies": {
         "@tauri-apps/api": "^1.4.0",
-        "daisyui": "^3.2.1"
+        "@zerodevx/svelte-json-view": "^1.0.7",
+        "daisyui": "^3.2.1",
+        "date-fns": "^2.30.0"
     },
     "devDependencies": {
         "@fontsource/fira-mono": "^5.0.5",

@@ -413,8 +413,8 @@ struct WindowNotifier {
 }
 
 impl aws::OnLogFound for WindowNotifier {
-    fn notify(&self, log: String) {
-        self.window.emit("new-log-found", log);
+    fn notify(&self, log: aws::LogEntry) {
+        let _ = self.window.emit("new-log-found", log);
     }
 }
 
@@ -427,11 +427,9 @@ async fn find_logs(
     filter: String,
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
-    ecs_state: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_config: tauri::State<'_, UserConfigState>,
-) -> Result<(), BError> {
-    // println!("FIND LOGS: {} {} {} {} {}", app, env, start, end, filter);
+) -> Result<usize, BError> {
     let app_ctx = app_state.0.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
     let login_check =
@@ -440,7 +438,8 @@ async fn find_logs(
         return Err(login_check.expect_err("It supposed to be err"));
     }
     let notifier = Arc::new(Mutex::new(WindowNotifier { window }));
-    aws::find_logs(
+    let action = Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
+    let result = aws::find_logs(
         cloudwatchlogs_client(profile).await,
         env,
         app,
@@ -450,8 +449,29 @@ async fn find_logs(
         notifier.clone(),
     )
     .await;
-
-    Ok(())
+    match &result {
+        Ok(cnt) => {
+            ingest_log(
+                &axiom,
+                &user_config.0.lock().await.id,
+                action,
+                None,
+                Some(*cnt),
+            )
+            .await
+        }
+        Err(err) => {
+            ingest_log(
+                &axiom,
+                &user_config.0.lock().await.id,
+                action,
+                Some(err.message.to_owned()),
+                None,
+            )
+            .await
+        }
+    }
+    return result;
 }
 
 #[tauri::command]
@@ -1126,6 +1146,7 @@ enum Action {
     SetPrefferedEnvs(Vec<Env>),
     Discover(String),
     Logout(String),
+    SearchLogs(String, Env, String, i64),
 }
 
 async fn check_login_and_trigger(

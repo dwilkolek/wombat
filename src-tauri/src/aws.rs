@@ -15,7 +15,6 @@ use ec2::types::Filter;
 use log::info;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +82,14 @@ pub struct ServiceDetails {
     pub version: String,
     pub cluster_arn: String,
     pub env: Env,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub log_stream_name: String,
+    pub timestamp: i64,
+    pub ingestion_time: i64,
+    pub message: String,
 }
 
 pub async fn is_logged(ecs: &ecs::Client) -> bool {
@@ -552,7 +559,7 @@ impl EcsClient {
 }
 
 pub trait OnLogFound: Send {
-    fn notify(&self, log: String);
+    fn notify(&self, log: LogEntry);
 }
 
 pub async fn find_logs(
@@ -563,10 +570,7 @@ pub async fn find_logs(
     end_date: i64,
     filter: String,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
-) {
-   
-    let mut logs = vec![];
-
+) -> Result<usize, BError> {
     let response = client
         .describe_log_groups()
         .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
@@ -576,15 +580,15 @@ pub async fn find_logs(
     let response_data = response.unwrap();
 
     let groups = response_data.log_groups().unwrap_or_default();
-
+    let mut log_count: usize = 0;
     for group in groups {
         let group_name = group.log_group_name().unwrap_or_default();
-        println!(" Group: {}", &group_name);
+        info!("Group: {}", &group_name);
         {
             let mut stream_names = vec![];
             let mut streams_marker = None;
             let mut first_streams = true;
-            println!("Looking for {} in {}", &filter, format!("web/{}/", app));
+            info!("Looking for {} in {}", &filter, format!("web/{}/", app));
             while first_streams || streams_marker.is_some() {
                 {
                     first_streams = false;
@@ -597,6 +601,12 @@ pub async fn find_logs(
                         .send()
                         .await;
 
+                    if response2.is_err() {
+                        return Result::Err(BError {
+                            message: response2.unwrap_err().to_string(),
+                            command: "find_logs".to_owned(),
+                        });
+                    }
                     let response2_data = response2.unwrap();
 
                     streams_marker = response2_data.next_token().map(|m| m.to_owned());
@@ -604,7 +614,6 @@ pub async fn find_logs(
                     let streams = response2_data.log_streams.unwrap_or_default();
                     let mut is_over_time = false;
                     for stream in streams {
-                        // println!("\t Stream: {:?}", &stream);
                         let overlap = stream
                             .first_event_timestamp
                             .is_some_and(|ts| ts <= end_date)
@@ -628,7 +637,7 @@ pub async fn find_logs(
             let mut marker = None;
             let mut first = true;
             if stream_names.is_empty() {
-                return ();
+                return Result::Ok(0);
             }
 
             while marker.as_ref().is_some() == true || first {
@@ -643,20 +652,37 @@ pub async fn find_logs(
                     .set_end_time(Some(end_date))
                     .send()
                     .await;
+
+                if logs_response.is_err() {
+                    return Result::Err(BError {
+                        message: logs_response
+                            .unwrap_err()
+                            .into_service_error()
+                            .meta()
+                            .message()
+                            .unwrap_or("")
+                            .to_owned(),
+                        command: "find_logs".to_owned(),
+                    });
+                }
                 let log_response_data = logs_response.unwrap();
+
                 marker = log_response_data.next_token().map(|m| m.to_owned());
                 let events = log_response_data.events.unwrap_or_default();
-                println!("LOGS: ");
+                info!("LOGS Found: {}", &events.len());
+                log_count = log_count + events.len();
+                let notifier = on_log_found.lock().await;
                 for event in events {
-                    on_log_found
-                        .lock()
-                        .await
-                        .notify(event.message().unwrap_or_default().to_owned());
-                    logs.push(event.message().unwrap_or_default().to_owned());
+                    notifier.notify(LogEntry {
+                        log_stream_name: event.log_stream_name.unwrap_or_default(),
+                        timestamp: event.timestamp.unwrap_or_default(),
+                        ingestion_time: event.ingestion_time.unwrap_or_default(),
+                        message: event.message.unwrap_or_default().to_owned(),
+                    });
                 }
             }
         }
     }
-
-    println!("--------");
+    info!("LOGS Done");
+    return Result::Ok(log_count);
 }
