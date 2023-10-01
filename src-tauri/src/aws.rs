@@ -613,26 +613,31 @@ pub async fn find_logs(
 
                     let streams = response2_data.log_streams.unwrap_or_default();
                     let mut is_over_time = false;
+                    let mut found_matching_stream = false;
+
                     for stream in streams {
-                        let overlap = stream
-                            .first_event_timestamp
-                            .is_some_and(|ts| ts <= end_date)
-                            && stream
-                                .last_event_timestamp
-                                .is_some_and(|ts| ts >= start_date);
-                        is_over_time = !overlap;
                         let stream_name = stream.log_stream_name.unwrap_or_default();
 
                         if stream_name.starts_with(&format!("web/{}/", &app)) {
+                            let overlap = stream
+                                .first_event_timestamp
+                                .is_some_and(|ts| ts <= end_date)
+                                && stream
+                                    .last_event_timestamp
+                                    .is_some_and(|ts| ts >= start_date);
                             stream_names.push(stream_name.to_owned());
+                            is_over_time = !overlap;
+                            found_matching_stream = true
                         }
                     }
 
-                    if stream_names.len() > 100 || is_over_time {
+                    if stream_names.len() > 100 || (is_over_time && found_matching_stream) {
                         streams_marker = None;
                     }
                 }
             }
+
+            info!("Found streams {:?}", &stream_names);
 
             let mut marker = None;
             let mut first = true;
