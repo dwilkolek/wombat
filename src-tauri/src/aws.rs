@@ -560,6 +560,8 @@ impl EcsClient {
 
 pub trait OnLogFound: Send {
     fn notify(&self, log: LogEntry);
+    fn success(&self);
+    fn error(&self, msg: String);
 }
 
 pub async fn find_logs(
@@ -602,8 +604,13 @@ pub async fn find_logs(
                         .await;
 
                     if response2.is_err() {
+                        let message = response2.unwrap_err().to_string();
+
+                        let notifier = on_log_found.lock().await;
+                        notifier.error(format!("Error: {}", &message).to_owned());
+
                         return Result::Err(BError {
-                            message: response2.unwrap_err().to_string(),
+                            message: message,
                             command: "find_logs".to_owned(),
                         });
                     }
@@ -642,6 +649,8 @@ pub async fn find_logs(
             let mut marker = None;
             let mut first = true;
             if stream_names.is_empty() {
+                let notifier = on_log_found.lock().await;
+                notifier.success();
                 return Result::Ok(0);
             }
 
@@ -659,14 +668,19 @@ pub async fn find_logs(
                     .await;
 
                 if logs_response.is_err() {
+                    let message = logs_response
+                        .unwrap_err()
+                        .into_service_error()
+                        .meta()
+                        .message()
+                        .unwrap_or("")
+                        .to_owned();
+
+                    let notifier = on_log_found.lock().await;
+                    notifier.error(format!("Error: {}", &message).to_owned());
+
                     return Result::Err(BError {
-                        message: logs_response
-                            .unwrap_err()
-                            .into_service_error()
-                            .meta()
-                            .message()
-                            .unwrap_or("")
-                            .to_owned(),
+                        message: message,
                         command: "find_logs".to_owned(),
                     });
                 }
@@ -689,5 +703,8 @@ pub async fn find_logs(
         }
     }
     info!("LOGS Done");
+
+    let notifier = on_log_found.lock().await;
+    notifier.success();
     return Result::Ok(log_count);
 }

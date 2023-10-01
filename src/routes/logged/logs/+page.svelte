@@ -8,6 +8,7 @@
 	import { writable } from 'svelte/store';
 	import { listen } from '@tauri-apps/api/event';
 	import { writeText } from '@tauri-apps/api/clipboard';
+	import { beforeNavigate } from '$app/navigation';
 
 	$: activeCluser = clusterStore.activeCluser;
 	$: tracked_names = $userStore.tracked_names;
@@ -60,6 +61,8 @@
 	};
 	let isLookingForLogs = false;
 	let searchError: string | undefined = undefined;
+
+	let searchStatus: 'success' | 'error' | 'aborted' | undefined = undefined;
 
 	const logs = writable<UiLogEntry[]>([]);
 	function logStyle(level: LogLevel): LogStyle {
@@ -150,6 +153,19 @@
 		}
 	}
 	listen<LogEntry>('new-log-found', (event) => processLogs(event.payload));
+
+	listen('find-logs-success', () => {
+		isLookingForLogs = false;
+		searchStatus = 'success';
+	});
+	listen<string>('find-logs-error', (event) => {
+		isLookingForLogs = false;
+		searchStatus = 'error';
+		searchError = event.payload;
+	});
+	beforeNavigate(async ({ from, to, type, cancel }) => {
+		invoke('abort_find_logs');
+	});
 </script>
 
 <svelte:head>
@@ -221,49 +237,70 @@
 				class="input input-bordered grow"
 				bind:value={$filterString}
 			/>
-			<button
-				class="btn btn-active btn-primary"
-				disabled={!$selectedService ||
-					$selectedService?.env !== $activeCluser.env ||
-					isLookingForLogs}
-				on:click={() => {
-					isLookingForLogs = true;
-					searchError = undefined;
-					logs.set([]);
-					selectedLog.set(undefined);
-					invoke('find_logs', {
-						app: $selectedService?.name,
-						env: $activeCluser?.env,
-						start: $startDate.getTime(),
-						end: $endDate.getTime(),
-						filter: $filterString
-					})
-						.catch((e) => {
-							searchError = e.message;
-							isLookingForLogs = false;
-						})
-						.then((res) => {
-							isLookingForLogs = false;
+			{#if !isLookingForLogs}
+				<button
+					class="btn btn-active btn-primary"
+					disabled={!$selectedService || $selectedService?.env !== $activeCluser.env}
+					on:click={() => {
+						isLookingForLogs = true;
+						searchError = undefined;
+						logs.set([]);
+						selectedLog.set(undefined);
+						searchStatus = undefined;
+						invoke('find_logs', {
+							app: $selectedService?.name,
+							env: $activeCluser?.env,
+							start: $startDate.getTime(),
+							end: $endDate.getTime(),
+							filter: $filterString
 						});
-				}}
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-6 h-6"
+					}}
 				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-					/>
-				</svg>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+						/>
+					</svg>
 
-				Search!</button
-			>
+					Search!</button
+				>
+			{/if}
+			{#if isLookingForLogs}
+				<button
+					class="btn btn-active btn-warning"
+					on:click={() => {
+						invoke('abort_find_logs');
+						isLookingForLogs = false;
+						searchStatus = 'aborted';
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M15.75 5.25v13.5m-7.5-13.5v13.5"
+						/>
+					</svg>
+
+					Abort</button
+				>
+			{/if}
 		</div>
 	</div>
 	<div class="flex h-full flex-col gap-2">
@@ -342,7 +379,10 @@
 	{#if isLookingForLogs}<progress class={`progress w-full ${searchError ? 'progress-error' : ''}`}
 		></progress>{/if}
 	{#if !isLookingForLogs}<progress
-			class={`progress w-full ${searchError ? 'progress-error' : ''}`}
+			class={`progress w-full 
+				${searchStatus == 'aborted' ? 'progress-warning' : ''} 
+				${searchStatus == 'success' ? 'progress-success' : ''} 
+				${searchStatus == 'error' ? 'progress-error' : ''}`}
 			value="100"
 			max="100"
 		></progress>{/if}
