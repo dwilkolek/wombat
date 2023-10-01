@@ -1,15 +1,24 @@
 <script lang="ts">
 	import { userStore } from '$lib/stores/user-store';
-
+	import { JsonView } from '@zerodevx/svelte-json-view';
+	import { endOfDay, format, startOfDay, sub } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
 	import { invoke } from '@tauri-apps/api';
 	import { writable } from 'svelte/store';
 	import { listen } from '@tauri-apps/api/event';
+	import { writeText } from '@tauri-apps/api/clipboard';
 
 	$: activeCluser = clusterStore.activeCluser;
-
-	$: services = serviceStore.getServices($activeCluser);
+	$: tracked_names = $userStore.tracked_names;
+	$: services = serviceStore.getServices($activeCluser).then((services) => [
+		services.filter((a) => {
+			return tracked_names.includes(a.name);
+		}),
+		services.filter((a) => {
+			return !tracked_names.includes(a.name);
+		})
+	]);
 
 	$: selectedService = serviceStore.selectedService;
 
@@ -24,27 +33,117 @@
 	const withZeros = (v: number) => {
 		return v < 10 ? `0${v}` : v;
 	};
+	const selectedLog = writable<any>(undefined);
 	const startDate = writable<Date>(new Date(new Date().getTime() - 24 * 60 * 60 * 1000));
 	const endDate = writable<Date>(new Date());
-	const filterString = writable<String>('{$.level = "ERROR"}');
+	const filterString = writable<String>('');
+	type LogEntry = {
+		log_stream_name: string;
+		timestamp: number;
+		ingestion_time: number;
+		message: string;
+	};
+	type LogStyle = {
+		bg: string;
+		active: string;
+		hover: string;
+	};
+	type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'TRACE' | 'DEBUG' | 'UNKNOWN';
+	type UiLogEntry = {
+		id: number;
+		message: string;
+		level: LogLevel;
+		timestamp: number;
+		data: any;
+		style: LogStyle;
+	};
+	let isLookingForLogs = false;
+	let searchError: string | undefined = undefined;
 
-	const logs = writable<{ message: string }[]>([]);
-
-	listen<string>('new-log-found', (newLog) => {
-		let messageObj = JSON.parse(newLog.payload);
-		console.log(messageObj);
-		if (messageObj === newLog.payload) {
+	const logs = writable<UiLogEntry[]>([]);
+	function logStyle(level: LogLevel): LogStyle {
+		switch (level) {
+			case 'INFO':
+				return {
+					bg: 'bg-cyan-900',
+					hover: 'hover:bg-cyan-800',
+					active: '!bg-cyan-700'
+				};
+			case 'WARN':
+				return {
+					bg: 'bg-amber-900',
+					hover: 'hover:bg-amber-800',
+					active: '!bg-amber-700'
+				};
+			case 'ERROR':
+				return {
+					bg: 'bg-red-900',
+					hover: 'hover:bg-red-800',
+					active: '!bg-red-700'
+				};
+			case 'TRACE':
+				return {
+					bg: 'bg-fuchsia-900',
+					hover: 'hover:bg-fuchsia-800',
+					active: '!bg-fuchsia-700'
+				};
+			case 'DEBUG':
+				return {
+					bg: 'bg-emerald-900',
+					hover: 'hover:bg-emerald-800',
+					active: '!bg-emerald-700'
+				};
+			case 'UNKNOWN':
+				return {
+					bg: 'bg-gray-900',
+					hover: 'hover:bg-gray-800',
+					active: '!bg-gray-700'
+				};
+		}
+	}
+	listen<LogEntry>('new-log-found', (newLog) => {
+		console.log(newLog);
+		let isString;
+		try {
+			if (typeof newLog.payload.message == 'object') {
+				isString = false;
+			} else {
+				isString = true;
+				if (typeof JSON.parse(newLog.payload.message) === 'object') {
+					isString = false;
+				} else {
+					isString = true;
+				}
+			}
+		} catch (e) {
+			isString = true;
+		}
+		if (isString) {
+			const level = (newLog.payload.message.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ??
+				'UNKNOWN') as LogLevel;
 			logs.update((n) => [
 				...n,
 				{
-					message: newLog.payload
+					id: n.length,
+					timestamp: newLog.payload.timestamp,
+					level,
+					message: newLog.payload.message,
+					data: { message: newLog.payload.message }	,
+					style: logStyle(level)
 				}
 			]);
 		} else {
+			const logData = JSON.parse(newLog.payload.message);
+			const level = logData?.level?.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ?? 'UNKNOWN';
 			logs.update((n) => [
 				...n,
 				{
-					message: messageObj.message
+					id: n.length,
+					timestamp: newLog.payload.timestamp,
+					level,
+					message: logData.message,
+					data: logData,
+					style: logStyle(level)
 				}
 			]);
 		}
@@ -55,7 +154,8 @@
 	<title>Logs</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="flex gap-2 content-end">
+
+<div class="flex gap-8 content-end flex-col-reverse lg:flex-row">
 	<div class="flex flex-col gap-2">
 		<div class="flex gap-2">
 			<div>
@@ -69,8 +169,17 @@
 			<div>
 				<select class="select select-bordered" bind:value={$selectedService}>
 					{#await services then services}
-						{#each services as service}
-							<option value={service}>{service.name}</option>
+						<option value={undefined}> -- favorite -- </option>
+						{#each services[0] as service}
+							<option value={service} selected={$selectedService?.name === service.name}
+								>{service.name}</option
+							>
+						{/each}
+						<option value={undefined}> -- rest -- </option>
+						{#each services[1] as service}
+							<option value={service} selected={$selectedService?.name === service.name}
+								>{service.name}</option
+							>
 						{/each}
 					{/await}
 				</select>
@@ -82,7 +191,7 @@
 					placeholder="Start date"
 					class="input input-bordered w-full max-w-xs"
 					on:change={(event) => {
-						startDate.set(new Date(event.currentTarget.value))
+						startDate.set(new Date(event.currentTarget.value));
 					}}
 					value={toLocalDateStr($startDate)}
 				/>
@@ -93,41 +202,205 @@
 					placeholder="End date"
 					class="input input-bordered w-full max-w-xs"
 					on:change={(event) => {
-						endDate.set(new Date(event.currentTarget.value))
+						endDate.set(new Date(event.currentTarget.value));
 					}}
 					value={toLocalDateStr($endDate)}
 				/>
 			</div>
 		</div>
-		<div class="w-full">
+		<div class="w-full flex gap-2">
 			<input
 				type="text"
 				placeholder="Filter"
-				class="input input-bordered w-full"
+				class="input input-bordered grow"
 				bind:value={$filterString}
 			/>
+			<button
+				class="btn btn-active btn-primary"
+				disabled={!$selectedService || isLookingForLogs}
+				on:click={() => {
+					isLookingForLogs = true;
+					searchError = undefined;
+					logs.set([]);
+					selectedLog.set(undefined)
+					invoke('find_logs', {
+						app: $selectedService?.name,
+						env: $selectedService?.env,
+						start: $startDate.getTime(),
+						end: $endDate.getTime(),
+						filter: $filterString
+					})
+						.catch((e) => {
+							searchError = e.message;
+							isLookingForLogs = false;
+						})
+						.then((res) => {
+							isLookingForLogs = false;
+						});
+				}}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke-width="1.5"
+					stroke="currentColor"
+					class="w-6 h-6"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+					/>
+				</svg>
+
+				Search!</button
+			>
 		</div>
 	</div>
-	<div class="flex items-center h-full self-end">
-		<button
-			class="btn btn-active btn-primary"
-			disabled={!$selectedService}
-			on:click={() => {
-				logs.set([]);
-				invoke('find_logs', {
-					app: $selectedService?.name,
-					env: $selectedService?.env,
-					start: $startDate.getTime(),
-					end: $endDate.getTime(),
-					filter: $filterString
-				});
-			}}>Search!</button
-		>
+	<div class="flex h-full flex-col gap-2">
+		<div class="flex flex-wrap gap-2">
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(sub(new Date(), { minutes: 5 }));
+					endDate.set(new Date());
+				}}>Last 5m</button
+			>
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(sub(new Date(), { minutes: 15 }));
+					endDate.set(new Date());
+				}}>Last 15m</button
+			>
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(sub(new Date(), { minutes: 30 }));
+					endDate.set(new Date());
+				}}>Last 30m</button
+			>
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 1 }));
+					endDate.set(new Date());
+				}}>Last 1h</button
+			>
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 4 }));
+					endDate.set(new Date());
+				}}>Last 4h</button
+			>
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 24 }));
+					endDate.set(new Date());
+				}}>Last 24h</button
+			>
+			<button
+				class="btn btn-active btn-secondary btn-sm"
+				on:click={() => {
+					startDate.set(startOfDay(new Date()));
+					endDate.set(endOfDay(new Date()));
+				}}>Today</button
+			>
+		</div>
+		<div class="flex flex-wrap gap-2">
+			{#if $selectedService?.name == 'rome'}
+				<button
+					class="btn btn-active btn-accent btn-sm"
+					on:click={() => {
+						filterString.set(`{ $.level = 'ERROR' }`);
+					}}>Only Errors</button
+				>
+			{/if}
+			{#if $selectedService?.name == 'rome'}
+				<button
+					class="btn btn-active btn-accent btn-sm"
+					on:click={() => {
+						const traceId = prompt('Trace id:');
+						filterString.set(`{ $.mdc.trace = "${traceId}" }`);
+					}}>By Trace</button
+				>
+			{/if}
+		</div>
 	</div>
-	
 </div>
-<div class="flex flex-col w-full">
-	{#each $logs as log}
-		<div class="grow">{JSON.stringify(log)}</div>
-	{/each}
+<div class="p-1 min-h-6">
+	{#if !!searchError}{searchError}{/if}
+	{#if isLookingForLogs}<progress class={`progress w-full ${searchError ? 'progress-error' : ''}`}
+		></progress>{/if}
+	{#if !isLookingForLogs}<progress
+			class={`progress w-full ${searchError ? 'progress-error' : ''}`}
+			value="100"
+			max="100"
+		></progress>{/if}
+</div>
+<div class="flex flex-row w-full gap-2">
+	<div class="overflow-auto max-h-[calc(100vh-210px)] w-full">
+		<table class="table table-xs w-full">
+			<thead>
+				<tr>
+					<th>Level</th>
+					<th>Timestamp</th>
+					<th>Message</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each $logs as log}
+					<tr
+						class={`text-white ${log.style.bg} ${log.style.hover} ${
+							$selectedLog === log.data ? log.style.active : ''
+						}`}
+					>
+						<td>{log.level}</td>
+						<td class="min-w-[200px] max-w-[200px]"
+							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
+						>
+						<td class="w-full">{log.message}</td>
+
+						<th>
+							<button class="cursor-pointer"
+								on:click={() => {
+									selectedLog.update((c) => (c === log.data ? undefined : log.data));
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="w-6 h-6"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+									/>
+								</svg>
+							</button>
+						</th>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+	{#if $selectedLog}
+		<div class="w-1/3 overflow-auto max-h-[calc(100vh-210px)] flex flex-col gap-2">
+			<button
+				class="btn btn-active btn-primary btn-sm"
+				on:click={async () => {
+					await writeText(JSON.stringify($selectedLog, null, 2));
+				}}>Copy raw json</button
+			>
+			<JsonView json={$selectedLog} />
+		</div>
+	{/if}
 </div>
