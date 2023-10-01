@@ -8,6 +8,7 @@
 
 - Proxy to RDS
 - Proxy to ECS (injected Origin/Host headers)
+- Searching through cloudwatch logs
 - All proxies have permanently assigned port
 - Tracking of favorite services
 - Each service is tracked separately - it requires you to manually favorite the same service per environment
