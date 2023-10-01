@@ -11,7 +11,7 @@
 </script>
 
 {#if envDetails}
-	<div class="w-1/2 p-2">
+	<div class="p-2">
 		<div class="card card-compact w-full bg-base-100 shadow-xl">
 			<div class="card-body">
 				<div class="card-title flex flex-row gap-2 items-center text-md">
