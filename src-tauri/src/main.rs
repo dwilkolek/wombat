@@ -439,21 +439,31 @@ async fn find_logs(
 ) -> Result<(), BError> {
     let app_ctx = app_state.0.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().to_owned();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, &profile, &axiom).await;
+
+    let user_id = user_config.0.lock().await.id.clone();
+
+    let login_check = check_login_and_trigger(&user_id, &profile, &axiom).await;
     if login_check.is_err() {
         return Err(login_check.expect_err("It supposed to be err"));
     }
+
     {
         let handler = &async_task_tracker.0.lock().await.search_log_handler;
         if let Some(handler) = handler {
+            ingest_log(
+                &axiom.0,
+                &user_id,
+                Action::AbortSearchLogs("new-search-request".to_owned()),
+                None,
+                None,
+            )
+            .await;
             handler.abort()
         }
     }
     {
         async_task_tracker.0.lock().await.search_log_handler = None;
     }
-    let user_id = user_config.0.lock().await.id.clone();
 
     ingest_log(
         &axiom.0,
@@ -479,7 +489,7 @@ async fn find_logs(
             notifier.clone(),
         )
         .await;
-        // let axiom = axiom.lock().await;
+
         match &result {
             Ok(cnt) => ingest_log(&axiom, &user_id, action, None, Some(*cnt)).await,
             Err(err) => {
@@ -493,12 +503,23 @@ async fn find_logs(
 
 #[tauri::command]
 async fn abort_find_logs(
+    reason: String,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<(), BError> {
-    info!("Aborting find logs");
+    info!("Attempt to abort find logs: {}", &reason);
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handler) = &tracker.search_log_handler {
-        handler.abort()
+        handler.abort();
+        ingest_log(
+            &axiom.0,
+            &user_config.0.lock().await.id,
+            Action::AbortSearchLogs(reason),
+            None,
+            None,
+        )
+        .await;
     }
     tracker.search_log_handler = None;
 
@@ -1182,6 +1203,7 @@ enum Action {
     Logout(String),
     StartSearchLogs(String, Env, String, i64),
     SearchLogs(String, Env, String, i64),
+    AbortSearchLogs(String),
 }
 
 async fn check_login_and_trigger(
@@ -1228,6 +1250,10 @@ async fn ingest_log(
     error_message: Option<String>,
     record_count: Option<usize>,
 ) {
+    info!(
+        "Ingesting log: {:?}, err: {:?}, record cound: {:?}",
+        &action, &error_message, &record_count
+    );
     if let Some(client) = client.lock().await.as_ref() {
         ingest_log_with_client(&client, user_id, action, error_message, record_count).await;
     }
