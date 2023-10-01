@@ -21,7 +21,7 @@
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between">
 	<div class="flex-none">
-		<ul class="menu menu-horizontal px-1">
+		<ul class="menu menu-horizontal px-1 gap-2">
 			<li>
 				<a
 					class={$page.url.pathname === '/logged/apps' ? 'active pl-10 relative' : 'pl-10 relative'}
@@ -38,8 +38,8 @@
 			</li>
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
-					>Services (ECS) </a
-				>
+					>Services (ECS)
+				</a>
 			</li>
 			<li>
 				<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"

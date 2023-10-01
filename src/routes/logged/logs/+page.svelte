@@ -164,7 +164,7 @@
 		searchError = event.payload;
 	});
 	beforeNavigate(async ({ from, to, type, cancel }) => {
-		invoke('abort_find_logs');
+		invoke('abort_find_logs', { reason: 'navigation' });
 	});
 </script>
 
@@ -278,7 +278,7 @@
 				<button
 					class="btn btn-active btn-warning"
 					on:click={() => {
-						invoke('abort_find_logs');
+						invoke('abort_find_logs', { reason: 'user-request' });
 						isLookingForLogs = false;
 						searchStatus = 'aborted';
 					}}
