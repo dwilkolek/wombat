@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api';
 
 const createServiceStore = () => {
 	const innerStore = writable(new Map<Cluster, EcsService[]>());
+	const selectedService = writable<EcsService | null>(null);
 	const getServices = async (cluster: Cluster): Promise<EcsService[]> => {
 		if (get(innerStore).has(cluster)) {
 			return get(innerStore).get(cluster)!;
@@ -16,7 +17,10 @@ const createServiceStore = () => {
 			return services;
 		}
 	};
-	return { ...innerStore, getServices };
+	const selectService = (service: EcsService) => {
+		selectedService.set(service)
+	}
+	return { ...innerStore,selectedService, getServices, selectService };
 };
 
 listen('cache-refreshed', () => {

@@ -1,6 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::shared::{self, BError, Env};
+use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
@@ -11,7 +15,7 @@ use ec2::types::Filter;
 use log::info;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tracing_unwrap::{ResultExt, OptionExt};
+use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
@@ -80,6 +84,14 @@ pub struct ServiceDetails {
     pub env: Env,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub log_stream_name: String,
+    pub timestamp: i64,
+    pub ingestion_time: i64,
+    pub message: String,
+}
+
 pub async fn is_logged(ecs: &ecs::Client) -> bool {
     let resp = ecs.list_clusters().send().await;
     return resp.is_ok();
@@ -110,13 +122,18 @@ pub async fn ssm_client(profile: &str) -> ssm::Client {
     ssm::Client::new(&config)
 }
 
+pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
+    let config = aws_config::from_env().profile_name(profile).load().await;
+    cloudwatchlogs::Client::new(&config)
+}
+
 pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
     let filter = Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
         .build();
     let res = ec2.describe_instances().filters(filter).send().await;
-    
+
     let res = res.expect_or_log("Failed to get ec2 bastion instances");
     let res = res.reservations().unwrap_or_default();
     let res = res
@@ -422,7 +439,7 @@ impl EcsClient {
         }
         self.clusters.clone()
     }
-   
+
     pub async fn service_details(&mut self, service_arn: &str, refresh: bool) -> ServiceDetails {
         let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
         if refresh {
@@ -539,4 +556,138 @@ impl EcsClient {
         }
         result
     }
+}
+
+pub trait OnLogFound: Send {
+    fn notify(&self, log: LogEntry);
+}
+
+pub async fn find_logs(
+    client: cloudwatchlogs::Client,
+    env: Env,
+    app: String,
+    start_date: i64,
+    end_date: i64,
+    filter: String,
+    on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
+) -> Result<usize, BError> {
+    let response = client
+        .describe_log_groups()
+        .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
+        .send()
+        .await;
+
+    let response_data = response.unwrap();
+
+    let groups = response_data.log_groups().unwrap_or_default();
+    let mut log_count: usize = 0;
+    for group in groups {
+        let group_name = group.log_group_name().unwrap_or_default();
+        info!("Group: {}", &group_name);
+        {
+            let mut stream_names = vec![];
+            let mut streams_marker = None;
+            let mut first_streams = true;
+            info!("Looking for {} in {}", &filter, format!("web/{}/", app));
+            while first_streams || streams_marker.is_some() {
+                {
+                    first_streams = false;
+                    let response2 = client
+                        .describe_log_streams()
+                        .set_log_group_name(Some(group_name.to_owned()))
+                        .set_next_token(streams_marker)
+                        .order_by(cloudwatchlogs::types::OrderBy::LastEventTime)
+                        .descending(true)
+                        .send()
+                        .await;
+
+                    if response2.is_err() {
+                        return Result::Err(BError {
+                            message: response2.unwrap_err().to_string(),
+                            command: "find_logs".to_owned(),
+                        });
+                    }
+                    let response2_data = response2.unwrap();
+
+                    streams_marker = response2_data.next_token().map(|m| m.to_owned());
+
+                    let streams = response2_data.log_streams.unwrap_or_default();
+                    let mut is_over_time = false;
+                    let mut found_matching_stream = false;
+
+                    for stream in streams {
+                        let stream_name = stream.log_stream_name.unwrap_or_default();
+
+                        if stream_name.starts_with(&format!("web/{}/", &app)) {
+                            let overlap = stream
+                                .first_event_timestamp
+                                .is_some_and(|ts| ts <= end_date)
+                                && stream
+                                    .last_event_timestamp
+                                    .is_some_and(|ts| ts >= start_date);
+                            stream_names.push(stream_name.to_owned());
+                            is_over_time = !overlap;
+                            found_matching_stream = true
+                        }
+                    }
+
+                    if stream_names.len() > 100 || (is_over_time && found_matching_stream) {
+                        streams_marker = None;
+                    }
+                }
+            }
+
+            info!("Found streams {:?}", &stream_names);
+
+            let mut marker = None;
+            let mut first = true;
+            if stream_names.is_empty() {
+                return Result::Ok(0);
+            }
+
+            while marker.as_ref().is_some() == true || first {
+                first = false;
+                let logs_response = client
+                    .filter_log_events()
+                    .set_log_group_name(Some(group_name.to_owned()))
+                    .set_log_stream_names(Some(stream_names.clone()))
+                    .set_next_token(marker)
+                    .set_filter_pattern(Some(filter.clone()))
+                    .set_start_time(Some(start_date))
+                    .set_end_time(Some(end_date))
+                    .send()
+                    .await;
+
+                if logs_response.is_err() {
+                    return Result::Err(BError {
+                        message: logs_response
+                            .unwrap_err()
+                            .into_service_error()
+                            .meta()
+                            .message()
+                            .unwrap_or("")
+                            .to_owned(),
+                        command: "find_logs".to_owned(),
+                    });
+                }
+                let log_response_data = logs_response.unwrap();
+
+                marker = log_response_data.next_token().map(|m| m.to_owned());
+                let events = log_response_data.events.unwrap_or_default();
+                info!("LOGS Found: {}", &events.len());
+                log_count = log_count + events.len();
+                let notifier = on_log_found.lock().await;
+                for event in events {
+                    notifier.notify(LogEntry {
+                        log_stream_name: event.log_stream_name.unwrap_or_default(),
+                        timestamp: event.timestamp.unwrap_or_default(),
+                        ingestion_time: event.ingestion_time.unwrap_or_default(),
+                        message: event.message.unwrap_or_default().to_owned(),
+                    });
+                }
+            }
+        }
+    }
+    info!("LOGS Done");
+    return Result::Ok(log_count);
 }

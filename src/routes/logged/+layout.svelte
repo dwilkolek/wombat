@@ -31,10 +31,14 @@
 					Apps
 				</a>
 			</li>
-
+			<li>
+				<a class={$page.url.pathname === '/logged/logs' ? 'active' : ''} href="/logged/logs"
+					>Logs 🧐</a
+				>
+			</li>
 			<li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
-					>Services (ECS)</a
+					>Services (ECS) </a
 				>
 			</li>
 			<li>

@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
+use aws::{cloudwatchlogs_client, Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
 use axiom_rs::Client;
 use log::{error, info, warn, LevelFilter};
 use regex::Regex;
@@ -8,7 +8,6 @@ use serde_json::json;
 use shared::{ecs_arn_to_name, rds_arn_to_name};
 use shared::{BError, Env};
 use shared_child::SharedChild;
-use tracing_unwrap::{ResultExt, OptionExt};
 use std::collections::HashSet;
 use std::env;
 use std::io::{BufRead, BufReader};
@@ -19,6 +18,7 @@ use std::{collections::HashMap, process::Command};
 use tauri::Window;
 use tauri_plugin_log::LogTarget;
 use tokio::sync::Mutex;
+use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 use warp::http::HeaderValue;
@@ -406,6 +406,72 @@ async fn logout(
         app_state.active_profile = None;
     }
     Ok(())
+}
+
+struct WindowNotifier {
+    window: Window,
+}
+
+impl aws::OnLogFound for WindowNotifier {
+    fn notify(&self, log: aws::LogEntry) {
+        let _ = self.window.emit("new-log-found", log);
+    }
+}
+
+#[tauri::command]
+async fn find_logs(
+    app: String,
+    env: Env,
+    start: i64,
+    end: i64,
+    filter: String,
+    window: Window,
+    app_state: tauri::State<'_, AppContextState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<usize, BError> {
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
+    let login_check =
+        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+    if login_check.is_err() {
+        return Err(login_check.expect_err("It supposed to be err"));
+    }
+    let notifier = Arc::new(Mutex::new(WindowNotifier { window }));
+    let action = Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
+    let result = aws::find_logs(
+        cloudwatchlogs_client(profile).await,
+        env,
+        app,
+        start,
+        end,
+        filter,
+        notifier.clone(),
+    )
+    .await;
+    match &result {
+        Ok(cnt) => {
+            ingest_log(
+                &axiom,
+                &user_config.0.lock().await.id,
+                action,
+                None,
+                Some(*cnt),
+            )
+            .await
+        }
+        Err(err) => {
+            ingest_log(
+                &axiom,
+                &user_config.0.lock().await.id,
+                action,
+                Some(err.message.to_owned()),
+                None,
+            )
+            .await
+        }
+    }
+    return result;
 }
 
 #[tauri::command]
@@ -1011,7 +1077,8 @@ async fn main() {
             discover,
             refresh_cache,
             credentials,
-            stop_job
+            stop_job,
+            find_logs
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1079,6 +1146,7 @@ enum Action {
     SetPrefferedEnvs(Vec<Env>),
     Discover(String),
     Logout(String),
+    SearchLogs(String, Env, String, i64),
 }
 
 async fn check_login_and_trigger(
