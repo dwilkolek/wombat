@@ -3,7 +3,7 @@
 ### Wombat presents view at AWS services. I created it to learn Tauri and Svelte... and make my life easier 😎
 
 ![Wombat homepage](https://github.com/dwilkolek/wombat/blob/main/docs/wombat-homepage.png?raw=true)
-
+![Wombat logs](https://github.com/dwilkolek/wombat/blob/main/docs/wombat-logs.png?raw=true)
 ## Features
 
 - Proxy to RDS
