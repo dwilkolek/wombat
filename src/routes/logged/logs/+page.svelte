@@ -267,67 +267,66 @@
 	<div class="flex h-full flex-col gap-2">
 		<div class="flex flex-wrap gap-2">
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(sub(new Date(), { minutes: 5 }));
 					endDate.set(new Date());
 				}}>Last 5m</button
 			>
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(sub(new Date(), { minutes: 15 }));
 					endDate.set(new Date());
 				}}>Last 15m</button
 			>
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(sub(new Date(), { minutes: 30 }));
 					endDate.set(new Date());
 				}}>Last 30m</button
 			>
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 1 }));
 					endDate.set(new Date());
 				}}>Last 1h</button
 			>
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 4 }));
 					endDate.set(new Date());
 				}}>Last 4h</button
 			>
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 24 }));
 					endDate.set(new Date());
 				}}>Last 24h</button
 			>
 			<button
-				class="btn btn-active btn-secondary btn-sm"
+				class="btn btn-active btn-accent btn-sm"
 				on:click={() => {
 					startDate.set(startOfDay(new Date()));
 					endDate.set(endOfDay(new Date()));
 				}}>Today</button
 			>
 		</div>
+		Ping me for custom search filter templates.
 		<div class="flex flex-wrap gap-2">
 			{#if $selectedService?.name == 'rome'}
 				<button
-					class="btn btn-active btn-accent btn-sm"
+					class="btn btn-active btn-secondary btn-sm"
 					on:click={() => {
 						filterString.set(`{ $.level = "ERROR" }`);
 					}}>Only Errors</button
 				>
-			{/if}
-			{#if $selectedService?.name == 'rome'}
 				<button
-					class="btn btn-active btn-accent btn-sm"
+					class="btn btn-active btn-secondary btn-sm"
 					on:click={() => {
 						filterString.set(`{ $.mdc.trace = "TRACE_ID_UUID" }`);
 					}}>By Trace</button
