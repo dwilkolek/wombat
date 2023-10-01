@@ -59,7 +59,7 @@ async fn favorite(
     let mut user_config = user_config.0.lock().await;
 
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.id,
         Action::UpdateTrackedNames(name.to_owned()),
         None,
@@ -87,7 +87,7 @@ async fn login(
     }
 
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.0.lock().await.id,
         Action::Login(profile.to_owned()),
         None,
@@ -105,7 +105,7 @@ async fn login(
         rds_client.init(profile).await;
         let dbs = rds_client.databases().await;
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_id,
             Action::RefreshRdsList,
             None,
@@ -121,7 +121,7 @@ async fn login(
     {
         let clusters = ecs_state.0.lock().await.clusters().await;
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_id,
             Action::RefreshClusterList,
             None,
@@ -131,7 +131,7 @@ async fn login(
         for cluster in clusters {
             let services = ecs_state.0.lock().await.services(&cluster).await;
             ingest_log(
-                &axiom,
+                &axiom.0,
                 &user_id,
                 Action::RefreshEcsList(cluster.name.to_owned(), cluster.env.clone()),
                 None,
@@ -208,7 +208,7 @@ async fn set_dbeaver_path(
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.id,
         Action::SetDbeaverPath(dbeaver_path.to_owned()),
         None,
@@ -226,7 +226,7 @@ async fn save_preffered_envs(
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.id,
         Action::SetPrefferedEnvs(envs.clone()),
         None,
@@ -255,7 +255,7 @@ async fn credentials(
     match &secret {
         Ok(_) => {
             ingest_log(
-                &axiom,
+                &axiom.0,
                 user_id,
                 Action::FetchCredentials(db.name, db.env),
                 None,
@@ -265,7 +265,7 @@ async fn credentials(
         }
         Err(err) => {
             ingest_log(
-                &axiom,
+                &axiom.0,
                 user_id,
                 Action::FetchCredentials(db.name, db.env),
                 Some(err.message.clone()),
@@ -295,7 +295,7 @@ async fn stop_job(
         .remove(arn)
     {
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_id,
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
@@ -352,7 +352,7 @@ async fn stop_job(
         }
     } else {
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_id,
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
@@ -380,7 +380,7 @@ async fn logout(
     let mut app_state = app_state.0.lock().await;
     if let Some(profile) = app_state.active_profile.as_ref() {
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_state.0.lock().await.id,
             Action::Logout(profile.clone()),
             None,
@@ -416,6 +416,12 @@ impl aws::OnLogFound for WindowNotifier {
     fn notify(&self, log: aws::LogEntry) {
         let _ = self.window.emit("new-log-found", log);
     }
+    fn success(&self) {
+        let _ = self.window.emit("find-logs-success", ());
+    }
+    fn error(&self, msg: String) {
+        let _ = self.window.emit("find-logs-error", msg);
+    }
 }
 
 #[tauri::command]
@@ -429,49 +435,74 @@ async fn find_logs(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_config: tauri::State<'_, UserConfigState>,
-) -> Result<usize, BError> {
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+) -> Result<(), BError> {
     let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log().to_owned();
     let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
+        check_login_and_trigger(&user_config.0.lock().await.id, &profile, &axiom).await;
     if login_check.is_err() {
         return Err(login_check.expect_err("It supposed to be err"));
     }
-    let notifier = Arc::new(Mutex::new(WindowNotifier { window }));
-    let action = Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
-    let result = aws::find_logs(
-        cloudwatchlogs_client(profile).await,
-        env,
-        app,
-        start,
-        end,
-        filter,
-        notifier.clone(),
-    )
-    .await;
-    match &result {
-        Ok(cnt) => {
-            ingest_log(
-                &axiom,
-                &user_config.0.lock().await.id,
-                action,
-                None,
-                Some(*cnt),
-            )
-            .await
-        }
-        Err(err) => {
-            ingest_log(
-                &axiom,
-                &user_config.0.lock().await.id,
-                action,
-                Some(err.message.to_owned()),
-                None,
-            )
-            .await
+    {
+        let handler = &async_task_tracker.0.lock().await.search_log_handler;
+        if let Some(handler) = handler {
+            handler.abort()
         }
     }
-    return result;
+    {
+        async_task_tracker.0.lock().await.search_log_handler = None;
+    }
+    let user_id = user_config.0.lock().await.id.clone();
+
+    ingest_log(
+        &axiom.0,
+        &user_id,
+        Action::StartSearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start),
+        None,
+        None,
+    )
+    .await;
+
+    let axiom = Arc::clone(&axiom.0);
+    async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
+        let notifier = Arc::new(Mutex::new(WindowNotifier { window }));
+        let action =
+            Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
+        let result = aws::find_logs(
+            cloudwatchlogs_client(profile.as_str()).await,
+            env,
+            app,
+            start,
+            end,
+            filter,
+            notifier.clone(),
+        )
+        .await;
+        // let axiom = axiom.lock().await;
+        match &result {
+            Ok(cnt) => ingest_log(&axiom, &user_id, action, None, Some(*cnt)).await,
+            Err(err) => {
+                ingest_log(&axiom, &user_id, action, Some(err.message.to_owned()), None).await
+            }
+        }
+    }));
+
+    return Ok(());
+}
+
+#[tauri::command]
+async fn abort_find_logs(
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+) -> Result<(), BError> {
+    info!("Aborting find logs");
+    let mut tracker = async_task_tracker.0.lock().await;
+    if let Some(handler) = &tracker.search_log_handler {
+        handler.abort()
+    }
+    tracker.search_log_handler = None;
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -555,7 +586,7 @@ async fn discover(
     let mut found_names = HashSet::new();
     if name.len() < 1 {
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_state.0.lock().await.id,
             Action::Discover(name.to_owned()),
             None,
@@ -615,7 +646,7 @@ async fn discover(
     found_names.extend(services.keys().cloned());
 
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_state.0.lock().await.id,
         Action::Discover(name.to_owned()),
         None,
@@ -653,7 +684,7 @@ async fn start_db_proxy(
         .expect("No bastion found");
 
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.0.lock().await.id,
         Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
         None,
@@ -696,7 +727,7 @@ async fn refresh_cache(
     }
 
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.0.lock().await.id,
         Action::ClearCache,
         None,
@@ -730,7 +761,7 @@ async fn service_details(
     let db = Arc::clone(&databases_cache.0);
     let ecs = Arc::clone(&services_cache.0);
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.0.lock().await.id,
         Action::ServiceDetails(app.to_owned()),
         None,
@@ -808,7 +839,7 @@ async fn start_service_proxy(
         .expect("No bastion found");
     let host = format!("{}.service", service.name);
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.0.lock().await.id,
         Action::StartEcsProxy(service.name.to_owned(), service.env.clone()),
         None,
@@ -877,7 +908,7 @@ async fn open_dbeaver(
     let db_secret = rds_state.0.lock().await.db_secret(&db.name, &db.env).await;
     if let Err(err) = db_secret {
         ingest_log(
-            &axiom,
+            &axiom.0,
             &user_config.0.lock().await.id,
             Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
             Some(err.message.clone()),
@@ -888,7 +919,7 @@ async fn open_dbeaver(
     }
     let db_secret = db_secret.unwrap_or_log();
     ingest_log(
-        &axiom,
+        &axiom.0,
         &user_config.0.lock().await.id,
         Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
         None,
@@ -1059,6 +1090,7 @@ async fn main() {
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             aws_resource_refresher: None,
             proxies_handlers: HashMap::new(),
+            search_log_handler: None,
         }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
@@ -1078,7 +1110,8 @@ async fn main() {
             refresh_cache,
             credentials,
             stop_job,
-            find_logs
+            find_logs,
+            abort_find_logs
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1105,6 +1138,7 @@ struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
     proxies_handlers: HashMap<String, Arc<SharedChild>>,
+    search_log_handler: Option<tokio::task::JoinHandle<()>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1146,6 +1180,7 @@ enum Action {
     SetPrefferedEnvs(Vec<Env>),
     Discover(String),
     Logout(String),
+    StartSearchLogs(String, Env, String, i64),
     SearchLogs(String, Env, String, i64),
 }
 
@@ -1163,7 +1198,7 @@ async fn check_login_and_trigger(
             .expect("failed to execute process");
         if !aws::is_logged(&client).await {
             ingest_log(
-                axiom,
+                &axiom.0,
                 user_id,
                 Action::LoginCheck(profile.to_owned()),
                 Some(String::from("Failed to log in.")),
@@ -1173,7 +1208,7 @@ async fn check_login_and_trigger(
             return Err(BError::new("login", "Failed to log in"));
         } else {
             ingest_log(
-                axiom,
+                &axiom.0,
                 user_id,
                 Action::LoginCheck(profile.to_owned()),
                 None,
@@ -1187,13 +1222,13 @@ async fn check_login_and_trigger(
 }
 
 async fn ingest_log(
-    client: &tauri::State<'_, AxiomClientState>,
+    client: &Arc<Mutex<Option<Client>>>,
     user_id: &uuid::Uuid,
     action: Action,
     error_message: Option<String>,
     record_count: Option<usize>,
 ) {
-    if let Some(client) = client.0.lock().await.as_ref() {
+    if let Some(client) = client.lock().await.as_ref() {
         ingest_log_with_client(&client, user_id, action, error_message, record_count).await;
     }
 }
