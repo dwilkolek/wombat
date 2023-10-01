@@ -336,7 +336,7 @@
 	{#if isLookingForLogs}<progress class={`progress w-full ${searchError ? 'progress-error' : ''}`}
 		></progress>{/if}
 	{#if !isLookingForLogs}<progress
-			class={`progress w-full ${searchError ? 'progress-error' : ''}`}
+			class={`progress w-full ${searchError ? 'progress-error' : 'progress-success'}`}
 			value="100"
 			max="100"
 		></progress>{/if}
