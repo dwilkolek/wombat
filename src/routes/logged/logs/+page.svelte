@@ -37,6 +37,7 @@
 	const startDate = writable<Date>(new Date(new Date().getTime() - 24 * 60 * 60 * 1000));
 	const endDate = writable<Date>(new Date());
 	const filterString = writable<String>('');
+	let showLogDetails = false;
 	type LogEntry = {
 		log_stream_name: string;
 		timestamp: number;
@@ -101,15 +102,15 @@
 				};
 		}
 	}
-	listen<LogEntry>('new-log-found', (newLog) => {
+	function processLogs(newLog: LogEntry) {
 		console.log(newLog);
 		let isString;
 		try {
-			if (typeof newLog.payload.message == 'object') {
+			if (typeof newLog.message == 'object') {
 				isString = false;
 			} else {
 				isString = true;
-				if (typeof JSON.parse(newLog.payload.message) === 'object') {
+				if (typeof JSON.parse(newLog.message) === 'object') {
 					isString = false;
 				} else {
 					isString = true;
@@ -119,27 +120,27 @@
 			isString = true;
 		}
 		if (isString) {
-			const level = (newLog.payload.message.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ??
+			const level = (newLog.message.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ??
 				'UNKNOWN') as LogLevel;
 			logs.update((n) => [
 				...n,
 				{
 					id: n.length,
-					timestamp: newLog.payload.timestamp,
+					timestamp: newLog.timestamp,
 					level,
-					message: newLog.payload.message,
-					data: { message: newLog.payload.message }	,
+					message: newLog.message,
+					data: { message: newLog.message },
 					style: logStyle(level)
 				}
 			]);
 		} else {
-			const logData = JSON.parse(newLog.payload.message);
+			const logData = JSON.parse(newLog.message);
 			const level = logData?.level?.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ?? 'UNKNOWN';
 			logs.update((n) => [
 				...n,
 				{
 					id: n.length,
-					timestamp: newLog.payload.timestamp,
+					timestamp: newLog.timestamp,
 					level,
 					message: logData.message,
 					data: logData,
@@ -147,7 +148,8 @@
 				}
 			]);
 		}
-	});
+	}
+	listen<LogEntry>('new-log-found', (event) => processLogs(event.payload));
 </script>
 
 <svelte:head>
@@ -212,6 +214,10 @@
 			<input
 				type="text"
 				placeholder="Filter"
+				autocomplete="off"
+				autocorrect="off"
+				autocapitalize="off"
+				spellcheck="false"
 				class="input input-bordered grow"
 				bind:value={$filterString}
 			/>
@@ -222,7 +228,7 @@
 					isLookingForLogs = true;
 					searchError = undefined;
 					logs.set([]);
-					selectedLog.set(undefined)
+					selectedLog.set(undefined);
 					invoke('find_logs', {
 						app: $selectedService?.name,
 						env: $selectedService?.env,
@@ -315,7 +321,7 @@
 				<button
 					class="btn btn-active btn-accent btn-sm"
 					on:click={() => {
-						filterString.set(`{ $.level = 'ERROR' }`);
+						filterString.set(`{ $.level = "ERROR" }`);
 					}}>Only Errors</button
 				>
 			{/if}
@@ -323,8 +329,7 @@
 				<button
 					class="btn btn-active btn-accent btn-sm"
 					on:click={() => {
-						const traceId = prompt('Trace id:');
-						filterString.set(`{ $.mdc.trace = "${traceId}" }`);
+						filterString.set(`{ $.mdc.trace = "TRACE_ID_UUID" }`);
 					}}>By Trace</button
 				>
 			{/if}
@@ -341,21 +346,25 @@
 			max="100"
 		></progress>{/if}
 </div>
-<div class="flex flex-row w-full gap-2">
-	<div class="overflow-auto max-h-[calc(100vh-210px)] w-full">
+<div class="flex flex-col w-full gap-2">
+	<div
+		class={`overflow-auto ${
+			showLogDetails ? 'h-[calc(100vh-650px)]' : 'h-[calc(100vh-260px)]'
+		} w-full`}
+	>
 		<table class="table table-xs w-full">
-			<thead>
-				<tr>
-					<th>Level</th>
-					<th>Timestamp</th>
-					<th>Message</th>
-					<th></th>
-				</tr>
-			</thead>
 			<tbody>
 				{#each $logs as log}
 					<tr
-						class={`text-white ${log.style.bg} ${log.style.hover} ${
+						on:click={() => {
+							selectedLog.update((c) => (c === log.data ? undefined : log.data));
+							if ($selectedLog) {
+								showLogDetails = true;
+							} else {
+								showLogDetails = false;
+							}
+						}}
+						class={`cursor-pointer text-white ${log.style.bg} ${log.style.hover} ${
 							$selectedLog === log.data ? log.style.active : ''
 						}`}
 					>
@@ -364,43 +373,58 @@
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
 						>
 						<td class="w-full">{log.message}</td>
-
-						<th>
-							<button class="cursor-pointer"
-								on:click={() => {
-									selectedLog.update((c) => (c === log.data ? undefined : log.data));
-								}}
-							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke-width="1.5"
-									stroke="currentColor"
-									class="w-6 h-6"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
-									/>
-								</svg>
-							</button>
-						</th>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
 	</div>
-	{#if $selectedLog}
-		<div class="w-1/3 overflow-auto max-h-[calc(100vh-210px)] flex flex-col gap-2">
-			<button
-				class="btn btn-active btn-primary btn-sm"
-				on:click={async () => {
-					await writeText(JSON.stringify($selectedLog, null, 2));
-				}}>Copy raw json</button
-			>
-			<JsonView json={$selectedLog} />
+	<div class="w-full flex-col">
+		<div class="w-full flex justify-center">
+			{#if !showLogDetails}
+				<button on:click={() => (showLogDetails = true)}>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+					</svg>
+				</button>
+			{/if}
+			{#if showLogDetails}
+				<button on:click={() => (showLogDetails = false)}>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+					</svg>
+				</button>
+			{/if}
 		</div>
-	{/if}
+
+		{#if $selectedLog && showLogDetails}
+			<div class="h-[400px] flex flex-col gap-2">
+				<button
+					class="m-2 btn btn-active btn-primary btn-sm"
+					on:click={async () => {
+						await writeText(JSON.stringify($selectedLog, null, 2));
+					}}>Copy raw json</button
+				>
+				<div class="text-sm overflow-auto h-[340px]">
+					<JsonView json={$selectedLog} />
+				</div>
+			</div>
+		{/if}
+		{#if !$selectedLog && showLogDetails}
+			<div class="overflow-auto h-[400px] flex flex-col gap-2">Select log to see details</div>
+		{/if}
+	</div>
 </div>
