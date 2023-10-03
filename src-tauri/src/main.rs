@@ -44,6 +44,30 @@ struct ServiceDetailsPayload {
     dbs: Vec<aws::DbInstance>,
 }
 
+struct AuthorizedUser {
+    id: uuid::Uuid,
+    profile: String,
+}
+
+async fn get_authorized(
+    app_state: &Arc<Mutex<AppContext>>,
+    axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
+    skip_check: bool,
+) -> AuthorizedUser {
+    let app_ctx = app_state.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
+    if !skip_check {
+        let login_check = check_login_and_trigger(&app_ctx.user_id, profile, &axiom).await;
+        if login_check.is_err() {
+            panic!("Authentication failed")
+        }
+    }
+    return AuthorizedUser {
+        profile: profile.to_owned(),
+        id: app_ctx.user_id.clone(),
+    };
+}
+
 #[tauri::command]
 async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<UserConfig, BError> {
     let user_config = user_config.0.lock().await;
@@ -80,15 +104,14 @@ async fn login(
     rds_state: tauri::State<'_, RdsClientState>,
     ecs_state: tauri::State<'_, EcsClientState>,
 ) -> Result<UserConfig, BError> {
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
+    {
+        app_state.0.lock().await.active_profile = Some(profile.to_owned());
     }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
     ingest_log(
         &axiom.0,
-        &user_config.0.lock().await.id,
+        &authorized_user.id,
         Action::Login(profile.to_owned()),
         None,
         None,
@@ -97,8 +120,6 @@ async fn login(
 
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
-    app_state.0.lock().await.active_profile = Some(profile.to_owned());
-    let user_id = user_config.id.clone();
 
     {
         let rds_client = &mut rds_state.0.lock().await;
@@ -106,7 +127,7 @@ async fn login(
         let dbs = rds_client.databases().await;
         ingest_log(
             &axiom.0,
-            &user_id,
+            &authorized_user.id,
             Action::RefreshRdsList,
             None,
             Some(dbs.len()),
@@ -122,7 +143,7 @@ async fn login(
         let clusters = ecs_state.0.lock().await.clusters().await;
         ingest_log(
             &axiom.0,
-            &user_id,
+            &authorized_user.id,
             Action::RefreshClusterList,
             None,
             Some(clusters.len()),
@@ -132,7 +153,7 @@ async fn login(
             let services = ecs_state.0.lock().await.services(&cluster).await;
             ingest_log(
                 &axiom.0,
-                &user_id,
+                &authorized_user.id,
                 Action::RefreshEcsList(cluster.name.to_owned(), cluster.env.clone()),
                 None,
                 Some(services.len()),
@@ -143,7 +164,7 @@ async fn login(
     let ecs_arc_clone = Arc::clone(&ecs_state.0);
     let rds_arc_clone = Arc::clone(&rds_state.0);
     let refresher_axiom = Arc::clone(&axiom.0);
-    let refresher_user_id = user_config.id.clone();
+    let refresher_user_id = authorized_user.id.clone();
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
         let initial_wait = tokio::time::sleep(Duration::from_secs(30 * 60));
         initial_wait.await;
@@ -239,24 +260,17 @@ async fn save_preffered_envs(
 #[tauri::command]
 async fn credentials(
     db: aws::DbInstance,
-    user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     db_state: tauri::State<'_, RdsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<DbSecret, BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let user_id = &user_config.0.lock().await.id.clone();
-    let login_check = check_login_and_trigger(user_id, &profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
     let secret = db_state.0.lock().await.db_secret(&db.name, &db.env).await;
     match &secret {
         Ok(_) => {
             ingest_log(
                 &axiom.0,
-                user_id,
+                &authorized_user.id,
                 Action::FetchCredentials(db.name, db.env),
                 None,
                 None,
@@ -266,7 +280,7 @@ async fn credentials(
         Err(err) => {
             ingest_log(
                 &axiom.0,
-                user_id,
+                &authorized_user.id,
                 Action::FetchCredentials(db.name, db.env),
                 Some(err.message.clone()),
                 None,
@@ -282,11 +296,9 @@ async fn stop_job(
     arn: &str,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-
-    user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let user_id = &user_config.0.lock().await.id.clone();
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, true).await;
     if let Some(job) = async_task_tracker
         .0
         .lock()
@@ -296,7 +308,7 @@ async fn stop_job(
     {
         ingest_log(
             &axiom.0,
-            &user_id,
+            &authorized_user.id,
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
                 Env::from_any(arn).to_owned(),
@@ -353,7 +365,7 @@ async fn stop_job(
     } else {
         ingest_log(
             &axiom.0,
-            &user_id,
+            &authorized_user.id,
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
                 Env::from_any(arn).to_owned(),
@@ -434,25 +446,16 @@ async fn find_logs(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log().to_owned();
-
-    let user_id = user_config.0.lock().await.id.clone();
-
-    let login_check = check_login_and_trigger(&user_id, &profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
     {
         let handler = &async_task_tracker.0.lock().await.search_log_handler;
         if let Some(handler) = handler {
             ingest_log(
                 &axiom.0,
-                &user_id,
+                &authorized_user.id,
                 Action::AbortSearchLogs("new-search-request".to_owned()),
                 None,
                 None,
@@ -467,7 +470,7 @@ async fn find_logs(
 
     ingest_log(
         &axiom.0,
-        &user_id,
+        &authorized_user.id,
         Action::StartSearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start),
         None,
         None,
@@ -480,7 +483,7 @@ async fn find_logs(
         let action =
             Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
         let result = aws::find_logs(
-            cloudwatchlogs_client(profile.as_str()).await,
+            cloudwatchlogs_client(&authorized_user.profile).await,
             env,
             app,
             start,
@@ -491,9 +494,16 @@ async fn find_logs(
         .await;
 
         match &result {
-            Ok(cnt) => ingest_log(&axiom, &user_id, action, None, Some(*cnt)).await,
+            Ok(cnt) => ingest_log(&axiom, &authorized_user.id, action, None, Some(*cnt)).await,
             Err(err) => {
-                ingest_log(&axiom, &user_id, action, Some(err.message.to_owned()), None).await
+                ingest_log(
+                    &axiom,
+                    &authorized_user.id,
+                    action,
+                    Some(err.message.to_owned()),
+                    None,
+                )
+                .await
             }
         }
     }));
@@ -531,15 +541,8 @@ async fn clusters(
     app_state: tauri::State<'_, AppContextState>,
     ecs_state: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::Cluster>, BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let _ = get_authorized(&app_state.0, &axiom.0, false).await;
 
     Ok(ecs_state.0.lock().await.clusters().await)
 }
@@ -550,15 +553,8 @@ async fn services(
     app_state: tauri::State<'_, AppContextState>,
     cache: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::EcsService>, BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let _ = get_authorized(&app_state.0, &axiom.0, false).await;
 
     Ok(cache.0.lock().await.services(&cluster).await)
 }
@@ -569,15 +565,8 @@ async fn databases(
     app_state: tauri::State<'_, AppContextState>,
     cache: tauri::State<'_, RdsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let _ = get_authorized(&app_state.0, &axiom.0, false).await;
 
     let dbs = cache.0.lock().await.databases().await;
 
@@ -592,23 +581,20 @@ async fn discover(
     user_config: tauri::State<'_, UserConfigState>,
     service_cache: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    user_state: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<String>, BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
     let name = &name.to_lowercase();
-    let tracked_names = user_config.0.lock().await.tracked_names.clone();
+    let tracked_names: HashSet<String>;
+    {
+        tracked_names = user_config.0.lock().await.tracked_names.clone()
+    }
+
     let mut found_names = HashSet::new();
     if name.len() < 1 {
         ingest_log(
             &axiom.0,
-            &user_state.0.lock().await.id,
+            &authorized_user.id,
             Action::Discover(name.to_owned()),
             None,
             Some(0),
@@ -616,6 +602,7 @@ async fn discover(
         .await;
         return Ok(Vec::new());
     }
+
     let mut dbs: HashMap<String, Vec<aws::DbInstance>> = HashMap::new();
     {
         let rds_client = &mut db_cache.0.lock().await;
@@ -668,7 +655,7 @@ async fn discover(
 
     ingest_log(
         &axiom.0,
-        &user_state.0.lock().await.id,
+        &authorized_user.id,
         Action::Discover(name.to_owned()),
         None,
         Some(found_names.len()),
@@ -687,17 +674,11 @@ async fn start_db_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
 
-    let ec2_client = aws::ec2_client(profile).await;
+    let ec2_client = aws::ec2_client(&authorized_user.profile).await;
     let bastions = aws::bastions(&ec2_client).await;
     let bastion = bastions
         .into_iter()
@@ -706,7 +687,7 @@ async fn start_db_proxy(
 
     ingest_log(
         &axiom.0,
-        &user_config.0.lock().await.id,
+        &authorized_user.id,
         Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
         None,
         None,
@@ -717,7 +698,7 @@ async fn start_db_proxy(
         db.arn,
         window,
         bastion.instance_id,
-        profile.to_owned(),
+        authorized_user.profile.to_owned(),
         db.endpoint.address,
         db.endpoint.port,
         local_port,
@@ -736,20 +717,13 @@ async fn refresh_cache(
     window: Window,
     databse_cache: tauri::State<'_, RdsClientState>,
     service_cache: tauri::State<'_, EcsClientState>,
-    user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
     ingest_log(
         &axiom.0,
-        &user_config.0.lock().await.id,
+        &authorized_user.id,
         Action::ClearCache,
         None,
         None,
@@ -774,16 +748,18 @@ async fn refresh_cache(
 async fn service_details(
     app: String,
     window: Window,
-    user_config: tauri::State<'_, UserConfigState>,
+    app_state: tauri::State<'_, AppContextState>,
     databases_cache: tauri::State<'_, RdsClientState>,
     services_cache: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+
     let db = Arc::clone(&databases_cache.0);
     let ecs = Arc::clone(&services_cache.0);
     ingest_log(
         &axiom.0,
-        &user_config.0.lock().await.id,
+        &authorized_user.id,
         Action::ServiceDetails(app.to_owned()),
         None,
         None,
@@ -844,15 +820,9 @@ async fn start_service_proxy(
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
     let aws_local_port = local_port + 10000;
 
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
-    }
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
-    let ec2_client = aws::ec2_client(profile).await;
+    let ec2_client = aws::ec2_client(&authorized_user.profile).await;
     let bastions = aws::bastions(&ec2_client).await;
     let bastion = bastions
         .into_iter()
@@ -861,7 +831,7 @@ async fn start_service_proxy(
     let host = format!("{}.service", service.name);
     ingest_log(
         &axiom.0,
-        &user_config.0.lock().await.id,
+        &authorized_user.id,
         Action::StartEcsProxy(service.name.to_owned(), service.env.clone()),
         None,
         None,
@@ -874,7 +844,7 @@ async fn start_service_proxy(
         service.arn,
         window,
         bastion.instance_id,
-        profile.to_owned(),
+        authorized_user.profile.to_owned(),
         host,
         80,
         aws_local_port,
@@ -910,27 +880,25 @@ async fn open_dbeaver(
         }
     }
 
-    let dbeaver_path = &user_config
-        .0
-        .lock()
-        .await
-        .dbeaver_path
-        .as_ref()
-        .expect("DBeaver needs to be configured")
-        .clone();
-    let app_ctx = app_state.0.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    let login_check =
-        check_login_and_trigger(&user_config.0.lock().await.id, profile, &axiom).await;
-    if login_check.is_err() {
-        return Err(login_check.expect_err("It supposed to be err"));
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+
+    let dbeaver_path: String;
+    {
+        dbeaver_path = user_config
+            .0
+            .lock()
+            .await
+            .dbeaver_path
+            .as_ref()
+            .expect("DBeaver needs to be configured")
+            .clone();
     }
 
     let db_secret = rds_state.0.lock().await.db_secret(&db.name, &db.env).await;
     if let Err(err) = db_secret {
         ingest_log(
             &axiom.0,
-            &user_config.0.lock().await.id,
+            &authorized_user.id,
             Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
             Some(err.message.clone()),
             None,
@@ -941,7 +909,7 @@ async fn open_dbeaver(
     let db_secret = db_secret.unwrap_or_log();
     ingest_log(
         &axiom.0,
-        &user_config.0.lock().await.id,
+        &authorized_user.id,
         Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
         None,
         None,
@@ -1081,7 +1049,7 @@ async fn main() {
     fix_path_env::fix().unwrap_or_log();
 
     let user = UserConfig::default();
-
+    let user_id = user.id.clone();
     let client = Client::builder()
         .with_token("%%AXIOM_TOKEN%%")
         .with_org_id("%%AXIOM_ORG%%")
@@ -1105,7 +1073,10 @@ async fn main() {
         )
         .manage(UserConfigState(Arc::new(Mutex::new(user))))
         .manage(axiom_client)
-        .manage(AppContextState::default())
+        .manage(AppContextState(Arc::new(Mutex::new(AppContext {
+            active_profile: None,
+            user_id: user_id,
+        }))))
         .manage(RdsClientState(Arc::new(Mutex::new(aws::RdsClient::new()))))
         .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
@@ -1142,12 +1113,13 @@ struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
 
 struct EcsClientState(Arc<Mutex<aws::EcsClient>>);
 
-#[derive(Default)]
+#[derive(Clone)]
 struct AppContext {
     active_profile: Option<String>,
+    user_id: uuid::Uuid,
 }
 
-#[derive(Default)]
+#[derive(Clone)]
 struct AppContextState(Arc<Mutex<AppContext>>);
 
 struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);
@@ -1209,7 +1181,7 @@ enum Action {
 async fn check_login_and_trigger(
     user_id: &uuid::Uuid,
     profile: &str,
-    axiom: &tauri::State<'_, AxiomClientState>,
+    axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<(), BError> {
     let client = aws::ecs_client(profile).await;
     if !aws::is_logged(&client).await {
@@ -1220,7 +1192,7 @@ async fn check_login_and_trigger(
             .expect("failed to execute process");
         if !aws::is_logged(&client).await {
             ingest_log(
-                &axiom.0,
+                &axiom,
                 user_id,
                 Action::LoginCheck(profile.to_owned()),
                 Some(String::from("Failed to log in.")),
@@ -1230,7 +1202,7 @@ async fn check_login_and_trigger(
             return Err(BError::new("login", "Failed to log in"));
         } else {
             ingest_log(
-                &axiom.0,
+                &axiom,
                 user_id,
                 Action::LoginCheck(profile.to_owned()),
                 None,
