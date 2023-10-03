@@ -367,7 +367,7 @@
 				<button
 					class="btn btn-active btn-secondary btn-sm"
 					on:click={() => {
-						filterString.set(`{ $.mdc.trace = "TRACE_ID_UUID" }`);
+						filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
 					}}>By Trace</button
 				>
 			{/if}
