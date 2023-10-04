@@ -10,7 +10,7 @@
 </script>
 
 {#if port}
-	<ServiceProxyStopBtn {service} {port} />
+	<ServiceProxyStopBtn service_arn={service.arn} />
 {/if}
 {#if !port}
 	<ServiceProxyStartBtn {service} />

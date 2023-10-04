@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { clusterStore } from '$lib/stores/cluster-store';
 	import { userStore } from '$lib/stores/user-store';
-	import { AwsEnv, type ServiceDetails } from '$lib/types';
+	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import AppCard from '../../../lib/componets/app-card.svelte';
-	
+	import TaskManager from '../../../lib/componets/task-manager.svelte';
+
 	$: user = $userStore;
 
 	$: selectedClusters = $userStore.preffered_environments;
@@ -78,33 +78,37 @@
 		{/each}
 	</div>
 </div>
-<div class="flex flex-col gap-2">
-	<div class="flex flex-wrap gap-2">
-		{#if discovered}
-			{#await discovered}
-				<span class="loading loading-dots loading-lg" />
-			{:then discoverValue}
-				{#each discoverValue as discoveredApp}
-					<AppCard
-						app={discoveredApp}
-						displayConfig={{
-							envs: selectedClusters,
-							favorite: false
-						}}
-					/>
-				{/each}
-			{/await}
-		{/if}
+<div class="flex gap-2 pb-2">
+	<div class="flex flex-col gap-2">
+		<div class="flex flex-wrap gap-2">
+			{#if discovered}
+				{#await discovered}
+					<span class="loading loading-dots loading-lg" />
+				{:then discoverValue}
+					{#each discoverValue as discoveredApp}
+						<AppCard
+							app={discoveredApp}
+							displayConfig={{
+								envs: selectedClusters,
+								favorite: false
+							}}
+						/>
+					{/each}
+				{/await}
+			{/if}
+		</div>
+		<div class="flex flex-wrap gap-2">
+			{#each user.tracked_names as app}
+				<AppCard
+					{app}
+					displayConfig={{
+						envs: selectedClusters,
+						favorite: true
+					}}
+				/>
+			{/each}
+		</div>
 	</div>
-	<div class="flex flex-wrap gap-2">
-		{#each user.tracked_names as app}
-			<AppCard
-				{app}
-				displayConfig={{
-					envs: selectedClusters,
-					favorite: true
-				}}
-			/>
-		{/each}
-	</div>
+
+	<TaskManager />
 </div>

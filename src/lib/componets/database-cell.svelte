@@ -12,6 +12,6 @@
 	<DbProxyStartBtn {database} />
 {/if}
 {#if port}
-	<DbProxyStopBtn {database} {port} />
+	<DbProxyStopBtn database_arn={database.arn} />
 {/if}
 <DbSecretBtn {database} />
