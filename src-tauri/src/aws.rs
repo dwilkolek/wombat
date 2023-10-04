@@ -15,6 +15,7 @@ use ec2::types::Filter;
 use log::info;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -555,6 +556,68 @@ impl EcsClient {
             }
         }
         result
+    }
+}
+
+pub async fn service_details(
+    profile: &str,
+    service_arn: &str,
+    service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
+    refresh: bool,
+) -> ServiceDetails {
+    {
+        let mut cache = service_details_map.lock().await;
+        if refresh {
+            cache.remove(service_arn);
+        }
+        if let Some(details) = cache.get(service_arn) {
+            return details.clone();
+        }
+    }
+    
+    info!("Fetching service details for {} {}", service_arn, refresh);
+
+    let ecs_client = ecs_client(profile).await;
+    let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
+    let service = ecs_client
+        .describe_services()
+        .services(service_arn)
+        .cluster(cluster)
+        .send()
+        .await
+        .unwrap_or_log();
+    let service = service.services().unwrap_or_log();
+    let service = &service[0];
+    let task_def_arn = service.task_definition().unwrap_or_log();
+    let task_def = ecs_client
+        .describe_task_definition()
+        .task_definition(task_def_arn)
+        .send()
+        .await
+        .unwrap_or_log();
+
+    let task_def = task_def.task_definition().unwrap_or_log();
+    let container_def = &task_def.container_definitions().unwrap_or_log()[0];
+    let version = container_def
+        .image()
+        .unwrap_or_log()
+        .split(":")
+        .last()
+        .unwrap_or_log()
+        .to_owned();
+    let details = ServiceDetails {
+        name: shared::ecs_arn_to_name(&service_arn),
+        timestamp: Utc::now(),
+        arn: service_arn.to_owned(),
+        cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
+        version: version,
+        env: Env::from_any(&service_arn),
+    };
+    {
+        let mut cache = service_details_map.lock().await;
+        cache.insert(service_arn.to_owned(), details.clone());
+
+        return details;
     }
 }
 
