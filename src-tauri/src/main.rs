@@ -5,7 +5,7 @@ use axiom_rs::Client;
 use log::{error, info, warn, LevelFilter};
 use regex::Regex;
 use serde_json::json;
-use shared::{ecs_arn_to_name, rds_arn_to_name};
+use shared::{arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, ResourceType};
 use shared::{BError, Env};
 use shared_child::SharedChild;
 use std::collections::HashSet;
@@ -35,6 +35,21 @@ struct ProxyEventMessage {
     arn: String,
     status: String,
     port: u16,
+    name: String,
+    env: Env,
+    proxy_type: ResourceType,
+}
+impl ProxyEventMessage {
+    fn new(arn: String, status: String, port: u16) -> Self {
+        Self {
+            arn: arn.clone(),
+            status,
+            port,
+            name: arn_to_name(&arn),
+            env: Env::from_any(&arn),
+            proxy_type: arn_resource_type(&arn).unwrap_or_log(),
+        }
+    }
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -312,7 +327,7 @@ async fn stop_job(
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
                 Env::from_any(arn).to_owned(),
-                shared::arn_resource_type(arn).to_owned(),
+                shared::arn_resource_type(arn).unwrap_or_log(),
             ),
             None,
             None,
@@ -369,7 +384,7 @@ async fn stop_job(
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
                 Env::from_any(arn).to_owned(),
-                shared::arn_resource_type(arn).to_owned(),
+                shared::arn_resource_type(arn).to_owned().unwrap_or_log(),
             ),
             Some(String::from("No matching job running!")),
             None,
@@ -1018,11 +1033,7 @@ async fn start_aws_ssm_proxy(
         window
             .emit(
                 "proxy-start",
-                ProxyEventMessage {
-                    arn: arn.clone(),
-                    status: "START".into(),
-                    port: access_port,
-                },
+                ProxyEventMessage::new(arn.clone(), "START".into(), access_port),
             )
             .unwrap_or_log();
         let _ = child_arc_clone.wait();
@@ -1034,11 +1045,7 @@ async fn start_aws_ssm_proxy(
         window
             .emit(
                 "proxy-end",
-                ProxyEventMessage {
-                    arn: arn.clone(),
-                    status: "END".into(),
-                    port: access_port,
-                },
+                ProxyEventMessage::new(arn.clone(), "END".into(), access_port),
             )
             .unwrap_or_log();
     });
@@ -1156,7 +1163,7 @@ enum Action {
     Start,
     Login(String),
     FetchCredentials(String, Env),
-    StopJob(String, Env, String),
+    StopJob(String, Env, ResourceType),
     StartEcsProxy(String, Env),
     ServiceDetails(String),
     StartRdsProxy(String, Env),

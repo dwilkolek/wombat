@@ -1,10 +1,17 @@
 use core::fmt;
 
+use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing_unwrap::{OptionExt, ResultExt};
 
 pub type TrackedName = String;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum ResourceType {
+    RDS,
+    ECS,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BError {
@@ -93,12 +100,13 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
     }
     return format!("unknown!#{}", arn);
 }
-pub fn arn_resource_type(arn: &str) -> TrackedName {
+pub fn arn_resource_type(arn: &str) -> Option<ResourceType> {
     if arn.starts_with("arn:aws:ecs") {
-        return "ECS".to_owned();
+        return Some(ResourceType::ECS);
     }
     if arn.starts_with("arn:aws:rds") {
-        return "RDS".to_owned();
+        return Some(ResourceType::RDS);
     }
-    return format!("UNKNOWN#{}", arn);
+    error!("Unknown resource type given arn {}", arn);
+    None
 }

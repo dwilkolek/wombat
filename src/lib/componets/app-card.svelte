@@ -22,48 +22,48 @@
 </script>
 
 {#if displayConfig.favorite == null || isFavourite(app) === displayConfig.favorite}
-	<div class="card card-compact w-80 bg-base-100 shadow-xl">
-		<div class="card-body gap-1">
-			<div class="card-title flex flex-row gap-2 items-center text-md">
-				<button
-					class="text-xs"
-					on:click={() => {
-						userStore.favoriteTrackedName(app);
-					}}
-				>
-					<StarIcon state={isFavourite(app)} />
-				</button>
-				<h5 class="inline text-base">
-					<a class="hover:text-accent underline" href={`/logged/apps/${app}`}>{app}</a>
-				</h5>
-			</div>
-			{#if !details}
-				<span class="loading loading-dots loading-lg" />
-			{/if}
-			{#if details}
+	<div class="p-2 bg-base-300 shadow-2xl w-full gap-1 flex rounded-2xl">
+		<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
+			<button
+				class="text-xs"
+				on:click={() => {
+					userStore.favoriteTrackedName(app);
+				}}
+			>
+				<StarIcon state={isFavourite(app)} />
+			</button>
+			<span class="inline text-base">
+				<a class="hover:text-accent underline" href={`/logged/apps/${app}`}>{app}</a>
+			</span>
+		</div>
+		{#if !details}
+			<span class="loading loading-dots loading-lg" />
+		{/if}
+		{#if details}
+			<div class="flex gap-2 flex-wrap w-full">
 				{#each [...details.envs] as [env, value]}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(env)}
-						<div class="flex flex-row">
-							<div class="font-bold">{env}:</div>
-							<div class="flex flex-row divide-x">
+						<div class="flex flex-col w-64">
+							<div class="font-bold w-16 text-xs italic">{env}:</div>
+							<div class="flex gap-4 grow">
 								{#each value.services as service}
 									<div class="flex flex-row items-center gap-1 px-1">
-										<span>{service.version}</span>
 										<ServiceCell {service} />
+										<span>{service.version}</span>
 									</div>
 								{/each}
 
 								{#each value.dbs as db}
 									<div class="flex flex-row items-center gap-1 px-1">
-										<span>{db.engine_version}</span>
 										<DatabaseCell database={db} />
+										<span>{db.engine_version}</span>
 									</div>
 								{/each}
 							</div>
 						</div>
 					{/if}
 				{/each}
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</div>
 {/if}
