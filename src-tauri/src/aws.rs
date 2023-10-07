@@ -385,8 +385,8 @@ impl RdsClient {
 
 pub struct EcsClient {
     ecs_client: Option<ecs::Client>,
-    clusters: Vec<Cluster>,
-    cluster_service_map: HashMap<Cluster, Vec<EcsService>>,
+    pub clusters: Vec<Cluster>,
+    pub cluster_service_map: HashMap<Cluster, Vec<EcsService>>,
     service_details_map: HashMap<String, ServiceDetails>,
 }
 
@@ -441,55 +441,6 @@ impl EcsClient {
         self.clusters.clone()
     }
 
-    pub async fn service_details(&mut self, service_arn: &str, refresh: bool) -> ServiceDetails {
-        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
-        if refresh {
-            self.service_details_map.remove(service_arn);
-        }
-        if let Some(details) = self.service_details_map.get(service_arn) {
-            return details.clone();
-        }
-        info!("Fetching service details for {} {}", service_arn, refresh);
-        let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
-        let service = ecs_client
-            .describe_services()
-            .services(service_arn)
-            .cluster(cluster)
-            .send()
-            .await
-            .unwrap_or_log();
-        let service = service.services().unwrap_or_log();
-        let service = &service[0];
-        let task_def_arn = service.task_definition().unwrap_or_log();
-        let task_def = ecs_client
-            .describe_task_definition()
-            .task_definition(task_def_arn)
-            .send()
-            .await
-            .unwrap_or_log();
-
-        let task_def = task_def.task_definition().unwrap_or_log();
-        let container_def = &task_def.container_definitions().unwrap_or_log()[0];
-        let version = container_def
-            .image()
-            .unwrap_or_log()
-            .split(":")
-            .last()
-            .unwrap_or_log()
-            .to_owned();
-        let details = ServiceDetails {
-            name: shared::ecs_arn_to_name(&service_arn),
-            timestamp: Utc::now(),
-            arn: service_arn.to_owned(),
-            cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
-            version: version,
-            env: Env::from_any(&service_arn),
-        };
-        self.service_details_map
-            .insert(service_arn.to_owned(), details.clone());
-
-        return details;
-    }
 
     pub async fn services(&mut self, cluster: &Cluster) -> Vec<EcsService> {
         let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
@@ -533,55 +484,66 @@ impl EcsClient {
         values
     }
 
-    pub async fn service_details_for_names(
-        &mut self,
-        names: &HashSet<String>,
-        refresh: bool,
-    ) -> HashMap<String, Vec<ServiceDetails>> {
-        let mut result = HashMap::new();
-        let service_arns: Vec<String> = self
-            .cluster_service_map
-            .values()
-            .flatten()
-            .filter(|s| names.contains(&s.name))
-            .map(|s| s.arn.clone())
-            .collect();
+}
 
-        for service_arn in service_arns {
-            let sd = self.service_details(&service_arn, refresh).await;
-            if !result.contains_key(&sd.name) {
-                result.insert(sd.name.clone(), vec![sd]);
-            } else {
-                result.get_mut(&sd.name).unwrap_or_log().push(sd);
-            }
-        }
-        result
+
+
+pub async fn service_details_for_names(
+    profile: &str,
+    service_arns: Vec<String>,
+    service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
+    refresh: bool,
+) -> Vec<ServiceDetails> {
+    let mut result = Vec::new();
+    let mut tokio_tasks = vec![];
+    for service_arn in service_arns {
+        let service_details_map = Arc::clone(&service_details_map);
+        let profile = profile.to_owned();
+        tokio_tasks.push(tokio::spawn(async move {
+            service_details(
+                profile,
+                service_arn,
+                service_details_map,
+                refresh,
+            )
+        }))
     }
+    for handle in tokio_tasks   {
+        let sd = handle.await.unwrap_or_log().await;
+        // if !result.contains_key(&sd.name) {
+        //     result.insert(sd.name.clone(), vec![sd]);
+        // } else {
+        //     result.get_mut(&sd.name).unwrap_or_log().push(sd);
+        // }
+        result.push(sd);
+    }
+    
+    result
 }
 
 pub async fn service_details(
-    profile: &str,
-    service_arn: &str,
+    profile: String,
+    service_arn: String,
     service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
     refresh: bool,
 ) -> ServiceDetails {
     {
         let mut cache = service_details_map.lock().await;
         if refresh {
-            cache.remove(service_arn);
+            cache.remove(&service_arn);
         }
-        if let Some(details) = cache.get(service_arn) {
+        if let Some(details) = cache.get(&service_arn) {
             return details.clone();
         }
     }
-    
+
     info!("Fetching service details for {} {}", service_arn, refresh);
 
-    let ecs_client = ecs_client(profile).await;
+    let ecs_client = ecs_client(&profile).await;
     let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
     let service = ecs_client
         .describe_services()
-        .services(service_arn)
+        .services(&service_arn)
         .cluster(cluster)
         .send()
         .await

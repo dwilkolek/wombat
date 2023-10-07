@@ -596,6 +596,7 @@ async fn discover(
     user_config: tauri::State<'_, UserConfigState>,
     service_cache: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<Vec<String>, BError> {
     let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
@@ -655,7 +656,12 @@ async fn discover(
                 .collect();
             for service in matching_services_at_cluster {
                 let name = ecs_arn_to_name(&service.arn);
-                let sd = ecs_client.service_details(&service.arn, false).await;
+                let sd = aws::service_details(
+                    authorized_user.profile.clone(), 
+                    service.arn.clone(), 
+                    Arc::clone(&service_details_cache.0),
+                    false
+                ).await;
                 if !services.contains_key(&name) {
                     services.insert(name, vec![sd]);
                 } else {
@@ -767,6 +773,7 @@ async fn service_details(
     databases_cache: tauri::State<'_, RdsClientState>,
     services_cache: tauri::State<'_, EcsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<(), BError> {
     let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
@@ -781,7 +788,7 @@ async fn service_details(
     )
     .await;
     info!("Called service_details: {}", &app);
-
+    let service_details_cache = Arc::clone(&service_details_cache.0);
     tokio::task::spawn(async move {
         info!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
@@ -794,20 +801,29 @@ async fn service_details(
                 }
             }
         }
-
-        let mut services: Vec<ServiceDetails> = vec![];
+        let clusters: Vec<Cluster>;
         {
-            let services_map = ecs
-                .lock()
-                .await
-                .service_details_for_names(&HashSet::from([app.clone()]), false)
-                .await;
-            for service_list in services_map.into_values() {
-                for service in service_list {
-                    services.push(service)
+            clusters = ecs.lock().await.clusters().await
+        }
+
+        let mut service_arns: Vec<String> = vec![];
+        {
+            for cluster in clusters {
+                let services = ecs.lock().await.services(&cluster).await;
+                for service in services {
+                    if app.eq(&service.name) {
+                        service_arns.push(service.arn.clone())
+                    }
                 }
             }
         }
+
+        let services: Vec<ServiceDetails> = aws::service_details_for_names(
+            &authorized_user.profile,
+            service_arns,
+            service_details_cache,
+            false,
+        ).await;
 
         window
             .emit(
@@ -1091,6 +1107,7 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
+        .manage(ServiceDetailsCache(Arc::new(Mutex::new(HashMap::new()))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
@@ -1134,6 +1151,8 @@ struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);
 struct UserConfigState(Arc<Mutex<UserConfig>>);
 
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
+
+struct ServiceDetailsCache(Arc<Mutex<HashMap<String, ServiceDetails>>>);
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
