@@ -81,7 +81,9 @@ pub fn rds_arn_to_name(arn: &str) -> TrackedName {
         .last()
         .unwrap_or_log()
         .split("-")
-        .skip(2)
+        .filter(|part| {
+            part != &"dsi" && !(vec!["play", "lab", "dev", "demo", "prod"].contains(part))
+        })
         .into_iter()
         .collect::<Vec<&str>>()
         .join("-")
