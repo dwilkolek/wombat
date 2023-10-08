@@ -18,7 +18,7 @@ fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConfJson, null, 2));
 
 const cargoTomlPath = './src-tauri/Cargo.toml';
 const cargoToml = fs.readFileSync(cargoTomlPath).toString('utf8');
-const start = cargoToml.search(/version = "([0-9a-z-.]+)"/gm);
+const start = cargoToml.search(/version = "([0-9.]+)"/gm);
 const end = cargoToml.indexOf('\n', start);
 fs.writeFileSync(
 	cargoTomlPath,
