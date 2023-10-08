@@ -27,7 +27,7 @@
 	<title>ECS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="my-4 p-2 pb-5">
+<div class="bg-base-100 sticky top-[68px] z-50 px-2">
 	<select class="select select-bordered" bind:value={$activeCluser}>
 		{#each $clusters as cluster}
 			<option value={cluster}>{cluster.name}</option>
@@ -36,7 +36,7 @@
 </div>
 <div class="h-full block">
 	<table class="table w-full table-zebra table-compact">
-		<thead class="sticky top-0">
+		<thead class="bg-base-100 sticky top-[116px] z-50">
 			<tr>
 				<th>
 					<div class="flex gap-2">

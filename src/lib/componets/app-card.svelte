@@ -22,7 +22,7 @@
 </script>
 
 {#if displayConfig.favorite == null || isFavourite(app) === displayConfig.favorite}
-	<div class="p-2 bg-base-300 shadow-2xl w-full gap-1 flex rounded-2xl">
+	<div class="px-2 py-1 bg-base-300 shadow-2xl w-full gap-1 flex rounded-2xl">
 		<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
 			<button
 				class="text-xs"
@@ -45,18 +45,18 @@
 					{#if displayConfig.envs == null || displayConfig.envs.includes(env)}
 						<div class="flex flex-col w-64">
 							<div class="font-bold w-16 text-xs italic">{env}:</div>
-							<div class="flex gap-4 grow">
+							<div class="flex gap-3 grow">
 								{#each value.services as service}
 									<div class="flex flex-row items-center gap-1 px-1">
 										<ServiceCell {service} />
-										<span>{service.version}</span>
+										<span class="truncate w-20">{service.version}</span>
 									</div>
 								{/each}
 
 								{#each value.dbs as db}
 									<div class="flex flex-row items-center gap-1 px-1">
 										<DatabaseCell database={db} />
-										<span>{db.engine_version}</span>
+										<span class="truncate w-20">{db.engine_version}</span>
 									</div>
 								{/each}
 							</div>
