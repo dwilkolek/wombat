@@ -8,30 +8,32 @@
 </script>
 
 {#await db then db}
-	<div
-		class="tooltip"
-		data-tip={$userStore.dbeaver_path
-			? 'Open connection in dbeaver'
-			: 'Install dbeaver to get instant conneciton'}
-	>
-		<button
-			disabled={!$userStore.dbeaver_path}
-			class={`link text-sm gap-1 text-amber-300 flex items-center ${
-				$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
-			}`}
-			on:click={() => {
-				execute(
-					'open_dbeaver',
-					{
-						db,
-						port: task.port
-					},
-					false
-				);
-			}}
+	<div class="flex gap-2">
+		<span class="italic text-sm">Database {task.env}:</span>
+		<div
+			class="tooltip"
+			data-tip={$userStore.dbeaver_path
+				? 'Open connection in dbeaver'
+				: 'Install dbeaver to get instant conneciton'}
 		>
-			
-			{task.env} : {task.port}
-		</button>
+			<button
+				disabled={!$userStore.dbeaver_path}
+				class={`link text-sm gap-1 text-amber-300 flex items-center ${
+					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
+				}`}
+				on:click={() => {
+					execute(
+						'open_dbeaver',
+						{
+							db,
+							port: task.port
+						},
+						false
+					);
+				}}
+			>
+				{task.port}
+			</button>
+		</div>
 	</div>
 {/await}

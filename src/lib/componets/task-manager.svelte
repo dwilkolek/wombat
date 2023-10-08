@@ -28,43 +28,39 @@
 	);
 </script>
 
-{#if (taskGroups ?? []).length > 0}
-	<div class="px-2 border-l-2 min-w-[350px]">
-		<div class="flex gap-2 flex-col">
-			{#each taskGroups as taskGroup}
-				<div class="flex flex-col gap-1">
-					<h5 class="text-info text-md font-bold uppercase">
-						{taskGroup.name}
-					</h5>
-					<div class="flex flex-col gap-2 pl-1">
-						{#each taskGroup.ecs as task}
-							<div class="flex gap-2 items-center text-sm">
-								<ServiceProxyStopBtn service_arn={task.arn} />
-
-								<div
-									class="tooltip flex items-center text-amber-300 hover:text-amber-500 gap-1"
-									data-tip={`Open ${task.name} in browser`}
-								>
-									<button
-										class="link text-md"
-										on:click|preventDefault={() => {
-											open('http://localhost:' + task.port);
-										}}
-									>
-										{task.env} : {task.port}</button
-									>
-								</div>
-							</div>
-						{/each}
-						{#each taskGroup.rds as task}
-							<div class="flex gap-2 items-center">
-								<DbProxyStopBtn database_arn={task.arn} />
-								<DbeaverBtn {task} />
-							</div>
-						{/each}
+<div class="flex gap-2 flex-col w-full">
+	{#each taskGroups as taskGroup}
+		<div class="flex flex-col gap-1">
+			<h5 class="text-info text-md font-bold uppercase">
+				{taskGroup.name}
+			</h5>
+			<div class="flex flex-col gap-2 pl-1">
+				{#each taskGroup.ecs as task}
+					<div class="flex gap-2 items-center text-sm">
+						<ServiceProxyStopBtn service_arn={task.arn} />
+						<span class="italic text-sm">Service {task.env}:</span>
+						<div
+							class="tooltip flex items-center text-amber-300 hover:text-amber-500 gap-1"
+							data-tip={`Open ${task.name} in browser`}
+						>
+							<button
+								class="link text-md"
+								on:click|preventDefault={() => {
+									open('http://localhost:' + task.port);
+								}}
+							>
+								{task.port}</button
+							>
+						</div>
 					</div>
-				</div>
-			{/each}
+				{/each}
+				{#each taskGroup.rds as task}
+					<div class="flex gap-2 items-center">
+						<DbProxyStopBtn database_arn={task.arn} />
+						<DbeaverBtn {task} />
+					</div>
+				{/each}
+			</div>
 		</div>
-	</div>
-{/if}
+	{/each}
+</div>

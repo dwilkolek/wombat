@@ -2,8 +2,9 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
-	import AppCard from '../../../lib/componets/app-card.svelte';
-	import TaskManager from '../../../lib/componets/task-manager.svelte';
+	import AppCard from '$lib/componets/app-card.svelte';
+	import TaskManager from '$lib/componets/task-manager.svelte';
+	import { taskStore } from '$lib/stores/task-store';
 
 	$: user = $userStore;
 
@@ -28,7 +29,7 @@
 	<title>APPS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="flex flex-row justify-between px-2">
+<div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
 	<form
 		class="flex flex-row gap-1 mb-2"
 		on:submit|preventDefault={async () => {
@@ -109,6 +110,9 @@
 			{/each}
 		</div>
 	</div>
-
-	<TaskManager />
+	{#if $taskStore.length > 0}
+	<div class="px-2 border-l-2 min-w-[350px]">
+		<TaskManager />
+	</div>
+	{/if}
 </div>

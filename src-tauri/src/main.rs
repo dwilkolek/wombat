@@ -79,7 +79,6 @@ async fn get_authorized(
     let last_check = app_ctx.last_auth_check;
 
     let now = chrono::Local::now().timestamp_millis();
-    println!("{} - {} = {}", &now, &last_check, now - last_check);
     if now - last_check > CHECK_AUTH_AFTER {
         info!("Checking authentication");
         let config = app_ctx.sdk_config.as_ref().unwrap_or_log().clone();
