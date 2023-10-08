@@ -19,7 +19,7 @@
 	$: userConfig = $userStore;
 </script>
 
-<div class="navbar bg-base-100 flex flex-row gap-2 justify-between">
+<div class="navbar bg-base-100 flex flex-row gap-2 justify-between px-3">
 	<div class="flex-none">
 		<ul class="menu menu-horizontal px-1 gap-2">
 			<li>

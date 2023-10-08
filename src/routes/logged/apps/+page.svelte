@@ -28,7 +28,7 @@
 	<title>APPS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="my-4 p-2 pb-5 flex flex-row justify-between px-2">
+<div class="flex flex-row justify-between px-2">
 	<form
 		class="flex flex-row gap-1 mb-2"
 		on:submit|preventDefault={async () => {
