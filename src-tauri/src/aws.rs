@@ -1,9 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use crate::shared::{self, BError, Env};
+use aws_config::SdkConfig;
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
@@ -12,7 +10,7 @@ use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
 use chrono::prelude::*;
 use ec2::types::Filter;
-use log::info;
+use log::{info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
@@ -93,43 +91,41 @@ pub struct LogEntry {
     pub message: String,
 }
 
-pub async fn is_logged(ecs: &ecs::Client) -> bool {
+pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
+    let ecs = ecs::Client::new(&config);
     let resp = ecs.list_clusters().send().await;
     return resp.is_ok();
 }
 
-pub async fn ecs_client(profile: &str) -> ecs::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    ecs::Client::new(&config)
-}
+// pub async fn ecs_client(config: &aws_config::SdkConfig) -> ecs::Client {
+//     ecs::Client::new(&config)
+// }
 
-pub async fn rds_client(profile: &str) -> rds::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    rds::Client::new(&config)
-}
+// pub async fn rds_client(config: &aws_config::SdkConfig) -> rds::Client {
+//     rds::Client::new(&config)
+// }
 
-pub async fn ec2_client(profile: &str) -> ec2::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    ec2::Client::new(&config)
-}
+// pub async fn ec2_client(config: &aws_config::SdkConfig) -> ec2::Client {
+//     ec2::Client::new(&config)
+// }
 
-pub async fn secretsmanager_client(profile: &str) -> secretsmanager::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    secretsmanager::Client::new(&config)
-}
+// pub async fn secretsmanager_client(profile: &str) -> secretsmanager::Client {
+//     let config = aws_config::from_env().profile_name(profile).load().await;
+//     secretsmanager::Client::new(&config)
+// }
 
-pub async fn ssm_client(profile: &str) -> ssm::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    ssm::Client::new(&config)
-}
+// pub async fn ssm_client(profile: &str) -> ssm::Client {
+//     let config = aws_config::from_env().profile_name(profile).load().await;
+//     ssm::Client::new(&config)
+// }
 
-pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    cloudwatchlogs::Client::new(&config)
-}
+// pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
+//     let config = aws_config::from_env().profile_name(profile).load().await;
+//     cloudwatchlogs::Client::new(&config)
+// }
 
-pub async fn bastions(profile: String) -> Vec<Bastion> {
-    let ec2_client = ec2_client(&profile).await;
+pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
+    let ec2_client = ec2::Client::new(&config);
     let filter = Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
@@ -172,8 +168,11 @@ pub async fn bastions(profile: String) -> Vec<Bastion> {
     res
 }
 
-
-pub async fn db_secret(profile: String, name: &str, env: &Env) -> Result<DbSecret, BError> {
+pub async fn db_secret(
+    config: &aws_config::SdkConfig,
+    name: &str,
+    env: &Env,
+) -> Result<DbSecret, BError> {
     let mut possible_secrets = Vec::new();
     if name.contains("-migrated") {
         possible_secrets.push(format!(
@@ -195,8 +194,9 @@ pub async fn db_secret(profile: String, name: &str, env: &Env) -> Result<DbSecre
     possible_secrets.push(format!("{}-{}/db-credentials", name, env));
     possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
     possible_secrets.push(format!("{}-{}/datasource-password", name, env));
+    dbg!(&possible_secrets);
 
-    let secret_client = secretsmanager_client(&profile).await;
+    let secret_client = secretsmanager::Client::new(&config);
 
     for secret in possible_secrets {
         let filter = secretsmanager::types::Filter::builder()
@@ -257,7 +257,7 @@ pub async fn db_secret(profile: String, name: &str, env: &Env) -> Result<DbSecre
         name, env
     ));
     possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
-    let ssm_client = ssm_client(&profile).await;
+    let ssm_client = ssm::Client::new(&config);
     for secret in possible_secrets {
         let param = ssm_client
             .get_parameter()
@@ -282,7 +282,7 @@ pub async fn db_secret(profile: String, name: &str, env: &Env) -> Result<DbSecre
 }
 
 pub async fn databases(
-    profile: String,
+    config: &aws_config::SdkConfig,
     databases_cache: Arc<Mutex<Vec<DbInstance>>>,
 ) -> Vec<DbInstance> {
     {
@@ -295,7 +295,7 @@ pub async fn databases(
     let mut there_is_more = true;
     let mut marker = None;
     let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
-    let rds_client = rds_client(&profile).await;
+    let rds_client = rds::Client::new(&config);
     let mut databases = vec![];
     while there_is_more {
         let resp = rds_client
@@ -351,7 +351,7 @@ pub async fn databases(
                     environment_tag,
                     env: env.clone(),
                 };
-               databases.push(db)
+                databases.push(db)
             }
         });
     }
@@ -363,14 +363,17 @@ pub async fn databases(
     return databases;
 }
 
-pub async fn clusters(profile: String, clusters_cache: Arc<Mutex<Vec<Cluster>>>) -> Vec<Cluster> {
+pub async fn clusters(
+    config: &aws_config::SdkConfig,
+    clusters_cache: Arc<Mutex<Vec<Cluster>>>,
+) -> Vec<Cluster> {
     {
         let clusters_cache = clusters_cache.lock().await;
         if clusters_cache.len() > 0 {
             return clusters_cache.clone();
         }
     }
-    let ecs_client = ecs_client(&profile).await;
+    let ecs_client = ecs::Client::new(&config);
 
     info!("Fetching clusters!");
     let cluster_resp = &ecs_client
@@ -402,7 +405,7 @@ pub async fn clusters(profile: String, clusters_cache: Arc<Mutex<Vec<Cluster>>>)
 }
 
 pub async fn services(
-    profile: String,
+    config: &aws_config::SdkConfig,
     clusters: Vec<Cluster>,
     cluster_service_map: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
 ) -> HashMap<Cluster, Vec<EcsService>> {
@@ -411,12 +414,12 @@ pub async fn services(
     for cluster in clusters.into_iter() {
         results.insert(cluster.clone(), Vec::new());
         let cache = Arc::clone(&cluster_service_map);
-        let profile = profile.clone();
+        let config = config.clone();
         let cluster = cluster.clone();
         handles.push(tokio::spawn(async move {
             (
                 cluster.clone(),
-                service(profile, cluster.clone(), cache).await,
+                service(&config, cluster.clone(), cache).await,
             )
         }));
     }
@@ -430,7 +433,7 @@ pub async fn services(
 }
 
 pub async fn service(
-    profile: String,
+    config: &aws_config::SdkConfig,
     cluster: Cluster,
     cluster_service_map: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
 ) -> Vec<EcsService> {
@@ -440,7 +443,7 @@ pub async fn service(
         }
     }
 
-    let ecs_client = ecs_client(&profile).await;
+    let ecs_client = ecs::Client::new(config);
     info!("Fetching services for {}", &cluster.arn);
     let mut values = vec![];
     let mut has_more = true;
@@ -482,7 +485,7 @@ pub async fn service(
 }
 
 pub async fn service_details(
-    profile: &str,
+    config: aws_config::SdkConfig,
     service_arns: Vec<String>,
     service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
     refresh: bool,
@@ -491,9 +494,9 @@ pub async fn service_details(
     let mut tokio_tasks = vec![];
     for service_arn in service_arns {
         let service_details_map = Arc::clone(&service_details_map);
-        let profile = profile.to_owned();
+        let config = config.clone();
         tokio_tasks.push(tokio::spawn(async move {
-            service_detail(profile, service_arn, service_details_map, refresh)
+            service_detail(config, service_arn, service_details_map, refresh)
         }))
     }
     for handle in tokio_tasks {
@@ -505,7 +508,7 @@ pub async fn service_details(
 }
 
 pub async fn service_detail(
-    profile: String,
+    config: aws_config::SdkConfig,
     service_arn: String,
     service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
     refresh: bool,
@@ -522,7 +525,7 @@ pub async fn service_detail(
 
     info!("Fetching service details for {} {}", service_arn, refresh);
 
-    let ecs_client = ecs_client(&profile).await;
+    let ecs_client = ecs::Client::new(&config);
     let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
     let service = ecs_client
         .describe_services()
@@ -567,13 +570,13 @@ pub async fn service_detail(
 }
 
 pub trait OnLogFound: Send {
-    fn notify(&self, log: LogEntry);
+    fn notify(&self, logs: Vec<LogEntry>);
     fn success(&self);
     fn error(&self, msg: String);
 }
 
 pub async fn find_logs(
-    client: cloudwatchlogs::Client,
+    config: &aws_config::SdkConfig,
     env: Env,
     app: String,
     start_date: i64,
@@ -581,6 +584,7 @@ pub async fn find_logs(
     filter: String,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
 ) -> Result<usize, BError> {
+    let client = cloudwatchlogs::Client::new(config);
     let response = client
         .describe_log_groups()
         .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
@@ -699,12 +703,24 @@ pub async fn find_logs(
                 info!("LOGS Found: {}", &events.len());
                 log_count = log_count + events.len();
                 let notifier = on_log_found.lock().await;
-                for event in events {
-                    notifier.notify(LogEntry {
-                        log_stream_name: event.log_stream_name.unwrap_or_default(),
-                        timestamp: event.timestamp.unwrap_or_default(),
-                        ingestion_time: event.ingestion_time.unwrap_or_default(),
-                        message: event.message.unwrap_or_default().to_owned(),
+                notifier.notify(
+                    events
+                        .into_iter()
+                        .map(|event| LogEntry {
+                            log_stream_name: event.log_stream_name.unwrap_or_default(),
+                            timestamp: event.timestamp.unwrap_or_default(),
+                            ingestion_time: event.ingestion_time.unwrap_or_default(),
+                            message: event.message.unwrap_or_default().to_owned(),
+                        })
+                        .collect(),
+                );
+
+                if log_count > 1000 {
+                    warn!("LOGS Exceeded max log count");
+                    notifier.error("Exceeded amount of logs. Limit 1000.".to_owned());
+                    return Result::Err(BError {
+                        message: "Exceeded amount of logs. Limit 1000.".to_owned(),
+                        command: "find_logs".to_owned(),
                     });
                 }
             }
