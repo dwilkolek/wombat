@@ -201,76 +201,6 @@ impl RdsClient {
     pub fn clear(&mut self) {
         self.databases = Vec::new();
     }
-    pub async fn databases(&mut self) -> Vec<DbInstance> {
-        if self.databases.len() > 0 {
-            return self.databases.clone();
-        }
-
-        let mut there_is_more = true;
-        let mut marker = None;
-        let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
-        let rds_client = self.rds_client.as_ref().unwrap_or_log();
-        while there_is_more {
-            let resp = rds_client
-                .describe_db_instances()
-                .set_marker(marker)
-                .max_records(100)
-                .send()
-                .await
-                .unwrap_or_log();
-            marker = resp.marker().map(|m| m.to_owned());
-            let instances = resp.db_instances();
-            let rdses = instances.as_deref().unwrap_or_log();
-            there_is_more = rdses.len() == 100 && marker.is_some();
-            rdses.into_iter().for_each(|rds| {
-                if let Some(_) = rds.db_name() {
-                    let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
-                    let name = name_regex
-                        .captures(&db_instance_arn)
-                        .and_then(|c| c.get(2))
-                        .and_then(|c| Some(c.as_str().to_owned()))
-                        .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
-                    let tags = rds.tag_list().unwrap_or_log();
-                    let mut appname_tag = String::from("");
-                    let mut environment_tag = String::from("");
-                    let endpoint = rds
-                        .endpoint()
-                        .map(|e| Endpoint {
-                            address: e.address().unwrap_or_log().to_owned(),
-                            port: u16::try_from(e.port()).unwrap_or_log(),
-                        })
-                        .unwrap_or_log()
-                        .clone();
-                    let engine: String = format!("{}", rds.engine().unwrap_or("??"));
-                    let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
-                    let mut env = Env::DEVNULL;
-                    for t in tags {
-                        if t.key().unwrap_or_log() == "AppName" {
-                            appname_tag = t.value().unwrap_or_log().to_owned()
-                        }
-                        if t.key().unwrap_or_log() == "Environment" {
-                            environment_tag = t.value().unwrap_or_log().to_owned();
-                            env = Env::from_exact(&environment_tag);
-                        }
-                    }
-
-                    let db = DbInstance {
-                        name,
-                        engine,
-                        engine_version,
-                        arn: db_instance_arn,
-                        endpoint,
-                        appname_tag,
-                        environment_tag,
-                        env: env.clone(),
-                    };
-                    self.databases.push(db)
-                }
-            });
-        }
-        self.databases.sort_by(|a, b| a.name.cmp(&b.name));
-        self.databases.clone()
-    }
 
     pub async fn db_secret(&self, name: &str, env: &Env) -> Result<DbSecret, BError> {
         let mut possible_secrets = Vec::new();
@@ -383,6 +313,87 @@ impl RdsClient {
     }
 }
 
+pub async fn databases(
+    profile: String,
+    databases_cache: Arc<Mutex<Vec<DbInstance>>>,
+) -> Vec<DbInstance> {
+    {
+        let databases_cache = databases_cache.lock().await;
+        if databases_cache.len() > 0 {
+            return databases_cache.clone();
+        }
+    }
+
+    let mut there_is_more = true;
+    let mut marker = None;
+    let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
+    let rds_client = rds_client(&profile).await;
+    let mut databases = vec![];
+    while there_is_more {
+        let resp = rds_client
+            .describe_db_instances()
+            .set_marker(marker)
+            .max_records(100)
+            .send()
+            .await
+            .unwrap_or_log();
+        marker = resp.marker().map(|m| m.to_owned());
+        let instances = resp.db_instances();
+        let rdses = instances.as_deref().unwrap_or_log();
+        there_is_more = rdses.len() == 100 && marker.is_some();
+        rdses.into_iter().for_each(|rds| {
+            if let Some(_) = rds.db_name() {
+                let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
+                let name = name_regex
+                    .captures(&db_instance_arn)
+                    .and_then(|c| c.get(2))
+                    .and_then(|c| Some(c.as_str().to_owned()))
+                    .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
+                let tags = rds.tag_list().unwrap_or_log();
+                let mut appname_tag = String::from("");
+                let mut environment_tag = String::from("");
+                let endpoint = rds
+                    .endpoint()
+                    .map(|e| Endpoint {
+                        address: e.address().unwrap_or_log().to_owned(),
+                        port: u16::try_from(e.port()).unwrap_or_log(),
+                    })
+                    .unwrap_or_log()
+                    .clone();
+                let engine: String = format!("{}", rds.engine().unwrap_or("??"));
+                let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
+                let mut env = Env::DEVNULL;
+                for t in tags {
+                    if t.key().unwrap_or_log() == "AppName" {
+                        appname_tag = t.value().unwrap_or_log().to_owned()
+                    }
+                    if t.key().unwrap_or_log() == "Environment" {
+                        environment_tag = t.value().unwrap_or_log().to_owned();
+                        env = Env::from_exact(&environment_tag);
+                    }
+                }
+
+                let db = DbInstance {
+                    name,
+                    engine,
+                    engine_version,
+                    arn: db_instance_arn,
+                    endpoint,
+                    appname_tag,
+                    environment_tag,
+                    env: env.clone(),
+                };
+               databases.push(db)
+            }
+        });
+    }
+    databases.sort_by(|a, b| a.name.cmp(&b.name));
+    {
+        let mut databases_cache = databases_cache.lock().await;
+        databases_cache.extend(databases.clone().into_iter())
+    }
+    return databases;
+}
 
 pub async fn clusters(profile: String, clusters_cache: Arc<Mutex<Vec<Cluster>>>) -> Vec<Cluster> {
     {
