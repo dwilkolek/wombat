@@ -197,9 +197,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-cloudwatchlogs"
-version = "0.31.2"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fc22a5df558d1f2505461da925b786ce0f0a1a8ebd47c18a6d0c17f2b15b3f1"
+checksum = "b11e27e0afee434e1417f4bd4b134cfceba2a8c0b9922da0dbfe6ce2a3dddb53"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -222,9 +222,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ec2"
-version = "0.31.2"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51b2f9409448aac3336e1c4ec712a73e532acd89d5adeeb4ad6f798dd69112c5"
+checksum = "f73fb5c6179aba310d6ac5bd82ccd2dbd08706f2874d7e15f142528488e0a0fe"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -248,9 +248,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ecs"
-version = "0.31.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "795d502afb2157afa69329f24106ff7890c27e47d94b8e2ce05f0813cce6f05d"
+checksum = "a5600bf04ad3cf6734ab76e7be18d6217336c2f8565a6ecbe5dc512b733ef78b"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -272,9 +272,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-rds"
-version = "0.31.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f44af3afa4bc9a4b19e57ad521e98cc4829533f45bc2599becd33821355f03b5"
+checksum = "2ee3012517524a61e74c3144e86b94d34c578a064b11996bb1d3cdf8b16a83bf"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -297,9 +297,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-secretsmanager"
-version = "0.31.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c1ed36f87416492f8a7529f201de656ffda5346cff3cce6cf0c16b63081dd35"
+checksum = "dca30a49664c4dc8e1acbae5c3985f2674fdadca5cf98d1110aa251aa3933030"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -322,9 +322,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "0.31.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9bc0b90baaa82399d95f0a3ed2a75cfcc79e2bee1f01a6e8a5663849fed4171"
+checksum = "cdf290de60935c47b6e51f6db5c0047139d0c137bd75236c1e186cef791db84a"
 dependencies = [
  "aws-credential-types",
  "aws-http",
@@ -4525,6 +4525,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79daa5ed5740825c40b389c5e50312b9c86df53fccd33f281df655642b43869d"
 dependencies = [
  "getrandom 0.2.10",
+ "rand 0.8.5",
  "serde",
 ]
 
