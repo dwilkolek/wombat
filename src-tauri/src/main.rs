@@ -117,7 +117,7 @@ async fn login(
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
-    rds_state: tauri::State<'_, RdsClientState>,
+    database_cache: tauri::State<'_, DatabaseCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
@@ -140,9 +140,8 @@ async fn login(
     user_config.use_profile(profile);
 
     {
-        let rds_client = &mut rds_state.0.lock().await;
-        rds_client.init(profile).await;
-        let dbs = rds_client.databases().await;
+       
+        let dbs = aws::databases(profile.to_owned(), Arc::clone(&database_cache.0)).await;
         ingest_log(
             &axiom.0,
             &authorized_user.id,
@@ -180,11 +179,11 @@ async fn login(
         }
     }
 
-    let rds_arc_clone = Arc::clone(&rds_state.0);
     let refresher_axiom = Arc::clone(&axiom.0);
     let refresher_user_id = authorized_user.id.clone();
     let profile_clone = profile.to_owned();
 
+    let database_cache = Arc::clone(&database_cache.0);
     let cluster_cache = Arc::clone(&cluster_cache.0);
     let service_cache = Arc::clone(&service_cache.0);
     let service_details_cache = Arc::clone(&service_details_cache.0);
@@ -196,9 +195,10 @@ async fn login(
         loop {
             interval.tick().await;
             {
-                let rds = &mut rds_arc_clone.lock().await;
-                rds.clear();
-                let dbs = rds.databases().await;
+                {
+                    database_cache.lock().await.clear();
+                }
+                let dbs = aws::databases(profile_clone.clone(), Arc::clone(&database_cache)).await;
                 if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                     ingest_log_with_client(
                         axiom,
@@ -213,6 +213,9 @@ async fn login(
 
             let clusters;
             {
+                {
+                    cluster_cache.lock().await.clear();
+                }
                 clusters = aws::clusters(profile_clone.clone(), Arc::clone(&cluster_cache)).await;
                 if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                     ingest_log_with_client(
@@ -226,8 +229,15 @@ async fn login(
                 }
             }
             {
-                let cluster_services =
-                    aws::services(profile_clone.to_owned(), clusters, Arc::clone(&service_cache)).await;
+                {
+                    service_cache.lock().await.clear();
+                }
+                let cluster_services = aws::services(
+                    profile_clone.to_owned(),
+                    clusters,
+                    Arc::clone(&service_cache),
+                )
+                .await;
 
                 for (cluster, services) in cluster_services {
                     if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
@@ -606,23 +616,21 @@ async fn services(
 async fn databases(
     env: shared::Env,
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, RdsClientState>,
+    cache: tauri::State<'_, DatabaseCache>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
-    let _ = get_authorized(&app_state.0, &axiom.0, false).await;
-
-    let dbs = cache.0.lock().await.databases().await;
-
-    Ok(dbs.into_iter().filter(|db| db.env == env).collect())
+    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let databases = aws::databases(authorized_user.profile, Arc::clone(&cache.0)).await;
+    Ok(databases.into_iter().filter(|db| db.env == env).collect())
 }
 
 #[tauri::command]
 async fn discover(
     name: &str,
     app_state: tauri::State<'_, AppContextState>,
-    db_cache: tauri::State<'_, RdsClientState>,
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    database_cache: tauri::State<'_, DatabaseCache>,
     service_cache: tauri::State<'_, ServiceCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
 ) -> Result<Vec<String>, BError> {
@@ -648,15 +656,14 @@ async fn discover(
     }
 
     {
-        let rds_client = &mut db_cache.0.lock().await;
-        let found_dbs: Vec<DbInstance> = rds_client
-            .databases()
-            .await
-            .into_iter()
-            .filter(|db| {
-                db.arn.contains(name) && !tracked_names.contains(&rds_arn_to_name(&db.arn))
-            })
-            .collect();
+        let found_dbs: Vec<DbInstance> = aws::databases(
+            authorized_user.profile.clone(),
+            Arc::clone(&database_cache.0),
+        )
+        .await
+        .into_iter()
+        .filter(|db| db.arn.contains(name) && !tracked_names.contains(&rds_arn_to_name(&db.arn)))
+        .collect();
 
         found_names.extend(found_dbs.into_iter().map(|d| rds_arn_to_name(&d.arn)));
     }
@@ -746,8 +753,8 @@ async fn start_db_proxy(
 async fn refresh_cache(
     app_state: tauri::State<'_, AppContextState>,
     window: Window,
-    databse_cache: tauri::State<'_, RdsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    database_cache: tauri::State<'_, DatabaseCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
@@ -763,8 +770,7 @@ async fn refresh_cache(
         service_details_cache.0.lock().await.clear();
     }
     {
-        let db_cache = &mut databse_cache.0.lock().await;
-        db_cache.clear();
+        database_cache.0.lock().await.clear();
     }
 
     ingest_log(
@@ -777,8 +783,11 @@ async fn refresh_cache(
     .await;
 
     {
-        let db_cache = &mut databse_cache.0.lock().await;
-        db_cache.databases().await;
+        aws::databases(
+            authorized_user.profile.clone(),
+            Arc::clone(&database_cache.0),
+        )
+        .await;
     }
 
     let clusters: Vec<Cluster>;
@@ -808,8 +817,8 @@ async fn service_details(
     app: String,
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
-    databases_cache: tauri::State<'_, RdsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    databases_cache: tauri::State<'_, DatabaseCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
@@ -825,7 +834,7 @@ async fn service_details(
     )
     .await;
     info!("Called service_details: {}", &app);
-    let db = Arc::clone(&databases_cache.0);
+    let database_cache = Arc::clone(&databases_cache.0);
     let cluster_cache = Arc::clone(&cluster_cache.0);
     let service_cache = Arc::clone(&service_cache.0);
     let service_details_cache = Arc::clone(&service_details_cache.0);
@@ -833,8 +842,7 @@ async fn service_details(
         info!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
         {
-            let databases_cache = &mut db.lock().await;
-            let databases = databases_cache.databases().await;
+            let databases = aws::databases(authorized_user.profile.clone(), database_cache).await;
             for db in databases.into_iter() {
                 if &shared::rds_arn_to_name(&db.arn) == &app {
                     dbs_list.push(db.clone())
@@ -1152,6 +1160,7 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
+        .manage(DatabaseCache(Arc::new(Mutex::new(Vec::new()))))
         .manage(ClusterCache(Arc::new(Mutex::new(Vec::new()))))
         .manage(ServiceCache(Arc::new(Mutex::new(HashMap::new()))))
         .manage(ServiceDetailsCache(Arc::new(Mutex::new(HashMap::new()))))
@@ -1182,7 +1191,6 @@ async fn main() {
 
 struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
 
-// struct EcsClientState(Arc<Mutex<aws::EcsClient>>);
 
 #[derive(Clone)]
 struct AppContext {
@@ -1202,6 +1210,8 @@ struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 struct ServiceDetailsCache(Arc<Mutex<HashMap<String, ServiceDetails>>>);
 struct ServiceCache(Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>);
 struct ClusterCache(Arc<Mutex<Vec<Cluster>>>);
+
+struct DatabaseCache(Arc<Mutex<Vec<DbInstance>>>);
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
