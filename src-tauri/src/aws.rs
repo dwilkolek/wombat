@@ -96,32 +96,6 @@ pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
     return resp.is_ok();
 }
 
-// pub async fn ecs_client(config: &aws_config::SdkConfig) -> ecs::Client {
-//     ecs::Client::new(&config)
-// }
-
-// pub async fn rds_client(config: &aws_config::SdkConfig) -> rds::Client {
-//     rds::Client::new(&config)
-// }
-
-// pub async fn ec2_client(config: &aws_config::SdkConfig) -> ec2::Client {
-//     ec2::Client::new(&config)
-// }
-
-// pub async fn secretsmanager_client(profile: &str) -> secretsmanager::Client {
-//     let config = aws_config::from_env().profile_name(profile).load().await;
-//     secretsmanager::Client::new(&config)
-// }
-
-// pub async fn ssm_client(profile: &str) -> ssm::Client {
-//     let config = aws_config::from_env().profile_name(profile).load().await;
-//     ssm::Client::new(&config)
-// }
-
-// pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
-//     let config = aws_config::from_env().profile_name(profile).load().await;
-//     cloudwatchlogs::Client::new(&config)
-// }
 
 pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
     let ec2_client = ec2::Client::new(&config);
@@ -282,12 +256,12 @@ pub async fn db_secret(
 
 pub async fn databases(
     config: &aws_config::SdkConfig,
-    databases_cache: Arc<Mutex<Vec<DbInstance>>>,
+    database_cache: Arc<Mutex<Vec<DbInstance>>>,
 ) -> Vec<DbInstance> {
     {
-        let databases_cache = databases_cache.lock().await;
-        if databases_cache.len() > 0 {
-            return databases_cache.clone();
+        let database_cache = database_cache.lock().await;
+        if database_cache.len() > 0 {
+            return database_cache.clone();
         }
     }
 
@@ -356,20 +330,20 @@ pub async fn databases(
     }
     databases.sort_by(|a, b| a.name.cmp(&b.name));
     {
-        let mut databases_cache = databases_cache.lock().await;
-        databases_cache.extend(databases.clone().into_iter())
+        let mut database_cache = database_cache.lock().await;
+        database_cache.extend(databases.clone().into_iter())
     }
     return databases;
 }
 
 pub async fn clusters(
     config: &aws_config::SdkConfig,
-    clusters_cache: Arc<Mutex<Vec<Cluster>>>,
+    cluster_cache: Arc<Mutex<Vec<Cluster>>>,
 ) -> Vec<Cluster> {
     {
-        let clusters_cache = clusters_cache.lock().await;
-        if clusters_cache.len() > 0 {
-            return clusters_cache.clone();
+        let cluster_cache = cluster_cache.lock().await;
+        if cluster_cache.len() > 0 {
+            return cluster_cache.clone();
         }
     }
     let ecs_client = ecs::Client::new(&config);
@@ -394,9 +368,9 @@ pub async fn clusters(
     }
 
     {
-        let mut clusters_cache = clusters_cache.lock().await;
+        let mut cluster_cache = cluster_cache.lock().await;
         for cluster in clusters.iter() {
-            clusters_cache.push(cluster.clone());
+            cluster_cache.push(cluster.clone());
         }
     }
 
@@ -406,13 +380,13 @@ pub async fn clusters(
 pub async fn services(
     config: &aws_config::SdkConfig,
     clusters: Vec<Cluster>,
-    cluster_service_map: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
+    service_cache: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
 ) -> HashMap<Cluster, Vec<EcsService>> {
     let mut handles = vec![];
     let mut results = HashMap::new();
     for cluster in clusters.into_iter() {
         results.insert(cluster.clone(), Vec::new());
-        let cache = Arc::clone(&cluster_service_map);
+        let cache = Arc::clone(&service_cache);
         let config = config.clone();
         let cluster = cluster.clone();
         handles.push(tokio::spawn(async move {
@@ -434,10 +408,10 @@ pub async fn services(
 pub async fn service(
     config: &aws_config::SdkConfig,
     cluster: Cluster,
-    cluster_service_map: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
+    service_cache: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
 ) -> Vec<EcsService> {
     {
-        if let Some(services) = cluster_service_map.lock().await.get(&cluster) {
+        if let Some(services) = service_cache.lock().await.get(&cluster) {
             return services.clone();
         }
     }
@@ -476,8 +450,8 @@ pub async fn service(
     values.sort_by(|a, b| a.name.cmp(&b.name));
 
     {
-        let mut cluster_service_map = cluster_service_map.lock().await;
-        cluster_service_map.insert(cluster.clone(), values.clone());
+        let mut service_cache = service_cache.lock().await;
+        service_cache.insert(cluster.clone(), values.clone());
     }
 
     values
@@ -486,16 +460,15 @@ pub async fn service(
 pub async fn service_details(
     config: aws_config::SdkConfig,
     service_arns: Vec<String>,
-    service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
-    refresh: bool,
+    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>
 ) -> Vec<ServiceDetails> {
     let mut result = Vec::new();
     let mut tokio_tasks = vec![];
     for service_arn in service_arns {
-        let service_details_map = Arc::clone(&service_details_map);
+        let service_details_cache = Arc::clone(&service_details_cache);
         let config = config.clone();
         tokio_tasks.push(tokio::spawn(async move {
-            service_detail(config, service_arn, service_details_map, refresh)
+            service_detail(config, service_arn, service_details_cache)
         }))
     }
     for handle in tokio_tasks {
@@ -509,20 +482,16 @@ pub async fn service_details(
 pub async fn service_detail(
     config: aws_config::SdkConfig,
     service_arn: String,
-    service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
-    refresh: bool,
+    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>
 ) -> ServiceDetails {
     {
-        let mut cache = service_details_map.lock().await;
-        if refresh {
-            cache.remove(&service_arn);
-        }
+        let cache = service_details_cache.lock().await;
         if let Some(details) = cache.get(&service_arn) {
             return details.clone();
         }
     }
 
-    info!("Fetching service details for {} {}", service_arn, refresh);
+    info!("Fetching service details for {}", service_arn);
 
     let ecs_client = ecs::Client::new(&config);
     let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
@@ -561,7 +530,7 @@ pub async fn service_detail(
         env: Env::from_any(&service_arn),
     };
     {
-        let mut cache = service_details_map.lock().await;
+        let mut cache = service_details_cache.lock().await;
         cache.insert(service_arn.to_owned(), details.clone());
 
         return details;

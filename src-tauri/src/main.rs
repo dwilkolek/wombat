@@ -67,7 +67,7 @@ struct AuthorizedUser {
     sdk_config: aws_config::SdkConfig,
 }
 
-const CHECK_AUTH_AFTER: i64 = 600_000;
+const CHECK_AUTH_AFTER: i64 = 45 * 60 * 1000; // every 45 minutes.
 
 async fn get_authorized(
     app_state: &Arc<Mutex<AppContext>>,
@@ -77,10 +77,11 @@ async fn get_authorized(
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
     let user_id = app_ctx.user_id.clone();
     let last_check = app_ctx.last_auth_check;
-    
 
     let now = chrono::Local::now().timestamp_millis();
+    println!("{} - {} = {}", &now, &last_check, now - last_check);
     if now - last_check > CHECK_AUTH_AFTER {
+        info!("Checking authentication");
         let config = app_ctx.sdk_config.as_ref().unwrap_or_log().clone();
         {
             let login_check = check_login_and_trigger(&user_id, &profile, &config, &axiom).await;
@@ -831,7 +832,7 @@ async fn service_details(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    databases_cache: tauri::State<'_, DatabaseCache>,
+    database_cache: tauri::State<'_, DatabaseCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
@@ -847,7 +848,7 @@ async fn service_details(
     )
     .await;
     info!("Called service_details: {}", &app);
-    let database_cache = Arc::clone(&databases_cache.0);
+    let database_cache = Arc::clone(&database_cache.0);
     let cluster_cache = Arc::clone(&cluster_cache.0);
     let service_cache = Arc::clone(&service_cache.0);
     let service_details_cache = Arc::clone(&service_details_cache.0);
@@ -886,8 +887,7 @@ async fn service_details(
         let services: Vec<ServiceDetails> = aws::service_details(
             authorized_user.sdk_config,
             service_arns,
-            service_details_cache,
-            false,
+            service_details_cache
         )
         .await;
 
