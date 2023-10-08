@@ -383,112 +383,126 @@ impl RdsClient {
     }
 }
 
-pub struct EcsClient {
-    ecs_client: Option<ecs::Client>,
-    pub clusters: Vec<Cluster>,
-    pub cluster_service_map: HashMap<Cluster, Vec<EcsService>>,
-    service_details_map: HashMap<String, ServiceDetails>,
+
+pub async fn clusters(profile: String, clusters_cache: Arc<Mutex<Vec<Cluster>>>) -> Vec<Cluster> {
+    {
+        let clusters_cache = clusters_cache.lock().await;
+        if clusters_cache.len() > 0 {
+            return clusters_cache.clone();
+        }
+    }
+    let ecs_client = ecs_client(&profile).await;
+
+    info!("Fetching clusters!");
+    let cluster_resp = &ecs_client
+        .list_clusters()
+        .send()
+        .await
+        .expect("Failed to get Cluster list");
+
+    let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
+
+    let mut clusters = vec![];
+    for cluster_arn in cluster_arns {
+        let env = Env::from_any(cluster_arn);
+        clusters.push(Cluster {
+            name: shared::cluster_arn_to_name(cluster_arn),
+            arn: cluster_arn.clone(),
+            env: env,
+        });
+    }
+
+    {
+        let mut clusters_cache = clusters_cache.lock().await;
+        for cluster in clusters.iter() {
+            clusters_cache.push(cluster.clone());
+        }
+    }
+
+    return clusters;
 }
 
-impl EcsClient {
-    pub fn new() -> Self {
-        EcsClient {
-            ecs_client: None,
-            clusters: Vec::new(),
-            cluster_service_map: HashMap::new(),
-            service_details_map: HashMap::new(),
-        }
-    }
-    pub async fn init(&mut self, profile: &str) {
-        self.ecs_client = Some(ecs_client(profile).await);
-    }
-    pub fn shutdown(&mut self) {
-        self.ecs_client = None;
-        self.clusters = Vec::new();
-        self.clear();
-    }
-    pub fn clear_shallow(&mut self) {
-        self.clusters = Vec::new();
-        self.cluster_service_map = HashMap::new();
-    }
-    pub fn clear(&mut self) {
-        self.clusters = Vec::new();
-        self.cluster_service_map = HashMap::new();
-        self.service_details_map = HashMap::new();
+pub async fn services(
+    profile: String,
+    clusters: Vec<Cluster>,
+    cluster_service_map: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
+) -> HashMap<Cluster, Vec<EcsService>> {
+    let mut handles = vec![];
+    let mut results = HashMap::new();
+    for cluster in clusters.into_iter() {
+        results.insert(cluster.clone(), Vec::new());
+        let cache = Arc::clone(&cluster_service_map);
+        let profile = profile.clone();
+        let cluster = cluster.clone();
+        handles.push(tokio::spawn(async move {
+            (
+                cluster.clone(),
+                service(profile, cluster.clone(), cache).await,
+            )
+        }));
     }
 
-    pub async fn clusters(&mut self) -> Vec<Cluster> {
-        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
-        if self.clusters.len() == 0 {
-            info!("Fetching clusters!");
-            let cluster_resp = &ecs_client
-                .list_clusters()
-                .send()
-                .await
-                .expect("Failed to get Cluster list");
-
-            let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
-
-            for cluster_arn in cluster_arns {
-                let env = Env::from_any(cluster_arn);
-                self.clusters.push(Cluster {
-                    name: shared::cluster_arn_to_name(cluster_arn),
-                    arn: cluster_arn.clone(),
-                    env: env,
-                });
-            }
-        }
-        self.clusters.clone()
+    for handle in handles {
+        let res = handle.await.unwrap_or_log();
+        results.insert(res.0, res.1);
     }
 
+    return results;
+}
 
-    pub async fn services(&mut self, cluster: &Cluster) -> Vec<EcsService> {
-        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
-
-        if let Some(services) = self.cluster_service_map.get(cluster) {
+pub async fn service(
+    profile: String,
+    cluster: Cluster,
+    cluster_service_map: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
+) -> Vec<EcsService> {
+    {
+        if let Some(services) = cluster_service_map.lock().await.get(&cluster) {
             return services.clone();
         }
-        info!("Fetching services for {}", &cluster.arn);
-        let mut values = vec![];
-        let mut has_more = true;
-        let mut next_token = None;
-
-        while has_more {
-            let services_resp = ecs_client
-                .list_services()
-                .cluster(cluster.arn.to_owned())
-                .max_results(100)
-                .set_next_token(next_token)
-                .send()
-                .await
-                .unwrap_or_log();
-            next_token = services_resp.next_token().map(|t| t.to_owned());
-            has_more = next_token.is_some();
-
-            services_resp
-                .service_arns()
-                .unwrap_or_log()
-                .iter()
-                .for_each(|service_arn| {
-                    values.push(EcsService {
-                        name: service_arn.split("/").last().unwrap_or_log().to_owned(),
-                        arn: service_arn.to_owned(),
-                        cluster_arn: cluster.arn.to_owned(),
-                        env: cluster.env.clone(),
-                    })
-                })
-        }
-        values.sort_by(|a, b| a.name.cmp(&b.name));
-        self.cluster_service_map
-            .insert(cluster.clone(), values.clone());
-        values
     }
 
+    let ecs_client = ecs_client(&profile).await;
+    info!("Fetching services for {}", &cluster.arn);
+    let mut values = vec![];
+    let mut has_more = true;
+    let mut next_token = None;
+
+    while has_more {
+        let services_resp = ecs_client
+            .list_services()
+            .cluster(cluster.arn.to_owned())
+            .max_results(100)
+            .set_next_token(next_token)
+            .send()
+            .await
+            .unwrap_or_log();
+        next_token = services_resp.next_token().map(|t| t.to_owned());
+        has_more = next_token.is_some();
+
+        services_resp
+            .service_arns()
+            .unwrap_or_log()
+            .iter()
+            .for_each(|service_arn| {
+                values.push(EcsService {
+                    name: service_arn.split("/").last().unwrap_or_log().to_owned(),
+                    arn: service_arn.to_owned(),
+                    cluster_arn: cluster.arn.to_owned(),
+                    env: cluster.env.clone(),
+                })
+            })
+    }
+    values.sort_by(|a, b| a.name.cmp(&b.name));
+
+    {
+        let mut cluster_service_map = cluster_service_map.lock().await;
+        cluster_service_map.insert(cluster.clone(), values.clone());
+    }
+
+    values
 }
 
-
-
-pub async fn service_details_for_names(
+pub async fn service_details(
     profile: &str,
     service_arns: Vec<String>,
     service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
@@ -500,28 +514,18 @@ pub async fn service_details_for_names(
         let service_details_map = Arc::clone(&service_details_map);
         let profile = profile.to_owned();
         tokio_tasks.push(tokio::spawn(async move {
-            service_details(
-                profile,
-                service_arn,
-                service_details_map,
-                refresh,
-            )
+            service_detail(profile, service_arn, service_details_map, refresh)
         }))
     }
-    for handle in tokio_tasks   {
+    for handle in tokio_tasks {
         let sd = handle.await.unwrap_or_log().await;
-        // if !result.contains_key(&sd.name) {
-        //     result.insert(sd.name.clone(), vec![sd]);
-        // } else {
-        //     result.get_mut(&sd.name).unwrap_or_log().push(sd);
-        // }
         result.push(sd);
     }
-    
+
     result
 }
 
-pub async fn service_details(
+pub async fn service_detail(
     profile: String,
     service_arn: String,
     service_details_map: Arc<Mutex<HashMap<String, ServiceDetails>>>,
