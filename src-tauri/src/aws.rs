@@ -128,12 +128,13 @@ pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
     cloudwatchlogs::Client::new(&config)
 }
 
-pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
+pub async fn bastions(profile: String) -> Vec<Bastion> {
+    let ec2_client = ec2_client(&profile).await;
     let filter = Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
         .build();
-    let res = ec2.describe_instances().filters(filter).send().await;
+    let res = ec2_client.describe_instances().filters(filter).send().await;
 
     let res = res.expect_or_log("Failed to get ec2 bastion instances");
     let res = res.reservations().unwrap_or_default();
@@ -171,146 +172,113 @@ pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
     res
 }
 
-pub struct RdsClient {
-    rds_client: Option<rds::Client>,
-    ssm_client: Option<ssm::Client>,
-    secret_client: Option<secretsmanager::Client>,
-    databases: Vec<DbInstance>,
-}
 
-impl RdsClient {
-    pub fn new() -> Self {
-        RdsClient {
-            rds_client: None,
-            ssm_client: None,
-            secret_client: None,
-            databases: Vec::new(),
+pub async fn db_secret(profile: String, name: &str, env: &Env) -> Result<DbSecret, BError> {
+    let mut possible_secrets = Vec::new();
+    if name.contains("-migrated") {
+        possible_secrets.push(format!(
+            "{}-{}/db-credentials",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "{}-{}/spring-datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "{}-{}/datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+    }
+    possible_secrets.push(format!("{}-{}/db-credentials", name, env));
+    possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
+    possible_secrets.push(format!("{}-{}/datasource-password", name, env));
+
+    let secret_client = secretsmanager_client(&profile).await;
+
+    for secret in possible_secrets {
+        let filter = secretsmanager::types::Filter::builder()
+            .key("name".into())
+            .values(&secret)
+            .build();
+        let secret_arn = secret_client.list_secrets().filters(filter).send().await;
+
+        let secret_arn = secret_arn.expect("Failed to fetch!");
+        let secret_arn = secret_arn.secret_list().expect("No arn list!");
+        if secret_arn.len() == 1 {
+            let secret_arn = secret_arn.first().unwrap_or_log();
+            let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
+
+            let secret = secret_client
+                .get_secret_value()
+                .secret_id(secret_arn.clone())
+                .send()
+                .await;
+            if secret.is_err() {
+                return Err(BError::new("db_secret", "No secrets found"));
+            }
+            let secret = secret.unwrap_or_log();
+            let secret = secret.secret_string().expect("There should be a secret");
+            let secret =
+                serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
+
+            return Ok(DbSecret {
+                dbname: secret.dbname,
+                password: secret.password,
+                username: secret.username,
+                auto_rotated: true,
+            });
         }
     }
-    pub async fn init(&mut self, profile: &str) {
-        self.rds_client = Some(rds_client(profile).await);
-        self.ssm_client = Some(ssm_client(profile).await);
-        self.secret_client = Some(secretsmanager_client(profile).await);
+
+    let mut possible_secrets = Vec::new();
+    if name.contains("-migrated") {
+        possible_secrets.push(format!(
+            "/config/{}_{}/db-credentials",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "/config/{}_{}/spring-datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "/config/{}_{}/datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
     }
-    pub fn shutdown(&mut self) {
-        self.rds_client = None;
-        self.ssm_client = None;
-        self.secret_client = None;
-        self.clear();
-    }
-    pub fn clear(&mut self) {
-        self.databases = Vec::new();
-    }
+    possible_secrets.push(format!("/config/{}_{}/db-credentials", name, env));
+    possible_secrets.push(format!(
+        "/config/{}_{}/spring-datasource-password",
+        name, env
+    ));
+    possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
+    let ssm_client = ssm_client(&profile).await;
+    for secret in possible_secrets {
+        let param = ssm_client
+            .get_parameter()
+            .name(&secret)
+            .with_decryption(true)
+            .send()
+            .await;
 
-    pub async fn db_secret(&self, name: &str, env: &Env) -> Result<DbSecret, BError> {
-        let mut possible_secrets = Vec::new();
-        if name.contains("-migrated") {
-            possible_secrets.push(format!(
-                "{}-{}/db-credentials",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "{}-{}/spring-datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "{}-{}/datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-        }
-        possible_secrets.push(format!("{}-{}/db-credentials", name, env));
-        possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
-        possible_secrets.push(format!("{}-{}/datasource-password", name, env));
-
-        for secret in possible_secrets {
-            let filter = secretsmanager::types::Filter::builder()
-                .key("name".into())
-                .values(&secret)
-                .build();
-            let secret_client = self.secret_client.as_ref().unwrap_or_log();
-            let secret_arn = secret_client.list_secrets().filters(filter).send().await;
-
-            let secret_arn = secret_arn.expect("Failed to fetch!");
-            let secret_arn = secret_arn.secret_list().expect("No arn list!");
-            if secret_arn.len() == 1 {
-                let secret_arn = secret_arn.first().unwrap_or_log();
-                let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
-
-                let secret = secret_client
-                    .get_secret_value()
-                    .secret_id(secret_arn.clone())
-                    .send()
-                    .await;
-                if secret.is_err() {
-                    return Err(BError::new("db_secret", "No secrets found"));
-                }
-                let secret = secret.unwrap_or_log();
-                let secret = secret.secret_string().expect("There should be a secret");
-                let secret =
-                    serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
-
+        if let Ok(param) = param {
+            if let Some(param) = param.parameter() {
                 return Ok(DbSecret {
-                    dbname: secret.dbname,
-                    password: secret.password,
-                    username: secret.username,
-                    auto_rotated: true,
+                    dbname: name.to_owned(),
+                    password: param.value().unwrap_or_log().to_owned(),
+                    username: name.to_owned(),
+                    auto_rotated: false,
                 });
             }
         }
-
-        let mut possible_secrets = Vec::new();
-        if name.contains("-migrated") {
-            possible_secrets.push(format!(
-                "/config/{}_{}/db-credentials",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "/config/{}_{}/spring-datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "/config/{}_{}/datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-        }
-        possible_secrets.push(format!("/config/{}_{}/db-credentials", name, env));
-        possible_secrets.push(format!(
-            "/config/{}_{}/spring-datasource-password",
-            name, env
-        ));
-        possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
-
-        for secret in possible_secrets {
-            let param = self
-                .ssm_client
-                .as_ref()
-                .unwrap_or_log()
-                .get_parameter()
-                .name(&secret)
-                .with_decryption(true)
-                .send()
-                .await;
-
-            if let Ok(param) = param {
-                if let Some(param) = param.parameter() {
-                    return Ok(DbSecret {
-                        dbname: name.to_owned(),
-                        password: param.value().unwrap_or_log().to_owned(),
-                        username: name.to_owned(),
-                        auto_rotated: false,
-                    });
-                }
-            }
-        }
-
-        return Err(BError::new("db_secret", "No secrets found"));
     }
+
+    return Err(BError::new("db_secret", "No secrets found"));
 }
 
 pub async fn databases(
