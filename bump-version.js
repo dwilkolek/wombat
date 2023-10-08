@@ -13,7 +13,7 @@ fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 4));
 
 const tauriConfPath = './src-tauri/tauri.conf.json';
 const tauriConfJson = JSON.parse(fs.readFileSync(tauriConfPath).toString('utf8'));
-tauriConfJson['package']['version'] = safeNewVersion;
+tauriConfJson['package']['version'] = newVersion;
 fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConfJson, null, 2));
 
 const cargoTomlPath = './src-tauri/Cargo.toml';
