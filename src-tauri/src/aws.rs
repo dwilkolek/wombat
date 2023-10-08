@@ -1,7 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::shared::{self, BError, Env};
-use aws_config::SdkConfig;
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
