@@ -22,7 +22,7 @@ export type UserConfig = {
 };
 
 export type EcsService = {
-	env: AwsEnv,
+	env: AwsEnv;
 	name: string;
 	arn: string;
 	cluster_arn: string;

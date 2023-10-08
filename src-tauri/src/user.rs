@@ -1,10 +1,10 @@
 use log::info;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
-use tracing_unwrap::OptionExt;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
+use tracing_unwrap::OptionExt;
 
 use crate::shared::{ecs_arn_to_name, rds_arn_to_name, BError, Env, TrackedName};
 use uuid::Uuid;
@@ -127,7 +127,10 @@ impl UserConfig {
     }
 
     fn config_path() -> PathBuf {
-        home::home_dir().unwrap_or_log().as_path().join(".wombat_v1")
+        home::home_dir()
+            .unwrap_or_log()
+            .as_path()
+            .join(".wombat_v1")
     }
 
     fn recheck_dbeaver_path(original_path: Option<String>) -> Option<String> {

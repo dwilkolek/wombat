@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { clusterStore } from '$lib/stores/cluster-store';
 	import { userStore } from '$lib/stores/user-store';
-	import { AwsEnv, type ServiceDetails } from '$lib/types';
+	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
-	import AppCard from '../../../lib/componets/app-card.svelte';
-	
+	import AppCard from '$lib/componets/app-card.svelte';
+	import TaskManager from '$lib/componets/task-manager.svelte';
+	import { taskStore } from '$lib/stores/task-store';
+
 	$: user = $userStore;
 
 	$: selectedClusters = $userStore.preffered_environments;
@@ -28,7 +29,7 @@
 	<title>APPS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="my-4 p-2 pb-5 flex flex-row justify-between">
+<div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
 	<form
 		class="flex flex-row gap-1 mb-2"
 		on:submit|preventDefault={async () => {
@@ -78,33 +79,40 @@
 		{/each}
 	</div>
 </div>
-<div class="flex flex-col gap-2">
-	<div class="flex flex-wrap gap-2">
-		{#if discovered}
-			{#await discovered}
-				<span class="loading loading-dots loading-lg" />
-			{:then discoverValue}
-				{#each discoverValue as discoveredApp}
-					<AppCard
-						app={discoveredApp}
-						displayConfig={{
-							envs: selectedClusters,
-							favorite: false
-						}}
-					/>
-				{/each}
-			{/await}
-		{/if}
+<div class="flex gap-2 pb-2 px-2">
+	<div class="flex flex-col gap-2">
+		<div class="flex flex-wrap gap-2">
+			{#if discovered}
+				{#await discovered}
+					<span class="loading loading-dots loading-lg" />
+				{:then discoverValue}
+					{#each discoverValue as discoveredApp}
+						<AppCard
+							app={discoveredApp}
+							displayConfig={{
+								envs: selectedClusters,
+								favorite: false
+							}}
+						/>
+					{/each}
+				{/await}
+			{/if}
+		</div>
+		<div class="flex flex-wrap gap-2">
+			{#each user.tracked_names as app}
+				<AppCard
+					{app}
+					displayConfig={{
+						envs: selectedClusters,
+						favorite: true
+					}}
+				/>
+			{/each}
+		</div>
 	</div>
-	<div class="flex flex-wrap gap-2">
-		{#each user.tracked_names as app}
-			<AppCard
-				{app}
-				displayConfig={{
-					envs: selectedClusters,
-					favorite: true
-				}}
-			/>
-		{/each}
+	{#if $taskStore.length > 0}
+	<div class="px-2 border-l-2 min-w-[350px]">
+		<TaskManager />
 	</div>
+	{/if}
 </div>

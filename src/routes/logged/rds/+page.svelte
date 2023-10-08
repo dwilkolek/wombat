@@ -29,7 +29,7 @@
 	<title>RDS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="my-4 p-2 pb-5">
+<div class="bg-base-100 sticky top-[68px] z-50 px-2">
 	<select class="select select-bordered" bind:value={$envStore}>
 		{#each envs as env}
 			<option value={env}>{env}</option>
@@ -37,8 +37,8 @@
 	</select>
 </div>
 <div class="h-full block">
-	<table class="table w-full table-zebra table-compact">
-		<thead class="sticky top-0">
+	<table class="table w-full table-zebra table-compact ">
+		<thead class="bg-base-100 sticky top-[116px] z-50">
 			<tr>
 				<th>
 					<div class="flex gap-2">

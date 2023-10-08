@@ -13,7 +13,7 @@
 			<span class="mx-auto my-10">Processing command: {$loading.replace('_', ' ')}</span>
 		</div>
 	{/if}
-	<main class={`px-2`}>
+	<main>
 		<slot />
 	</main>
 </div>

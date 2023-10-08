@@ -105,8 +105,14 @@
 				};
 		}
 	}
-	function processLogs(newLog: LogEntry) {
-		console.log(newLog);
+	function processLogs(newLogs: LogEntry[]) {
+		logs.update((n) => {
+			let startIndex = n.length;
+			let newLogArr = newLogs.map((log) => ({ id: startIndex++, ...transformLog(log) }));
+			return [...n, ...newLogArr];
+		});
+	}
+	function transformLog(newLog: LogEntry) {
 		let isString;
 		try {
 			if (typeof newLog.message == 'object') {
@@ -125,34 +131,27 @@
 		if (isString) {
 			const level = (newLog.message.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ??
 				'UNKNOWN') as LogLevel;
-			logs.update((n) => [
-				...n,
-				{
-					id: n.length,
-					timestamp: newLog.timestamp,
-					level,
-					message: newLog.message,
-					data: { message: newLog.message },
-					style: logStyle(level)
-				}
-			]);
+			return {
+				timestamp: newLog.timestamp,
+				level,
+				message: newLog.message,
+				data: { message: newLog.message },
+				style: logStyle(level)
+			};
 		} else {
 			const logData = JSON.parse(newLog.message);
 			const level = logData?.level?.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ?? 'UNKNOWN';
-			logs.update((n) => [
-				...n,
-				{
-					id: n.length,
-					timestamp: newLog.timestamp,
-					level,
-					message: logData.message,
-					data: logData,
-					style: logStyle(level)
-				}
-			]);
+			return {
+				timestamp: newLog.timestamp,
+				level,
+				message: logData.message,
+				data: logData,
+				style: logStyle(level)
+			};
 		}
 	}
-	listen<LogEntry>('new-log-found', (event) => processLogs(event.payload));
+
+	listen<LogEntry[]>('new-log-found', (event) => processLogs(event.payload));
 
 	listen('find-logs-success', () => {
 		isLookingForLogs = false;
@@ -163,7 +162,7 @@
 		searchStatus = 'error';
 		searchError = event.payload;
 	});
-	beforeNavigate(async ({ from, to, type, cancel }) => {
+	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
 </script>
@@ -173,7 +172,7 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 
-<div class="flex gap-8 content-end flex-col-reverse lg:flex-row">
+<div class="flex gap-8 content-end flex-col-reverse lg:flex-row px-2">
 	<div class="flex flex-col gap-2">
 		<div class="flex gap-2">
 			<div>
@@ -246,6 +245,7 @@
 						searchError = undefined;
 						logs.set([]);
 						selectedLog.set(undefined);
+						showLogDetails = false;
 						searchStatus = undefined;
 						invoke('find_logs', {
 							app: $selectedService?.name,
@@ -304,68 +304,68 @@
 		</div>
 	</div>
 	<div class="flex h-full flex-col gap-2">
+		Ping me for custom search filter templates.
 		<div class="flex flex-wrap gap-2">
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(sub(new Date(), { minutes: 5 }));
 					endDate.set(new Date());
 				}}>Last 5m</button
 			>
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(sub(new Date(), { minutes: 15 }));
 					endDate.set(new Date());
 				}}>Last 15m</button
 			>
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(sub(new Date(), { minutes: 30 }));
 					endDate.set(new Date());
 				}}>Last 30m</button
 			>
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 1 }));
 					endDate.set(new Date());
 				}}>Last 1h</button
 			>
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 4 }));
 					endDate.set(new Date());
 				}}>Last 4h</button
 			>
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 24 }));
 					endDate.set(new Date());
 				}}>Last 24h</button
 			>
 			<button
-				class="btn btn-active btn-accent btn-sm"
+				class="btn btn-accent btn-xs"
 				on:click={() => {
 					startDate.set(startOfDay(new Date()));
 					endDate.set(endOfDay(new Date()));
 				}}>Today</button
 			>
 		</div>
-		Ping me for custom search filter templates.
 		<div class="flex flex-wrap gap-2">
 			{#if $selectedService?.name == 'rome'}
 				<button
-					class="btn btn-active btn-secondary btn-sm"
+					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
 						filterString.set(`{ $.level = "ERROR" }`);
 					}}>Only Errors</button
 				>
 				<button
-					class="btn btn-active btn-secondary btn-sm"
+					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
 						filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
 					}}>By Trace</button
@@ -390,7 +390,7 @@
 <div class="flex flex-col w-full gap-2">
 	<div
 		class={`overflow-auto ${
-			showLogDetails ? 'h-[calc(100vh-650px)]' : 'h-[calc(100vh-260px)]'
+			showLogDetails ? 'h-[calc(60vh-260px)]' : 'h-[calc(100vh-260px)]'
 		} w-full`}
 	>
 		<table class="table table-xs w-full">
@@ -419,7 +419,9 @@
 			</tbody>
 		</table>
 	</div>
-	<div class="w-full flex-col">
+</div>
+<div class="fixed w-full bottom-0">
+	<div class="w-full flex-col bg-base-300 rounded-t-lg">
 		<div class="w-full flex justify-center">
 			{#if !showLogDetails}
 				<button on:click={() => (showLogDetails = true)}>
@@ -452,20 +454,22 @@
 		</div>
 
 		{#if $selectedLog && showLogDetails}
-			<div class="h-[400px] flex flex-col gap-2">
+			<div class="h-[40vh] flex flex-col gap-2">
 				<button
 					class="m-2 btn btn-active btn-primary btn-sm"
 					on:click={async () => {
 						await writeText(JSON.stringify($selectedLog, null, 2));
 					}}>Copy raw json</button
 				>
-				<div class="text-sm overflow-auto h-[340px]">
+				<div class="text-sm overflow-auto h-[calc(40vh-80px)]">
 					<JsonView json={$selectedLog} />
 				</div>
 			</div>
 		{/if}
 		{#if !$selectedLog && showLogDetails}
-			<div class="overflow-auto h-[400px] flex flex-col gap-2">Select log to see details</div>
+			<div class="overflow-auto h-[40vh] justify-evenly text-center flex flex-col gap-2">
+				Select log to see details
+			</div>
 		{/if}
 	</div>
 </div>

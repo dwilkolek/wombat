@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { execute } from '$lib/stores/error-store';
-	import type { ServiceDetails } from '$lib/types';
-	import { open } from '@tauri-apps/api/shell';
 
-	export let service: ServiceDetails;
-	export let port: number;
+	export let service_arn: String;
 </script>
 
-<div class="tooltip" data-tip="Stop proxy to service">
+<div class="tooltip flex" data-tip="Stop proxy to service">
 	<button
 		on:click={async () => {
-			await execute('stop_job', { arn: service?.arn });
+			await execute('stop_job', { arn: service_arn });
 		}}
 	>
 		<div class="w-5 h-5 relative">
@@ -40,12 +37,4 @@
 			</svg>
 		</div>
 	</button>
-</div>
-<div class="tooltip" data-tip="Open in browser">
-	<button
-		class="link"
-		on:click|preventDefault={() => {
-			open('http://localhost:' + port);
-		}}>:{port}</button
-	>
 </div>
