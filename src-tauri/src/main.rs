@@ -301,11 +301,10 @@ async fn save_preffered_envs(
 async fn credentials(
     db: aws::DbInstance,
     app_state: tauri::State<'_, AppContextState>,
-    db_state: tauri::State<'_, RdsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<DbSecret, BError> {
     let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
-    let secret = db_state.0.lock().await.db_secret(&db.name, &db.env).await;
+    let secret = aws::db_secret(authorized_user.profile, &db.name, &db.env).await;
     match &secret {
         Ok(_) => {
             ingest_log(
@@ -426,7 +425,7 @@ async fn logout(
     cluster_cache: tauri::State<'_, ClusterCache>,
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
-    rds_state: tauri::State<'_, RdsClientState>,
+    database_cache: tauri::State<'_, DatabaseCache>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_state: tauri::State<'_, UserConfigState>,
@@ -454,7 +453,7 @@ async fn logout(
     }
 
     {
-        rds_state.0.lock().await.shutdown()
+        database_cache.0.lock().await.clear()
     }
     {
         cluster_cache.0.lock().await.clear();
@@ -716,8 +715,7 @@ async fn start_db_proxy(
 
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
 
-    let ec2_client = aws::ec2_client(&authorized_user.profile).await;
-    let bastions = aws::bastions(&ec2_client).await;
+    let bastions = aws::bastions(authorized_user.profile.clone()).await;
     let bastion = bastions
         .into_iter()
         .find(|b| b.env == db.env)
@@ -906,8 +904,7 @@ async fn start_service_proxy(
 
     let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
 
-    let ec2_client = aws::ec2_client(&authorized_user.profile).await;
-    let bastions = aws::bastions(&ec2_client).await;
+    let bastions = aws::bastions(authorized_user.profile.clone()).await;
     let bastion = bastions
         .into_iter()
         .find(|b| b.env == service.env)
@@ -928,7 +925,7 @@ async fn start_service_proxy(
         service.arn,
         window,
         bastion.instance_id,
-        authorized_user.profile.to_owned(),
+        authorized_user.profile.clone(),
         host,
         80,
         aws_local_port,
@@ -947,7 +944,6 @@ async fn open_dbeaver(
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
-    rds_state: tauri::State<'_, RdsClientState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
@@ -978,7 +974,7 @@ async fn open_dbeaver(
             .clone();
     }
 
-    let db_secret = rds_state.0.lock().await.db_secret(&db.name, &db.env).await;
+    let db_secret = aws::db_secret(authorized_user.profile, &db.name, &db.env).await;
     if let Err(err) = db_secret {
         ingest_log(
             &axiom.0,
@@ -1153,8 +1149,6 @@ async fn main() {
             active_profile: None,
             user_id: user_id,
         }))))
-        .manage(RdsClientState(Arc::new(Mutex::new(aws::RdsClient::new()))))
-        // .manage(EcsClientState(Arc::new(Mutex::new(aws::EcsClient::new()))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             aws_resource_refresher: None,
             proxies_handlers: HashMap::new(),
@@ -1189,7 +1183,6 @@ async fn main() {
         .expect("Error while running tauri application");
 }
 
-struct RdsClientState(Arc<Mutex<aws::RdsClient>>);
 
 
 #[derive(Clone)]
