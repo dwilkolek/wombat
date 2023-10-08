@@ -28,7 +28,7 @@
 	<title>APPS</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="my-4 p-2 pb-5 flex flex-row justify-between">
+<div class="my-4 p-2 pb-5 flex flex-row justify-between px-2">
 	<form
 		class="flex flex-row gap-1 mb-2"
 		on:submit|preventDefault={async () => {
@@ -78,7 +78,7 @@
 		{/each}
 	</div>
 </div>
-<div class="flex gap-2 pb-2">
+<div class="flex gap-2 pb-2 px-2">
 	<div class="flex flex-col gap-2">
 		<div class="flex flex-wrap gap-2">
 			{#if discovered}

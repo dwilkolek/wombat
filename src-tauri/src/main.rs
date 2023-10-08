@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{cloudwatchlogs_client, Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
+use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
 use axiom_rs::Client;
 use log::{error, info, warn, LevelFilter};
 use regex::Regex;
@@ -60,27 +60,44 @@ struct ServiceDetailsPayload {
     dbs: Vec<aws::DbInstance>,
 }
 
+#[derive(Clone)]
 struct AuthorizedUser {
     id: uuid::Uuid,
     profile: String,
+    sdk_config: aws_config::SdkConfig,
 }
+
+const CHECK_AUTH_AFTER: i64 = 600_000;
 
 async fn get_authorized(
     app_state: &Arc<Mutex<AppContext>>,
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
-    skip_check: bool,
 ) -> AuthorizedUser {
-    let app_ctx = app_state.lock().await;
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-    if !skip_check {
-        let login_check = check_login_and_trigger(&app_ctx.user_id, profile, &axiom).await;
-        if login_check.is_err() {
-            panic!("Authentication failed")
+    let mut app_ctx = app_state.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
+    let user_id = app_ctx.user_id.clone();
+    let last_check = app_ctx.last_auth_check;
+    
+
+    let now = chrono::Local::now().timestamp_millis();
+    if now - last_check > CHECK_AUTH_AFTER {
+        let config = app_ctx.sdk_config.as_ref().unwrap_or_log().clone();
+        {
+            let login_check = check_login_and_trigger(&user_id, &profile, &config, &axiom).await;
+            if login_check.is_err() {
+                panic!("Authentication failed")
+            }
         }
+        app_ctx.last_auth_check = now;
     }
     return AuthorizedUser {
         profile: profile.to_owned(),
         id: app_ctx.user_id.clone(),
+        sdk_config: app_ctx
+            .sdk_config
+            .as_ref()
+            .expect("Sdk Config should be initialized at all times")
+            .clone(),
     };
 }
 
@@ -123,9 +140,11 @@ async fn login(
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<UserConfig, BError> {
     {
-        app_state.0.lock().await.active_profile = Some(profile.to_owned());
+        let mut app_state = app_state.0.lock().await;
+        app_state.active_profile = Some(profile.to_owned());
+        app_state.sdk_config = Some(aws_config::from_env().profile_name(profile).load().await);
     }
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
     ingest_log(
         &axiom.0,
@@ -140,8 +159,7 @@ async fn login(
     user_config.use_profile(profile);
 
     {
-       
-        let dbs = aws::databases(profile.to_owned(), Arc::clone(&database_cache.0)).await;
+        let dbs = aws::databases(&authorized_user.sdk_config, Arc::clone(&database_cache.0)).await;
         ingest_log(
             &axiom.0,
             &authorized_user.id,
@@ -154,7 +172,7 @@ async fn login(
 
     let clusters;
     {
-        clusters = aws::clusters(profile.to_owned(), Arc::clone(&cluster_cache.0)).await;
+        clusters = aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache.0)).await;
         ingest_log(
             &axiom.0,
             &authorized_user.id,
@@ -165,8 +183,12 @@ async fn login(
         .await;
     }
     {
-        let cluster_services =
-            aws::services(profile.to_owned(), clusters, Arc::clone(&service_cache.0)).await;
+        let cluster_services = aws::services(
+            &authorized_user.sdk_config,
+            clusters,
+            Arc::clone(&service_cache.0),
+        )
+        .await;
         for (cluster, services) in cluster_services {
             ingest_log(
                 &axiom.0,
@@ -181,7 +203,7 @@ async fn login(
 
     let refresher_axiom = Arc::clone(&axiom.0);
     let refresher_user_id = authorized_user.id.clone();
-    let profile_clone = profile.to_owned();
+    let authorized_user = authorized_user.clone();
 
     let database_cache = Arc::clone(&database_cache.0);
     let cluster_cache = Arc::clone(&cluster_cache.0);
@@ -198,7 +220,8 @@ async fn login(
                 {
                     database_cache.lock().await.clear();
                 }
-                let dbs = aws::databases(profile_clone.clone(), Arc::clone(&database_cache)).await;
+                let dbs =
+                    aws::databases(&authorized_user.sdk_config, Arc::clone(&database_cache)).await;
                 if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                     ingest_log_with_client(
                         axiom,
@@ -216,7 +239,8 @@ async fn login(
                 {
                     cluster_cache.lock().await.clear();
                 }
-                clusters = aws::clusters(profile_clone.clone(), Arc::clone(&cluster_cache)).await;
+                clusters =
+                    aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache)).await;
                 if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                     ingest_log_with_client(
                         axiom,
@@ -233,7 +257,7 @@ async fn login(
                     service_cache.lock().await.clear();
                 }
                 let cluster_services = aws::services(
-                    profile_clone.to_owned(),
+                    &authorized_user.sdk_config,
                     clusters,
                     Arc::clone(&service_cache),
                 )
@@ -303,8 +327,8 @@ async fn credentials(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<DbSecret, BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
-    let secret = aws::db_secret(authorized_user.profile, &db.name, &db.env).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
+    let secret = aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
     match &secret {
         Ok(_) => {
             ingest_log(
@@ -337,7 +361,7 @@ async fn stop_job(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, true).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
     if let Some(job) = async_task_tracker
         .0
         .lock()
@@ -466,6 +490,8 @@ async fn logout(
     }
 
     app_state.active_profile = None;
+    app_state.sdk_config = None;
+    app_state.last_auth_check = 0;
 
     Ok(())
 }
@@ -475,8 +501,8 @@ struct WindowNotifier {
 }
 
 impl aws::OnLogFound for WindowNotifier {
-    fn notify(&self, log: aws::LogEntry) {
-        let _ = self.window.emit("new-log-found", log);
+    fn notify(&self, logs: Vec<aws::LogEntry>) {
+        let _ = self.window.emit("new-log-found", logs);
     }
     fn success(&self) {
         let _ = self.window.emit("find-logs-success", ());
@@ -498,7 +524,7 @@ async fn find_logs(
     axiom: tauri::State<'_, AxiomClientState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
     {
         let handler = &async_task_tracker.0.lock().await.search_log_handler;
@@ -533,7 +559,7 @@ async fn find_logs(
         let action =
             Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
         let result = aws::find_logs(
-            cloudwatchlogs_client(&authorized_user.profile).await,
+            &authorized_user.sdk_config,
             env,
             app,
             start,
@@ -592,10 +618,10 @@ async fn clusters(
     cache: tauri::State<'_, ClusterCache>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::Cluster>, BError> {
-    let _ = get_authorized(&app_state.0, &axiom.0, false).await;
+    let _ = get_authorized(&app_state.0, &axiom.0).await;
 
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
-    let clusters = aws::clusters(authorized_user.profile, Arc::clone(&cache.0)).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
+    let clusters = aws::clusters(&authorized_user.sdk_config, Arc::clone(&cache.0)).await;
     Ok(clusters)
 }
 
@@ -606,8 +632,8 @@ async fn services(
     cache: tauri::State<'_, ServiceCache>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::EcsService>, BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
-    let services = aws::service(authorized_user.profile, cluster, Arc::clone(&cache.0)).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
+    let services = aws::service(&authorized_user.sdk_config, cluster, Arc::clone(&cache.0)).await;
     Ok(services)
 }
 
@@ -618,8 +644,8 @@ async fn databases(
     cache: tauri::State<'_, DatabaseCache>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
-    let databases = aws::databases(authorized_user.profile, Arc::clone(&cache.0)).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
+    let databases = aws::databases(&authorized_user.sdk_config, Arc::clone(&cache.0)).await;
     Ok(databases.into_iter().filter(|db| db.env == env).collect())
 }
 
@@ -633,7 +659,7 @@ async fn discover(
     service_cache: tauri::State<'_, ServiceCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
 ) -> Result<Vec<String>, BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
     let name = &name.to_lowercase();
     let tracked_names: HashSet<String>;
@@ -655,26 +681,23 @@ async fn discover(
     }
 
     {
-        let found_dbs: Vec<DbInstance> = aws::databases(
-            authorized_user.profile.clone(),
-            Arc::clone(&database_cache.0),
-        )
-        .await
-        .into_iter()
-        .filter(|db| db.arn.contains(name) && !tracked_names.contains(&rds_arn_to_name(&db.arn)))
-        .collect();
+        let found_dbs: Vec<DbInstance> =
+            aws::databases(&authorized_user.sdk_config, Arc::clone(&database_cache.0))
+                .await
+                .into_iter()
+                .filter(|db| {
+                    db.arn.contains(name) && !tracked_names.contains(&rds_arn_to_name(&db.arn))
+                })
+                .collect();
 
         found_names.extend(found_dbs.into_iter().map(|d| rds_arn_to_name(&d.arn)));
     }
 
     {
-        let clusters = aws::clusters(
-            authorized_user.profile.clone(),
-            Arc::clone(&cluster_cache.0),
-        )
-        .await;
+        let clusters =
+            aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache.0)).await;
         let services = aws::services(
-            authorized_user.profile.clone(),
+            &authorized_user.sdk_config,
             clusters,
             Arc::clone(&service_cache.0),
         )
@@ -711,11 +734,11 @@ async fn start_db_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
 
-    let bastions = aws::bastions(authorized_user.profile.clone()).await;
+    let bastions = aws::bastions(&authorized_user.sdk_config).await;
     let bastion = bastions
         .into_iter()
         .find(|b| b.env == db.env)
@@ -757,7 +780,7 @@ async fn refresh_cache(
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<(), BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
     {
         cluster_cache.0.lock().await.clear();
     }
@@ -781,25 +804,17 @@ async fn refresh_cache(
     .await;
 
     {
-        aws::databases(
-            authorized_user.profile.clone(),
-            Arc::clone(&database_cache.0),
-        )
-        .await;
+        aws::databases(&authorized_user.sdk_config, Arc::clone(&database_cache.0)).await;
     }
 
     let clusters: Vec<Cluster>;
     {
-        clusters = aws::clusters(
-            authorized_user.profile.clone(),
-            Arc::clone(&cluster_cache.0),
-        )
-        .await;
+        clusters = aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache.0)).await;
     }
 
     {
         aws::services(
-            authorized_user.profile.clone(),
+            &authorized_user.sdk_config,
             clusters,
             Arc::clone(&service_cache.0),
         )
@@ -821,7 +836,7 @@ async fn service_details(
     service_cache: tauri::State<'_, ServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<(), BError> {
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
     ingest_log(
         &axiom.0,
@@ -840,7 +855,7 @@ async fn service_details(
         info!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
         {
-            let databases = aws::databases(authorized_user.profile.clone(), database_cache).await;
+            let databases = aws::databases(&authorized_user.sdk_config, database_cache).await;
             for db in databases.into_iter() {
                 if &shared::rds_arn_to_name(&db.arn) == &app {
                     dbs_list.push(db.clone())
@@ -849,13 +864,13 @@ async fn service_details(
         }
         let clusters: Vec<Cluster>;
         {
-            clusters = aws::clusters(authorized_user.profile.clone(), cluster_cache).await;
+            clusters = aws::clusters(&authorized_user.sdk_config, cluster_cache).await;
         }
 
         let service_arns: Vec<String>;
         {
             let services = aws::services(
-                authorized_user.profile.clone(),
+                &authorized_user.sdk_config,
                 clusters.clone(),
                 Arc::clone(&service_cache),
             )
@@ -869,7 +884,7 @@ async fn service_details(
         }
 
         let services: Vec<ServiceDetails> = aws::service_details(
-            &authorized_user.profile,
+            authorized_user.sdk_config,
             service_arns,
             service_details_cache,
             false,
@@ -902,9 +917,9 @@ async fn start_service_proxy(
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
     let aws_local_port = local_port + 10000;
 
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
-    let bastions = aws::bastions(authorized_user.profile.clone()).await;
+    let bastions = aws::bastions(&authorized_user.sdk_config).await;
     let bastion = bastions
         .into_iter()
         .find(|b| b.env == service.env)
@@ -960,7 +975,7 @@ async fn open_dbeaver(
         }
     }
 
-    let authorized_user = get_authorized(&app_state.0, &axiom.0, false).await;
+    let authorized_user = get_authorized(&app_state.0, &axiom.0).await;
 
     let dbeaver_path: String;
     {
@@ -974,7 +989,7 @@ async fn open_dbeaver(
             .clone();
     }
 
-    let db_secret = aws::db_secret(authorized_user.profile, &db.name, &db.env).await;
+    let db_secret = aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
     if let Err(err) = db_secret {
         ingest_log(
             &axiom.0,
@@ -1148,6 +1163,8 @@ async fn main() {
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
             user_id: user_id,
+            last_auth_check: 0,
+            sdk_config: None,
         }))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             aws_resource_refresher: None,
@@ -1183,12 +1200,12 @@ async fn main() {
         .expect("Error while running tauri application");
 }
 
-
-
 #[derive(Clone)]
 struct AppContext {
     active_profile: Option<String>,
     user_id: uuid::Uuid,
+    sdk_config: Option<aws_config::SdkConfig>,
+    last_auth_check: i64,
 }
 
 #[derive(Clone)]
@@ -1259,16 +1276,16 @@ enum Action {
 async fn check_login_and_trigger(
     user_id: &uuid::Uuid,
     profile: &str,
+    config: &aws_config::SdkConfig,
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<(), BError> {
-    let client = aws::ecs_client(profile).await;
-    if !aws::is_logged(&client).await {
+    if !aws::is_logged(&config).await {
         info!("Trigger log in into AWS");
         Command::new("aws")
-            .args(["sso", "login", "--profile", &profile])
+            .args(["sso", "login", "--profile", profile])
             .output()
             .expect("failed to execute process");
-        if !aws::is_logged(&client).await {
+        if !aws::is_logged(&config).await {
             ingest_log(
                 &axiom,
                 user_id,
