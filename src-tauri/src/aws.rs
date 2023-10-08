@@ -46,6 +46,7 @@ pub struct DbInstance {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(non_snake_case)]
 pub struct DbSecretDTO {
     dbInstanceIdentifier: String,
     pub dbname: String,
@@ -95,7 +96,6 @@ pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
     let resp = ecs.list_clusters().send().await;
     return resp.is_ok();
 }
-
 
 pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
     let ec2_client = ec2::Client::new(&config);
@@ -182,11 +182,11 @@ pub async fn db_secret(
         let secret_arn = secret_arn.secret_list().expect("No arn list!");
         if secret_arn.len() == 1 {
             let secret_arn = secret_arn.first().unwrap_or_log();
-            let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
+            let secret_arn = secret_arn.arn().expect("Expected arn password");
 
             let secret = secret_client
                 .get_secret_value()
-                .secret_id(secret_arn.clone())
+                .secret_id(secret_arn)
                 .send()
                 .await;
             if secret.is_err() {
@@ -460,7 +460,7 @@ pub async fn service(
 pub async fn service_details(
     config: aws_config::SdkConfig,
     service_arns: Vec<String>,
-    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>
+    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>,
 ) -> Vec<ServiceDetails> {
     let mut result = Vec::new();
     let mut tokio_tasks = vec![];
@@ -482,7 +482,7 @@ pub async fn service_details(
 pub async fn service_detail(
     config: aws_config::SdkConfig,
     service_arn: String,
-    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>
+    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>,
 ) -> ServiceDetails {
     {
         let cache = service_details_cache.lock().await;
