@@ -1,17 +1,14 @@
 <script lang="ts">
-	import dbeaver from '$lib/images/dbeaver-head.png';
 	import { execute } from '$lib/stores/error-store';
-	import type { DbInstance } from '$lib/types';
-	import { userStore } from '$lib/stores/user-store';
 
-	export let database: DbInstance;
-	export let port: number;
+	export let database_arn: String;
 </script>
 
-<div class="tooltip" data-tip="Stop proxy to database">
+<div class="tooltip flex" data-tip="Stop proxy to database">
 	<button
 		on:click={async () => {
-			await execute('stop_job', { arn: database?.arn });
+			console.log('stopping ', database_arn);
+			await execute('stop_job', { arn: database_arn });
 		}}
 	>
 		<div class="w-5 h-5 relative">
@@ -42,25 +39,5 @@
 			</svg>
 		</div>
 	</button>
-
-	<span>:{port}</span>
 </div>
-{#if $userStore.dbeaver_path}
-	<div class="tooltip" data-tip="Open connection in dbeaver">
-		<button
-			class={`link link-success`}
-			on:click={() => {
-				execute(
-					'open_dbeaver',
-					{
-						db: database,
-						port
-					},
-					false
-				);
-			}}
-		>
-			<img width="18" src={dbeaver} alt="download icon" />
-		</button>
-	</div>
-{/if}
+

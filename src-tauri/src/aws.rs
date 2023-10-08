@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use crate::shared::{self, BError, Env};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
@@ -12,9 +9,10 @@ use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
 use chrono::prelude::*;
 use ec2::types::Filter;
-use log::info;
+use log::{info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use tokio::sync::Mutex;
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +46,7 @@ pub struct DbInstance {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(non_snake_case)]
 pub struct DbSecretDTO {
     dbInstanceIdentifier: String,
     pub dbname: String,
@@ -92,47 +91,19 @@ pub struct LogEntry {
     pub message: String,
 }
 
-pub async fn is_logged(ecs: &ecs::Client) -> bool {
+pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
+    let ecs = ecs::Client::new(&config);
     let resp = ecs.list_clusters().send().await;
     return resp.is_ok();
 }
 
-pub async fn ecs_client(profile: &str) -> ecs::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    ecs::Client::new(&config)
-}
-
-pub async fn rds_client(profile: &str) -> rds::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    rds::Client::new(&config)
-}
-
-pub async fn ec2_client(profile: &str) -> ec2::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    ec2::Client::new(&config)
-}
-
-pub async fn secretsmanager_client(profile: &str) -> secretsmanager::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    secretsmanager::Client::new(&config)
-}
-
-pub async fn ssm_client(profile: &str) -> ssm::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    ssm::Client::new(&config)
-}
-
-pub async fn cloudwatchlogs_client(profile: &str) -> cloudwatchlogs::Client {
-    let config = aws_config::from_env().profile_name(profile).load().await;
-    cloudwatchlogs::Client::new(&config)
-}
-
-pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
+pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
+    let ec2_client = ec2::Client::new(&config);
     let filter = Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
         .build();
-    let res = ec2.describe_instances().filters(filter).send().await;
+    let res = ec2_client.describe_instances().filters(filter).send().await;
 
     let res = res.expect_or_log("Failed to get ec2 bastion instances");
     let res = res.reservations().unwrap_or_default();
@@ -170,402 +141,410 @@ pub async fn bastions(ec2: &ec2::Client) -> Vec<Bastion> {
     res
 }
 
-pub struct RdsClient {
-    rds_client: Option<rds::Client>,
-    ssm_client: Option<ssm::Client>,
-    secret_client: Option<secretsmanager::Client>,
-    databases: Vec<DbInstance>,
-}
-
-impl RdsClient {
-    pub fn new() -> Self {
-        RdsClient {
-            rds_client: None,
-            ssm_client: None,
-            secret_client: None,
-            databases: Vec::new(),
-        }
-    }
-    pub async fn init(&mut self, profile: &str) {
-        self.rds_client = Some(rds_client(profile).await);
-        self.ssm_client = Some(ssm_client(profile).await);
-        self.secret_client = Some(secretsmanager_client(profile).await);
-    }
-    pub fn shutdown(&mut self) {
-        self.rds_client = None;
-        self.ssm_client = None;
-        self.secret_client = None;
-        self.clear();
-    }
-    pub fn clear(&mut self) {
-        self.databases = Vec::new();
-    }
-    pub async fn databases(&mut self) -> Vec<DbInstance> {
-        if self.databases.len() > 0 {
-            return self.databases.clone();
-        }
-
-        let mut there_is_more = true;
-        let mut marker = None;
-        let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
-        let rds_client = self.rds_client.as_ref().unwrap_or_log();
-        while there_is_more {
-            let resp = rds_client
-                .describe_db_instances()
-                .set_marker(marker)
-                .max_records(100)
-                .send()
-                .await
-                .unwrap_or_log();
-            marker = resp.marker().map(|m| m.to_owned());
-            let instances = resp.db_instances();
-            let rdses = instances.as_deref().unwrap_or_log();
-            there_is_more = rdses.len() == 100 && marker.is_some();
-            rdses.into_iter().for_each(|rds| {
-                if let Some(_) = rds.db_name() {
-                    let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
-                    let name = name_regex
-                        .captures(&db_instance_arn)
-                        .and_then(|c| c.get(2))
-                        .and_then(|c| Some(c.as_str().to_owned()))
-                        .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
-                    let tags = rds.tag_list().unwrap_or_log();
-                    let mut appname_tag = String::from("");
-                    let mut environment_tag = String::from("");
-                    let endpoint = rds
-                        .endpoint()
-                        .map(|e| Endpoint {
-                            address: e.address().unwrap_or_log().to_owned(),
-                            port: u16::try_from(e.port()).unwrap_or_log(),
-                        })
-                        .unwrap_or_log()
-                        .clone();
-                    let engine: String = format!("{}", rds.engine().unwrap_or("??"));
-                    let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
-                    let mut env = Env::DEVNULL;
-                    for t in tags {
-                        if t.key().unwrap_or_log() == "AppName" {
-                            appname_tag = t.value().unwrap_or_log().to_owned()
-                        }
-                        if t.key().unwrap_or_log() == "Environment" {
-                            environment_tag = t.value().unwrap_or_log().to_owned();
-                            env = Env::from_exact(&environment_tag);
-                        }
-                    }
-
-                    let db = DbInstance {
-                        name,
-                        engine,
-                        engine_version,
-                        arn: db_instance_arn,
-                        endpoint,
-                        appname_tag,
-                        environment_tag,
-                        env: env.clone(),
-                    };
-                    self.databases.push(db)
-                }
-            });
-        }
-        self.databases.sort_by(|a, b| a.name.cmp(&b.name));
-        self.databases.clone()
-    }
-
-    pub async fn db_secret(&self, name: &str, env: &Env) -> Result<DbSecret, BError> {
-        let mut possible_secrets = Vec::new();
-        if name.contains("-migrated") {
-            possible_secrets.push(format!(
-                "{}-{}/db-credentials",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "{}-{}/spring-datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "{}-{}/datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-        }
-        possible_secrets.push(format!("{}-{}/db-credentials", name, env));
-        possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
-        possible_secrets.push(format!("{}-{}/datasource-password", name, env));
-
-        for secret in possible_secrets {
-            let filter = secretsmanager::types::Filter::builder()
-                .key("name".into())
-                .values(&secret)
-                .build();
-            let secret_client = self.secret_client.as_ref().unwrap_or_log();
-            let secret_arn = secret_client.list_secrets().filters(filter).send().await;
-
-            let secret_arn = secret_arn.expect("Failed to fetch!");
-            let secret_arn = secret_arn.secret_list().expect("No arn list!");
-            if secret_arn.len() == 1 {
-                let secret_arn = secret_arn.first().unwrap_or_log();
-                let secret_arn = secret_arn.arn().expect("Expected arn password").clone();
-
-                let secret = secret_client
-                    .get_secret_value()
-                    .secret_id(secret_arn.clone())
-                    .send()
-                    .await;
-                if secret.is_err() {
-                    return Err(BError::new("db_secret", "No secrets found"));
-                }
-                let secret = secret.unwrap_or_log();
-                let secret = secret.secret_string().expect("There should be a secret");
-                let secret =
-                    serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
-
-                return Ok(DbSecret {
-                    dbname: secret.dbname,
-                    password: secret.password,
-                    username: secret.username,
-                    auto_rotated: true,
-                });
-            }
-        }
-
-        let mut possible_secrets = Vec::new();
-        if name.contains("-migrated") {
-            possible_secrets.push(format!(
-                "/config/{}_{}/db-credentials",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "/config/{}_{}/spring-datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-            possible_secrets.push(format!(
-                "/config/{}_{}/datasource-password",
-                name.replace("-migrated", ""),
-                env
-            ));
-        }
-        possible_secrets.push(format!("/config/{}_{}/db-credentials", name, env));
+pub async fn db_secret(
+    config: &aws_config::SdkConfig,
+    name: &str,
+    env: &Env,
+) -> Result<DbSecret, BError> {
+    let mut possible_secrets = Vec::new();
+    if name.contains("-migrated") {
         possible_secrets.push(format!(
-            "/config/{}_{}/spring-datasource-password",
-            name, env
+            "{}-{}/db-credentials",
+            name.replace("-migrated", ""),
+            env
         ));
-        possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
+        possible_secrets.push(format!(
+            "{}-{}/spring-datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "{}-{}/datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+    }
+    possible_secrets.push(format!("{}-{}/db-credentials", name, env));
+    possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
+    possible_secrets.push(format!("{}-{}/datasource-password", name, env));
+    dbg!(&possible_secrets);
 
-        for secret in possible_secrets {
-            let param = self
-                .ssm_client
-                .as_ref()
-                .unwrap_or_log()
-                .get_parameter()
-                .name(&secret)
-                .with_decryption(true)
+    let secret_client = secretsmanager::Client::new(&config);
+
+    for secret in possible_secrets {
+        let filter = secretsmanager::types::Filter::builder()
+            .key("name".into())
+            .values(&secret)
+            .build();
+        let secret_arn = secret_client.list_secrets().filters(filter).send().await;
+
+        let secret_arn = secret_arn.expect("Failed to fetch!");
+        let secret_arn = secret_arn.secret_list().expect("No arn list!");
+        if secret_arn.len() == 1 {
+            let secret_arn = secret_arn.first().unwrap_or_log();
+            let secret_arn = secret_arn.arn().expect("Expected arn password");
+
+            let secret = secret_client
+                .get_secret_value()
+                .secret_id(secret_arn)
                 .send()
                 .await;
-
-            if let Ok(param) = param {
-                if let Some(param) = param.parameter() {
-                    return Ok(DbSecret {
-                        dbname: name.to_owned(),
-                        password: param.value().unwrap_or_log().to_owned(),
-                        username: name.to_owned(),
-                        auto_rotated: false,
-                    });
-                }
+            if secret.is_err() {
+                return Err(BError::new("db_secret", "No secrets found"));
             }
-        }
+            let secret = secret.unwrap_or_log();
+            let secret = secret.secret_string().expect("There should be a secret");
+            let secret =
+                serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
 
-        return Err(BError::new("db_secret", "No secrets found"));
-    }
-}
-
-pub struct EcsClient {
-    ecs_client: Option<ecs::Client>,
-    clusters: Vec<Cluster>,
-    cluster_service_map: HashMap<Cluster, Vec<EcsService>>,
-    service_details_map: HashMap<String, ServiceDetails>,
-}
-
-impl EcsClient {
-    pub fn new() -> Self {
-        EcsClient {
-            ecs_client: None,
-            clusters: Vec::new(),
-            cluster_service_map: HashMap::new(),
-            service_details_map: HashMap::new(),
+            return Ok(DbSecret {
+                dbname: secret.dbname,
+                password: secret.password,
+                username: secret.username,
+                auto_rotated: true,
+            });
         }
     }
-    pub async fn init(&mut self, profile: &str) {
-        self.ecs_client = Some(ecs_client(profile).await);
-    }
-    pub fn shutdown(&mut self) {
-        self.ecs_client = None;
-        self.clusters = Vec::new();
-        self.clear();
-    }
-    pub fn clear_shallow(&mut self) {
-        self.clusters = Vec::new();
-        self.cluster_service_map = HashMap::new();
-    }
-    pub fn clear(&mut self) {
-        self.clusters = Vec::new();
-        self.cluster_service_map = HashMap::new();
-        self.service_details_map = HashMap::new();
-    }
 
-    pub async fn clusters(&mut self) -> Vec<Cluster> {
-        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
-        if self.clusters.len() == 0 {
-            info!("Fetching clusters!");
-            let cluster_resp = &ecs_client
-                .list_clusters()
-                .send()
-                .await
-                .expect("Failed to get Cluster list");
+    let mut possible_secrets = Vec::new();
+    if name.contains("-migrated") {
+        possible_secrets.push(format!(
+            "/config/{}_{}/db-credentials",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "/config/{}_{}/spring-datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
+            "/config/{}_{}/datasource-password",
+            name.replace("-migrated", ""),
+            env
+        ));
+    }
+    possible_secrets.push(format!("/config/{}_{}/db-credentials", name, env));
+    possible_secrets.push(format!(
+        "/config/{}_{}/spring-datasource-password",
+        name, env
+    ));
+    possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
+    let ssm_client = ssm::Client::new(&config);
+    for secret in possible_secrets {
+        let param = ssm_client
+            .get_parameter()
+            .name(&secret)
+            .with_decryption(true)
+            .send()
+            .await;
 
-            let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
-
-            for cluster_arn in cluster_arns {
-                let env = Env::from_any(cluster_arn);
-                self.clusters.push(Cluster {
-                    name: shared::cluster_arn_to_name(cluster_arn),
-                    arn: cluster_arn.clone(),
-                    env: env,
+        if let Ok(param) = param {
+            if let Some(param) = param.parameter() {
+                return Ok(DbSecret {
+                    dbname: name.to_owned(),
+                    password: param.value().unwrap_or_log().to_owned(),
+                    username: name.to_owned(),
+                    auto_rotated: false,
                 });
             }
         }
-        self.clusters.clone()
     }
 
-    pub async fn service_details(&mut self, service_arn: &str, refresh: bool) -> ServiceDetails {
-        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
-        if refresh {
-            self.service_details_map.remove(service_arn);
+    return Err(BError::new("db_secret", "No secrets found"));
+}
+
+pub async fn databases(
+    config: &aws_config::SdkConfig,
+    database_cache: Arc<Mutex<Vec<DbInstance>>>,
+) -> Vec<DbInstance> {
+    {
+        let database_cache = database_cache.lock().await;
+        if database_cache.len() > 0 {
+            return database_cache.clone();
         }
-        if let Some(details) = self.service_details_map.get(service_arn) {
-            return details.clone();
-        }
-        info!("Fetching service details for {} {}", service_arn, refresh);
-        let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
-        let service = ecs_client
-            .describe_services()
-            .services(service_arn)
-            .cluster(cluster)
+    }
+
+    let mut there_is_more = true;
+    let mut marker = None;
+    let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
+    let rds_client = rds::Client::new(&config);
+    let mut databases = vec![];
+    while there_is_more {
+        let resp = rds_client
+            .describe_db_instances()
+            .set_marker(marker)
+            .max_records(100)
             .send()
             .await
             .unwrap_or_log();
-        let service = service.services().unwrap_or_log();
-        let service = &service[0];
-        let task_def_arn = service.task_definition().unwrap_or_log();
-        let task_def = ecs_client
-            .describe_task_definition()
-            .task_definition(task_def_arn)
-            .send()
-            .await
-            .unwrap_or_log();
+        marker = resp.marker().map(|m| m.to_owned());
+        let instances = resp.db_instances();
+        let rdses = instances.as_deref().unwrap_or_log();
+        there_is_more = rdses.len() == 100 && marker.is_some();
+        rdses.into_iter().for_each(|rds| {
+            if let Some(_) = rds.db_name() {
+                let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
+                let name = name_regex
+                    .captures(&db_instance_arn)
+                    .and_then(|c| c.get(2))
+                    .and_then(|c| Some(c.as_str().to_owned()))
+                    .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
+                let tags = rds.tag_list().unwrap_or_log();
+                let mut appname_tag = String::from("");
+                let mut environment_tag = String::from("");
+                let endpoint = rds
+                    .endpoint()
+                    .map(|e| Endpoint {
+                        address: e.address().unwrap_or_log().to_owned(),
+                        port: u16::try_from(e.port()).unwrap_or_log(),
+                    })
+                    .unwrap_or_log()
+                    .clone();
+                let engine: String = format!("{}", rds.engine().unwrap_or("??"));
+                let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
+                let mut env = Env::DEVNULL;
+                for t in tags {
+                    if t.key().unwrap_or_log() == "AppName" {
+                        appname_tag = t.value().unwrap_or_log().to_owned()
+                    }
+                    if t.key().unwrap_or_log() == "Environment" {
+                        environment_tag = t.value().unwrap_or_log().to_owned();
+                        env = Env::from_exact(&environment_tag);
+                    }
+                }
 
-        let task_def = task_def.task_definition().unwrap_or_log();
-        let container_def = &task_def.container_definitions().unwrap_or_log()[0];
-        let version = container_def
-            .image()
-            .unwrap_or_log()
-            .split(":")
-            .last()
-            .unwrap_or_log()
-            .to_owned();
-        let details = ServiceDetails {
-            name: shared::ecs_arn_to_name(&service_arn),
-            timestamp: Utc::now(),
-            arn: service_arn.to_owned(),
-            cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
-            version: version,
-            env: Env::from_any(&service_arn),
-        };
-        self.service_details_map
-            .insert(service_arn.to_owned(), details.clone());
+                let db = DbInstance {
+                    name,
+                    engine,
+                    engine_version,
+                    arn: db_instance_arn,
+                    endpoint,
+                    appname_tag,
+                    environment_tag,
+                    env: env.clone(),
+                };
+                databases.push(db)
+            }
+        });
+    }
+    databases.sort_by(|a, b| a.name.cmp(&b.name));
+    {
+        let mut database_cache = database_cache.lock().await;
+        database_cache.extend(databases.clone().into_iter())
+    }
+    return databases;
+}
 
-        return details;
+pub async fn clusters(
+    config: &aws_config::SdkConfig,
+    cluster_cache: Arc<Mutex<Vec<Cluster>>>,
+) -> Vec<Cluster> {
+    {
+        let cluster_cache = cluster_cache.lock().await;
+        if cluster_cache.len() > 0 {
+            return cluster_cache.clone();
+        }
+    }
+    let ecs_client = ecs::Client::new(&config);
+
+    info!("Fetching clusters!");
+    let cluster_resp = &ecs_client
+        .list_clusters()
+        .send()
+        .await
+        .expect("Failed to get Cluster list");
+
+    let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
+
+    let mut clusters = vec![];
+    for cluster_arn in cluster_arns {
+        let env = Env::from_any(cluster_arn);
+        clusters.push(Cluster {
+            name: shared::cluster_arn_to_name(cluster_arn),
+            arn: cluster_arn.clone(),
+            env: env,
+        });
     }
 
-    pub async fn services(&mut self, cluster: &Cluster) -> Vec<EcsService> {
-        let ecs_client = self.ecs_client.as_ref().unwrap_or_log();
+    {
+        let mut cluster_cache = cluster_cache.lock().await;
+        for cluster in clusters.iter() {
+            cluster_cache.push(cluster.clone());
+        }
+    }
 
-        if let Some(services) = self.cluster_service_map.get(cluster) {
+    return clusters;
+}
+
+pub async fn services(
+    config: &aws_config::SdkConfig,
+    clusters: Vec<Cluster>,
+    service_cache: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
+) -> HashMap<Cluster, Vec<EcsService>> {
+    let mut handles = vec![];
+    let mut results = HashMap::new();
+    for cluster in clusters.into_iter() {
+        results.insert(cluster.clone(), Vec::new());
+        let cache = Arc::clone(&service_cache);
+        let config = config.clone();
+        let cluster = cluster.clone();
+        handles.push(tokio::spawn(async move {
+            (
+                cluster.clone(),
+                service(&config, cluster.clone(), cache).await,
+            )
+        }));
+    }
+
+    for handle in handles {
+        let res = handle.await.unwrap_or_log();
+        results.insert(res.0, res.1);
+    }
+
+    return results;
+}
+
+pub async fn service(
+    config: &aws_config::SdkConfig,
+    cluster: Cluster,
+    service_cache: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
+) -> Vec<EcsService> {
+    {
+        if let Some(services) = service_cache.lock().await.get(&cluster) {
             return services.clone();
         }
-        info!("Fetching services for {}", &cluster.arn);
-        let mut values = vec![];
-        let mut has_more = true;
-        let mut next_token = None;
-
-        while has_more {
-            let services_resp = ecs_client
-                .list_services()
-                .cluster(cluster.arn.to_owned())
-                .max_results(100)
-                .set_next_token(next_token)
-                .send()
-                .await
-                .unwrap_or_log();
-            next_token = services_resp.next_token().map(|t| t.to_owned());
-            has_more = next_token.is_some();
-
-            services_resp
-                .service_arns()
-                .unwrap_or_log()
-                .iter()
-                .for_each(|service_arn| {
-                    values.push(EcsService {
-                        name: service_arn.split("/").last().unwrap_or_log().to_owned(),
-                        arn: service_arn.to_owned(),
-                        cluster_arn: cluster.arn.to_owned(),
-                        env: cluster.env.clone(),
-                    })
-                })
-        }
-        values.sort_by(|a, b| a.name.cmp(&b.name));
-        self.cluster_service_map
-            .insert(cluster.clone(), values.clone());
-        values
     }
 
-    pub async fn service_details_for_names(
-        &mut self,
-        names: &HashSet<String>,
-        refresh: bool,
-    ) -> HashMap<String, Vec<ServiceDetails>> {
-        let mut result = HashMap::new();
-        let service_arns: Vec<String> = self
-            .cluster_service_map
-            .values()
-            .flatten()
-            .filter(|s| names.contains(&s.name))
-            .map(|s| s.arn.clone())
-            .collect();
+    let ecs_client = ecs::Client::new(config);
+    info!("Fetching services for {}", &cluster.arn);
+    let mut values = vec![];
+    let mut has_more = true;
+    let mut next_token = None;
 
-        for service_arn in service_arns {
-            let sd = self.service_details(&service_arn, refresh).await;
-            if !result.contains_key(&sd.name) {
-                result.insert(sd.name.clone(), vec![sd]);
-            } else {
-                result.get_mut(&sd.name).unwrap_or_log().push(sd);
-            }
+    while has_more {
+        let services_resp = ecs_client
+            .list_services()
+            .cluster(cluster.arn.to_owned())
+            .max_results(100)
+            .set_next_token(next_token)
+            .send()
+            .await
+            .unwrap_or_log();
+        next_token = services_resp.next_token().map(|t| t.to_owned());
+        has_more = next_token.is_some();
+
+        services_resp
+            .service_arns()
+            .unwrap_or_log()
+            .iter()
+            .for_each(|service_arn| {
+                values.push(EcsService {
+                    name: service_arn.split("/").last().unwrap_or_log().to_owned(),
+                    arn: service_arn.to_owned(),
+                    cluster_arn: cluster.arn.to_owned(),
+                    env: cluster.env.clone(),
+                })
+            })
+    }
+    values.sort_by(|a, b| a.name.cmp(&b.name));
+
+    {
+        let mut service_cache = service_cache.lock().await;
+        service_cache.insert(cluster.clone(), values.clone());
+    }
+
+    values
+}
+
+pub async fn service_details(
+    config: aws_config::SdkConfig,
+    service_arns: Vec<String>,
+    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>,
+) -> Vec<ServiceDetails> {
+    let mut result = Vec::new();
+    let mut tokio_tasks = vec![];
+    for service_arn in service_arns {
+        let service_details_cache = Arc::clone(&service_details_cache);
+        let config = config.clone();
+        tokio_tasks.push(tokio::spawn(async move {
+            service_detail(config, service_arn, service_details_cache)
+        }))
+    }
+    for handle in tokio_tasks {
+        let sd = handle.await.unwrap_or_log().await;
+        result.push(sd);
+    }
+
+    result
+}
+
+pub async fn service_detail(
+    config: aws_config::SdkConfig,
+    service_arn: String,
+    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>,
+) -> ServiceDetails {
+    {
+        let cache = service_details_cache.lock().await;
+        if let Some(details) = cache.get(&service_arn) {
+            return details.clone();
         }
-        result
+    }
+
+    info!("Fetching service details for {}", service_arn);
+
+    let ecs_client = ecs::Client::new(&config);
+    let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
+    let service = ecs_client
+        .describe_services()
+        .services(&service_arn)
+        .cluster(cluster)
+        .send()
+        .await
+        .unwrap_or_log();
+    let service = service.services().unwrap_or_log();
+    let service = &service[0];
+    let task_def_arn = service.task_definition().unwrap_or_log();
+    let task_def = ecs_client
+        .describe_task_definition()
+        .task_definition(task_def_arn)
+        .send()
+        .await
+        .unwrap_or_log();
+
+    let task_def = task_def.task_definition().unwrap_or_log();
+    let container_def = &task_def.container_definitions().unwrap_or_log()[0];
+    let version = container_def
+        .image()
+        .unwrap_or_log()
+        .split(":")
+        .last()
+        .unwrap_or_log()
+        .to_owned();
+    let details = ServiceDetails {
+        name: shared::ecs_arn_to_name(&service_arn),
+        timestamp: Utc::now(),
+        arn: service_arn.to_owned(),
+        cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
+        version: version,
+        env: Env::from_any(&service_arn),
+    };
+    {
+        let mut cache = service_details_cache.lock().await;
+        cache.insert(service_arn.to_owned(), details.clone());
+
+        return details;
     }
 }
 
 pub trait OnLogFound: Send {
-    fn notify(&self, log: LogEntry);
+    fn notify(&self, logs: Vec<LogEntry>);
     fn success(&self);
     fn error(&self, msg: String);
 }
 
 pub async fn find_logs(
-    client: cloudwatchlogs::Client,
+    config: &aws_config::SdkConfig,
     env: Env,
     app: String,
     start_date: i64,
@@ -573,6 +552,7 @@ pub async fn find_logs(
     filter: String,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
 ) -> Result<usize, BError> {
+    let client = cloudwatchlogs::Client::new(config);
     let response = client
         .describe_log_groups()
         .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
@@ -691,12 +671,24 @@ pub async fn find_logs(
                 info!("LOGS Found: {}", &events.len());
                 log_count = log_count + events.len();
                 let notifier = on_log_found.lock().await;
-                for event in events {
-                    notifier.notify(LogEntry {
-                        log_stream_name: event.log_stream_name.unwrap_or_default(),
-                        timestamp: event.timestamp.unwrap_or_default(),
-                        ingestion_time: event.ingestion_time.unwrap_or_default(),
-                        message: event.message.unwrap_or_default().to_owned(),
+                notifier.notify(
+                    events
+                        .into_iter()
+                        .map(|event| LogEntry {
+                            log_stream_name: event.log_stream_name.unwrap_or_default(),
+                            timestamp: event.timestamp.unwrap_or_default(),
+                            ingestion_time: event.ingestion_time.unwrap_or_default(),
+                            message: event.message.unwrap_or_default().to_owned(),
+                        })
+                        .collect(),
+                );
+
+                if log_count > 1000 {
+                    warn!("LOGS Exceeded max log count");
+                    notifier.error("Exceeded amount of logs. Limit 1000.".to_owned());
+                    return Result::Err(BError {
+                        message: "Exceeded amount of logs. Limit 1000.".to_owned(),
+                        command: "find_logs".to_owned(),
                     });
                 }
             }
