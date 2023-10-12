@@ -111,8 +111,8 @@
 		</div>
 	</div>
 	{#if $taskStore.length > 0}
-		<div class="min-w-[350px]">
-			<div class="px-2 border-l-2 w-[350px] fixed">
+		<div class="min-w-[320px]">
+			<div class="px-2 border-l-2 w-[320px] fixed">
 				<TaskManager />
 			</div>
 		</div>
