@@ -30,15 +30,23 @@ listen('logged-out', () => {
 	serviceDetailsStore.set([]);
 });
 const serviceDetailsStore = createServiceDetailsStore();
-setInterval(
-	() => {
-		const apps = get(serviceDetailsStore);
-		apps.forEach((app) => {
-			invoke('service_details', { app: app.app });
-		});
-	},
-	5 * 60 * 1000
-);
+let refreshTimeout: number | undefined;
+const refresh = () => {
+	console.log('refresh');
+	clearTimeout(refreshTimeout);
+	refreshTimeout = setTimeout(
+		() => {
+			const apps = get(serviceDetailsStore);
+			apps.forEach((app) => {
+				invoke('service_details', { app: app.app });
+			});
+			refresh();
+		},
+		5 * 60 * 1000
+	);
+};
+refresh();
+
 const to: { [key: string]: Promise<void> } = {};
 export const serviceDetailStore = (app: string) =>
 	derived([serviceDetailsStore], (stores) => {
