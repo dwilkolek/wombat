@@ -887,13 +887,12 @@ async fn service_details(
         None,
     )
     .await;
-    info!("Called service_details: {}", &app);
+    info!("Called for service_details: {}", &app);
     let database_cache = Arc::clone(&database_cache.0);
     let cluster_cache = Arc::clone(&cluster_cache.0);
     let service_cache = Arc::clone(&service_cache.0);
     let service_details_cache = Arc::clone(&service_details_cache.0);
     tokio::task::spawn(async move {
-        info!("Fetching details for: {}", &app);
         let mut dbs_list: Vec<aws::DbInstance> = vec![];
         {
             let databases = aws::databases(&authorized_user.sdk_config, database_cache).await;
@@ -1364,7 +1363,7 @@ async fn ingest_log(
     record_count: Option<usize>,
 ) {
     info!(
-        "Ingesting log: {:?}, err: {:?}, record cound: {:?}",
+        "Ingesting log: {:?}, err: {:?}, record count: {:?}",
         &action, &error_message, &record_count
     );
     if let Some(client) = client.lock().await.as_ref() {
