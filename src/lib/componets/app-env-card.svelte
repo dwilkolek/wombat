@@ -19,7 +19,7 @@
 				</div>
 				<div class="flex flex-col gap-2 text-md">
 					<div class="">
-						<h4 class="font-bold text-lg">Service:</h4>
+						<h4 class="font-medium text-lg">Service:</h4>
 						<div class="flex">
 							{#each envDetails.services as service}
 								<div class="flex flex-col">
@@ -34,7 +34,7 @@
 						</div>
 					</div>
 					<div class="">
-						<h4 class="font-bold text-lg">Database:</h4>
+						<h4 class="font-medium text-lg">Database:</h4>
 						<div class="flex">
 							{#each envDetails.dbs as db}
 								<div class="flex flex-col">

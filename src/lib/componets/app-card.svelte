@@ -44,7 +44,7 @@
 				{#each [...details.envs] as [env, value]}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(env)}
 						<div class="flex flex-col w-64">
-							<div class="font-bold w-16 text-xs italic">{env}:</div>
+							<div class="font-medium w-16 text-xs italic">{env}:</div>
 							<div class="flex gap-3 grow">
 								{#each value.services as service}
 									<div class="flex flex-row items-center gap-1 px-1">

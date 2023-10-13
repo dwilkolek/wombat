@@ -74,7 +74,7 @@
 									</button>
 
 									<div class="flex flex-col">
-										<span class="font-bold"> {service.name}</span>
+										<span class="font-medium"> {service.name}</span>
 										<span class="text-xs"> {service.arn}</span>
 									</div>
 								</div>
