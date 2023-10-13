@@ -31,7 +31,7 @@
 <div class="flex gap-2 flex-col w-full">
 	{#each taskGroups as taskGroup}
 		<div class="flex flex-col gap-1">
-			<h5 class="text-info text-md font-bold uppercase">
+			<h5 class="text-info text-md font-medium uppercase">
 				{taskGroup.name}
 			</h5>
 			<div class="flex flex-col gap-2 pl-1">

@@ -17,16 +17,16 @@
 
 	let { subscribe, login } = userStore;
 	let profile: string = '';
-	let userId: string = ''
+	let userId: string = '';
 
 	$: subscribe((userConfig) => {
 		profile = userConfig?.last_used_profile ?? '';
 		userId = userConfig?.id ?? '';
 	});
 	let loading = false;
-	let buttonText = "Start";
+	let buttonText = 'Start';
 	listen<string>('message', (event) => {
-		buttonText = event.payload
+		buttonText = event.payload;
 	});
 </script>
 
@@ -38,7 +38,7 @@
 	<div class="hero max-h-screen min-h-screen bg-base-200">
 		<div class="hero-content flex-col">
 			<div class="text-center">
-				<h1 class="text-5xl font-bold">Hello!</h1>
+				<h1 class="text-5xl font-medium">Hello!</h1>
 				<p class="py-6">Wombat is friendly app that aims to make your life less miserable 😎</p>
 			</div>
 			<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
@@ -75,9 +75,7 @@
 						</div>
 
 						<div class="form-control mt-6">
-							<button class="btn btn-accent" disabled={loading} type="submit">
-								{buttonText}</button
-							>
+							<button class="btn btn-accent" disabled={loading} type="submit"> {buttonText}</button>
 						</div>
 					</form>
 				</div>

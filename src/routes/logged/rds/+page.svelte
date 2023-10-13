@@ -37,7 +37,7 @@
 	</select>
 </div>
 <div class="h-full block">
-	<table class="table w-full table-zebra table-compact ">
+	<table class="table w-full table-zebra table-compact">
 		<thead class="bg-base-100 sticky top-[116px] z-50">
 			<tr>
 				<th>
@@ -77,7 +77,7 @@
 									</button>
 
 									<div class="flex flex-col">
-										<span class="font-bold">{db.name}</span>
+										<span class="font-medium">{db.name}</span>
 										<span class="text-xs">{db.arn}</span>
 										<span class="text-xs">{db.endpoint.address}:{db.endpoint.port}</span>
 									</div>
