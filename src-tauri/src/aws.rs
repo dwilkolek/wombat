@@ -258,11 +258,9 @@ pub async fn databases(
     config: &aws_config::SdkConfig,
     database_cache: Arc<Mutex<Vec<DbInstance>>>,
 ) -> Vec<DbInstance> {
-    {
-        let database_cache = database_cache.lock().await;
-        if database_cache.len() > 0 {
-            return database_cache.clone();
-        }
+    let mut database_cache = database_cache.lock().await;
+    if database_cache.len() > 0 {
+        return database_cache.clone();
     }
 
     let mut there_is_more = true;
@@ -329,10 +327,7 @@ pub async fn databases(
         });
     }
     databases.sort_by(|a, b| a.name.cmp(&b.name));
-    {
-        let mut database_cache = database_cache.lock().await;
-        database_cache.extend(databases.clone().into_iter())
-    }
+    database_cache.extend(databases.clone().into_iter());
     return databases;
 }
 
