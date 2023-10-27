@@ -2,6 +2,7 @@
     "name": "wombat",
     "version": "1.4.2",
     "scripts": {
+        "start": "tauri dev",
         "dev": "vite dev",
         "build": "vite build",
         "preview": "vite preview",
