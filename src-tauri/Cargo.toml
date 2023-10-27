@@ -13,9 +13,6 @@ rust-version = "1.73"
 [build-dependencies]
 tauri-build = { version = "1.5.0", features = [] }
 
-[registries.crates-io]
-protocol = "sparse"
-
 [dependencies]
 log = "^0.4"
 tracing-unwrap = "0.10"
