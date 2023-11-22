@@ -5,6 +5,7 @@
 	import { version } from '$app/environment';
 	import { fetch } from '@tauri-apps/api/http';
 	import { listen } from '@tauri-apps/api/event';
+	import { exit } from '@tauri-apps/api/process';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
@@ -27,6 +28,10 @@
 	let buttonText = 'Start';
 	listen<string>('message', (event) => {
 		buttonText = event.payload;
+	});
+
+	listen<string>('KILL_ME', () => {
+		exit(1);
 	});
 </script>
 
@@ -52,6 +57,7 @@
 								goto(`/logged/apps`, { replaceState: true });
 							} catch (e) {
 								console.error(e);
+								buttonText = "Start Again"
 								loading = false;
 							}
 						}}
