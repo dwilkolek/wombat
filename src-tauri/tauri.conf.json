@@ -27,6 +27,12 @@
         "ask": true,
         "message": true
       },
+      "process": {
+        "all": false,
+        "exit": true,
+        "relaunch": false,
+        "relaunchDangerousAllowSymlinkMacos": false
+      },
       "http": {
         "request": true,
         "scope": [
