@@ -3968,7 +3968,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-log"
 version = "0.0.0"
-source = "git+https://github.com/tauri-apps/plugins-workspace?branch=v1#e66b1968528b0d3ca5578f3d9d04c2ebf34d67c2"
+source = "git+https://github.com/tauri-apps/plugins-workspace?branch=v1#2d941a407bb3a845080b3abf14cc5f7cf91e8f13"
 dependencies = [
  "byte-unit",
  "fern",
@@ -5220,7 +5220,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "aws-config",
  "aws-sdk-cloudwatchlogs",
