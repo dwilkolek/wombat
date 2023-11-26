@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbInstance, DbSecret, EcsService, ServiceDetails};
+use aws::{Cluster, DbInstance, DbSecret, EcsService, LogEntry, ServiceDetails};
 use axiom_rs::Client;
 use log::{error, info, warn, LevelFilter};
 use regex::Regex;
@@ -9,12 +9,13 @@ use shared::{arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, R
 use shared::{BError, Env};
 use shared_child::SharedChild;
 use std::collections::HashSet;
-use std::env;
-use std::io::{BufRead, BufReader};
+use std::fs::File;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, process::Command};
+use std::{env, fs};
 use tauri::Window;
 use tauri_plugin_log::LogTarget;
 use tokio::sync::Mutex;
@@ -323,6 +324,23 @@ async fn set_dbeaver_path(
     .await;
     user_config.set_dbeaver_path(dbeaver_path)
 }
+#[tauri::command]
+async fn set_logs_dir_path(
+    logs_dir: &str,
+    user_config: tauri::State<'_, UserConfigState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+) -> Result<UserConfig, BError> {
+    let mut user_config = user_config.0.lock().await;
+    ingest_log(
+        &axiom.0,
+        &user_config.id,
+        Action::SetLogsDirPath(logs_dir.to_owned()),
+        None,
+        None,
+    )
+    .await;
+    user_config.set_logs_path(logs_dir)
+}
 
 #[tauri::command]
 async fn save_preffered_envs(
@@ -530,14 +548,76 @@ struct WindowNotifier {
 }
 
 impl aws::OnLogFound for WindowNotifier {
-    fn notify(&self, logs: Vec<aws::LogEntry>) {
+    fn notify(&mut self, logs: Vec<aws::LogEntry>) {
         let _ = self.window.emit("new-log-found", logs);
     }
-    fn success(&self) {
+    fn success(&mut self) {
         let _ = self.window.emit("find-logs-success", ());
     }
-    fn error(&self, msg: String) {
+    fn error(&mut self, msg: String) {
         let _ = self.window.emit("find-logs-error", msg);
+    }
+}
+
+struct FileNotifier {
+    window: Window,
+    writer: BufWriter<File>,
+    filename_location: String,
+}
+
+impl aws::OnLogFound for FileNotifier {
+    fn notify(&mut self, logs: Vec<aws::LogEntry>) {
+        let writer = &mut self.writer;
+        let mut data = "".to_owned();
+        for log in logs.iter() {
+            let log_str = serde_json::to_string(log).unwrap_or_log();
+            data.push_str(&log_str);
+            data.push_str("\n")
+        }
+        let _ = writer.write(data.as_bytes());
+        if let Some(log) = logs.first() {
+            let now = SystemTime::now();
+            let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+            let _ = self.window.emit(
+                "new-log-found",
+                vec![LogEntry {
+                    log_stream_name: log.log_stream_name.to_owned(),
+                    ingestion_time: log.ingestion_time,
+                    timestamp: timestamp.as_millis() as i64,
+                    message: format!("INFO Stored {} logs", logs.len()),
+                }],
+            );
+        }
+    }
+    fn success(&mut self) {
+        let now = SystemTime::now();
+        let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+        let _ = self.window.emit(
+            "new-log-found",
+            vec![LogEntry {
+                log_stream_name: "-".to_owned(),
+                ingestion_time: timestamp.as_millis() as i64,
+                timestamp: timestamp.as_millis() as i64,
+                message: format!("TRACE File: {}", self.filename_location),
+            }],
+        );
+        let _ = self.window.emit("find-logs-success", ());
+        let _ = self.writer.flush();
+    }
+    fn error(&mut self, msg: String) {
+        let now = SystemTime::now();
+        let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+        let _ = self.window.emit(
+            "new-log-found",
+            vec![LogEntry {
+                log_stream_name: "-".to_owned(),
+                ingestion_time: timestamp.as_millis() as i64,
+                timestamp: timestamp.as_millis() as i64,
+                message: format!("ERROR {}", msg),
+            }],
+        );
+        let _ = self.window.emit("find-logs-error", msg);
+        let _ = self.writer.flush();
     }
 }
 
@@ -549,9 +629,11 @@ async fn find_logs(
     start: i64,
     end: i64,
     filter: String,
+    filename: Option<String>,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("find_logs", msg)),
@@ -579,17 +661,28 @@ async fn find_logs(
     ingest_log(
         &axiom.0,
         &authorized_user.id,
-        Action::StartSearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start),
+        Action::StartSearchLogs(
+            app.to_owned(),
+            env.clone(),
+            filter.to_string(),
+            end - start,
+            filename.is_some(),
+        ),
         None,
         None,
     )
     .await;
 
     let axiom = Arc::clone(&axiom.0);
+    let user_config = Arc::clone(&user_config.0);
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
-        let notifier = Arc::new(Mutex::new(WindowNotifier { window }));
-        let action =
-            Action::SearchLogs(app.to_owned(), env.clone(), filter.to_string(), end - start);
+        let action = Action::SearchLogs(
+            app.to_owned(),
+            env.clone(),
+            filter.to_string(),
+            end - start,
+            filename.is_some(),
+        );
         let result = aws::find_logs(
             &authorized_user.sdk_config,
             env,
@@ -597,7 +690,33 @@ async fn find_logs(
             start,
             end,
             filter,
-            notifier.clone(),
+            match &filename {
+                None => Arc::new(Mutex::new(WindowNotifier { window })),
+                Some(filename) => {
+                    let now = SystemTime::now();
+                    let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+
+                    let user = user_config.lock().await;
+                    let logs_dir = user.logs_dir.as_ref().unwrap_or_log().clone();
+                    fs::create_dir_all(&logs_dir).unwrap_or_log();
+                    let pathbuf =
+                        logs_dir.join(format!("{}-{}.log", filename, timestamp.as_millis()));
+                    let file = File::create(pathbuf.clone()).unwrap_or_log();
+
+                    Arc::new(Mutex::new(FileNotifier {
+                        window,
+                        writer: BufWriter::new(file),
+                        filename_location: format!(
+                            "{}",
+                            fs::canonicalize(&pathbuf).unwrap_or_log().display()
+                        ),
+                    }))
+                }
+            },
+            match &filename.is_some() {
+                true => Some(1000),
+                false => None,
+            },
         )
         .await;
 
@@ -1239,6 +1358,7 @@ async fn main() {
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
+            set_logs_dir_path,
             save_preffered_envs,
             login,
             logout,
@@ -1327,11 +1447,12 @@ enum Action {
     ClearCache,
     UpdateTrackedNames(String),
     SetDbeaverPath(String),
+    SetLogsDirPath(String),
     SetPrefferedEnvs(Vec<Env>),
     Discover(String),
     Logout(String),
-    StartSearchLogs(String, Env, String, i64),
-    SearchLogs(String, Env, String, i64),
+    StartSearchLogs(String, Env, String, i64, bool),
+    SearchLogs(String, Env, String, i64, bool),
     AbortSearchLogs(String),
 }
 

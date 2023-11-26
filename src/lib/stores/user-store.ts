@@ -12,14 +12,21 @@ const createUserStore = () => {
 		tracked_names: [],
 		known_profiles: [],
 		last_used_profile: undefined,
-		preffered_environments: []
+		preffered_environments: [],
+		logs_dir: ''
 	});
 	execute<UserConfig>('user_config').then((config) => {
+		console.log(config);
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	});
 
 	const setDbeaverPath = async (path: string) => {
 		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path }, true);
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+	};
+
+	const setLogsDir = async (path: string) => {
+		const config = await execute<UserConfig>('set_logs_dir_path', { logsDir: path }, true);
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
@@ -44,6 +51,6 @@ const createUserStore = () => {
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
-	return { subscribe, login, setDbeaverPath, favoriteTrackedName, savePrefferedEnvs };
+	return { subscribe, login, setDbeaverPath, setLogsDir, favoriteTrackedName, savePrefferedEnvs };
 };
 export const userStore = createUserStore();

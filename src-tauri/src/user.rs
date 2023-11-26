@@ -49,6 +49,7 @@ pub struct UserConfig {
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     pub dbeaver_path: Option<String>,
     pub preffered_environments: Vec<Env>,
+    pub logs_dir: Option<PathBuf>,
 }
 
 impl UserConfig {
@@ -100,6 +101,7 @@ impl UserConfig {
                 service_proxy_port_map,
                 dbeaver_path: UserConfig::recheck_dbeaver_path(old.dbeaver_path),
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
+                logs_dir: Some(UserConfig::logs_path()),
             };
             new_config.save();
             let _ = fs::remove_file(UserConfigOld::config_path());
@@ -119,10 +121,12 @@ impl UserConfig {
                 service_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
+                logs_dir: Some(UserConfig::logs_path()),
             },
         };
         user_config.dbeaver_path =
             UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
+        user_config.logs_dir = Some(UserConfig::logs_path());
         user_config
     }
 
@@ -131,6 +135,10 @@ impl UserConfig {
             .unwrap_or_log()
             .as_path()
             .join(".wombat_v1")
+    }
+
+    fn logs_path() -> PathBuf {
+        home::home_dir().unwrap_or_log().as_path().join("log_dumps")
     }
 
     fn recheck_dbeaver_path(original_path: Option<String>) -> Option<String> {
@@ -214,6 +222,21 @@ impl UserConfig {
             Ok(self.clone())
         } else {
             Err(BError::new("set_dbeaver_path", "Invalid path!"))
+        }
+    }
+    pub fn set_logs_path(&mut self, logs_dir_path: &str) -> Result<UserConfig, BError> {
+        let path = std::path::Path::new(logs_dir_path);
+        let res = fs::create_dir_all(&path);
+        match res {
+            Err(msg) => Err(BError::new(
+                "set_logs_path",
+                format!("Invalid path! {}", msg),
+            )),
+            Ok(()) => {
+                self.logs_dir = Some(PathBuf::from(logs_dir_path.to_owned()));
+                self.save();
+                Ok(self.clone())
+            }
         }
     }
 

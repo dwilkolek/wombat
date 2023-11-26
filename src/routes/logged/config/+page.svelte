@@ -4,6 +4,7 @@
 
 	let user = $userStore;
 	let dbeaver_path = user?.dbeaver_path ?? '';
+	let logs_dir = user?.logs_dir ?? '';
 </script>
 
 <svelte:head>
@@ -15,6 +16,7 @@
 		class="flex flex-col justify-items-center gap-2"
 		on:submit|preventDefault={() => {
 			userStore.setDbeaverPath(dbeaver_path);
+			userStore.setLogsDir(logs_dir);
 		}}
 	>
 		<div class="form-control">
@@ -60,6 +62,24 @@
 				
 				<div class="flex flex-col pl-2">
 					<h4 class="text-lg">Log dir</h4>
+					<div class="pl-1 flex">
+						<input
+						id="logs_dir"
+						type="text"
+						autocomplete="off"
+						autocorrect="off"
+						autocapitalize="off"
+						spellcheck="false"
+						placeholder="Logs dir"
+						class="input input-bordered w-full min-w-xs mb-2"
+						bind:value={logs_dir}
+					/>
+
+					</div>
+				</div>
+
+				<div class="flex flex-col pl-2">
+					<h4 class="text-lg">Wombat dir</h4>
 					<div class="pl-1 flex">Windows: <pre class="pl-1">%userprofile%\AppData\Roaming\eu.wilkolek.wombat\logs</pre></div>
 					<div class="pl-1 flex">MacOS: <pre class="pl-1">~/Library/Logs/eu.wilkolek.wombat</pre></div>
 					<div class="pl-1 flex">Linux: <pre class="pl-1">~/.config/eu.wilkolek.wombat\logs</pre></div>
@@ -67,6 +87,6 @@
 			</div>
 		</div>
 
-		<button class="btn btn-primary">Update path </button>
+		<button class="btn btn-primary">Save!</button>
 	</form>
 </div>
