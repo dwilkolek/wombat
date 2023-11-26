@@ -210,6 +210,13 @@
 			<button
 				class="btn btn-accent btn-xs"
 				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 8 }));
+					endDate.set(new Date());
+				}}>Last 8h</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
 					startDate.set(sub(new Date(), { hours: 24 }));
 					endDate.set(new Date());
 				}}>Last 24h</button
