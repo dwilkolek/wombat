@@ -171,6 +171,27 @@ const createLogStore = () => {
 			};
 		});
 	};
+	const dumpLogs = (app: string, env: AwsEnv) => {
+		invoke('find_logs', {
+			app,
+			env,
+			start: get(startDate).getTime(),
+			end: get(endDate).getTime(),
+			filter: get(filterString),
+			filename: `${app}-${env?.toLowerCase()}`
+		});
+		storeState.update((state) => {
+			return {
+				...state,
+				isLookingForLogs: true,
+				searchError: undefined,
+				logs: [],
+				showLogDetails: false,
+				searchStatus: undefined
+			};
+		});
+	};
+	
 	const abort = (reason: string) => {
 		invoke('abort_find_logs', { reason });
 		storeState.update((state) => {
@@ -196,6 +217,7 @@ const createLogStore = () => {
 		showLog,
 		abort,
 		search,
+		dumpLogs,
 		selectedLog,
 		startDate,
 		endDate,

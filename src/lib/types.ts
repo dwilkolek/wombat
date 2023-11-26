@@ -19,6 +19,7 @@ export type UserConfig = {
 	tracked_names: string[];
 	dbeaver_path: string | undefined;
 	preffered_environments: AwsEnv[];
+	logs_dir: string
 };
 
 export type EcsService = {
