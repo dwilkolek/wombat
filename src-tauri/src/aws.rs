@@ -533,9 +533,9 @@ pub async fn service_detail(
 }
 
 pub trait OnLogFound: Send {
-    fn notify(&self, logs: Vec<LogEntry>);
-    fn success(&self);
-    fn error(&self, msg: String);
+    fn notify(&mut self, logs: Vec<LogEntry>);
+    fn success(&mut self);
+    fn error(&mut self, msg: String);
 }
 
 pub async fn find_logs(
@@ -546,6 +546,7 @@ pub async fn find_logs(
     end_date: i64,
     filter: String,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
+    limit: Option<usize>,
 ) -> Result<usize, BError> {
     let client = cloudwatchlogs::Client::new(config);
     let response = client
@@ -581,7 +582,7 @@ pub async fn find_logs(
                     if response2.is_err() {
                         let message = response2.unwrap_err().to_string();
 
-                        let notifier = on_log_found.lock().await;
+                        let mut notifier = on_log_found.lock().await;
                         notifier.error(format!("Error: {}", &message).to_owned());
 
                         return Result::Err(BError {
@@ -624,7 +625,7 @@ pub async fn find_logs(
             let mut marker = None;
             let mut first = true;
             if stream_names.is_empty() {
-                let notifier = on_log_found.lock().await;
+                let mut notifier = on_log_found.lock().await;
                 notifier.success();
                 return Result::Ok(0);
             }
@@ -651,7 +652,7 @@ pub async fn find_logs(
                         .unwrap_or("")
                         .to_owned();
 
-                    let notifier = on_log_found.lock().await;
+                    let mut notifier = on_log_found.lock().await;
                     notifier.error(format!("Error: {}", &message).to_owned());
 
                     return Result::Err(BError {
@@ -665,7 +666,7 @@ pub async fn find_logs(
                 let events = log_response_data.events.unwrap_or_default();
                 info!("LOGS Found: {}", &events.len());
                 log_count = log_count + events.len();
-                let notifier = on_log_found.lock().await;
+                let mut notifier = on_log_found.lock().await;
                 notifier.notify(
                     events
                         .into_iter()
@@ -677,21 +678,22 @@ pub async fn find_logs(
                         })
                         .collect(),
                 );
-
-                if log_count > 1000 {
-                    warn!("LOGS Exceeded max log count");
-                    notifier.error("Exceeded amount of logs. Limit 1000.".to_owned());
-                    return Result::Err(BError {
-                        message: "Exceeded amount of logs. Limit 1000.".to_owned(),
-                        command: "find_logs".to_owned(),
-                    });
+                if let Some(limit) = limit {
+                    if log_count > limit {
+                        warn!("LOGS Exceeded max log count");
+                        notifier.error("Exceeded amount of logs. Limit 1000.".to_owned());
+                        return Result::Err(BError {
+                            message: "Exceeded amount of logs. Limit 1000.".to_owned(),
+                            command: "find_logs".to_owned(),
+                        });
+                    }
                 }
             }
         }
     }
     info!("LOGS Done");
 
-    let notifier = on_log_found.lock().await;
+    let mut notifier = on_log_found.lock().await;
     notifier.success();
     return Result::Ok(log_count);
 }
