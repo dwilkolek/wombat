@@ -624,7 +624,7 @@ impl aws::OnLogFound for FileNotifier {
 #[tauri::command]
 async fn find_logs(
     window: Window,
-    app: String,
+    apps: Vec<String>,
     env: Env,
     start: i64,
     end: i64,
@@ -662,7 +662,7 @@ async fn find_logs(
         &axiom.0,
         &authorized_user.id,
         Action::StartSearchLogs(
-            app.to_owned(),
+            apps.to_owned(),
             env.clone(),
             filter.to_string(),
             end - start,
@@ -677,7 +677,7 @@ async fn find_logs(
     let user_config = Arc::clone(&user_config.0);
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
         let action = Action::SearchLogs(
-            app.to_owned(),
+            apps.clone(),
             env.clone(),
             filter.to_string(),
             end - start,
@@ -686,7 +686,7 @@ async fn find_logs(
         let result = aws::find_logs(
             &authorized_user.sdk_config,
             env,
-            app,
+            apps,
             start,
             end,
             filter,
@@ -714,8 +714,8 @@ async fn find_logs(
                 }
             },
             match &filename.is_some() {
+                false => Some(2500),
                 true => None,
-                false => Some(1000),
             },
         )
         .await;
@@ -1451,8 +1451,8 @@ enum Action {
     SetPrefferedEnvs(Vec<Env>),
     Discover(String),
     Logout(String),
-    StartSearchLogs(String, Env, String, i64, bool),
-    SearchLogs(String, Env, String, i64, bool),
+    StartSearchLogs(Vec<String>, Env, String, i64, bool),
+    SearchLogs(Vec<String>, Env, String, i64, bool),
     AbortSearchLogs(String),
 }
 

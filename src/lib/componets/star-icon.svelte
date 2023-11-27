@@ -3,9 +3,9 @@
 	export let size = '1.8em';
 	import Icon from 'svelte-icon/Icon.svelte';
 	import star from '$lib/images/star-solid.svg?raw';
-	let selected = 'hsl(var(--wa))';
-	let notSelected = 'hsl(var(--er))';
-	let transition = 'hsl(var(--af))';
+	let selected = 'oklch(var(--wa))';
+	let notSelected = 'oklch(var(--er))';
+	let transition = state ? notSelected : selected
 	let color = state ? selected : notSelected;
 </script>
 

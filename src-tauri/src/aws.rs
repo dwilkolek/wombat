@@ -541,7 +541,7 @@ pub trait OnLogFound: Send {
 pub async fn find_logs(
     config: &aws_config::SdkConfig,
     env: Env,
-    app: String,
+    apps: Vec<String>,
     start_date: i64,
     end_date: i64,
     filter: String,
@@ -556,9 +556,12 @@ pub async fn find_logs(
         .await;
 
     let response_data = response.unwrap();
+    let apps_dbg_str = format!("web/{:#?}/", &apps);
 
     let groups = response_data.log_groups().unwrap_or_default();
     let mut log_count: usize = 0;
+
+    info!("Limit: {:?}", &limit);
     for group in groups {
         let group_name = group.log_group_name().unwrap_or_default();
         info!("Group: {}", &group_name);
@@ -566,7 +569,7 @@ pub async fn find_logs(
             let mut stream_names = vec![];
             let mut streams_marker = None;
             let mut first_streams = true;
-            info!("Looking for {} in {}", &filter, format!("web/{}/", app));
+            info!("Looking for {} in {}", &filter, apps_dbg_str);
             while first_streams || streams_marker.is_some() {
                 {
                     first_streams = false;
@@ -600,17 +603,18 @@ pub async fn find_logs(
 
                     for stream in streams {
                         let stream_name = stream.log_stream_name.unwrap_or_default();
-
-                        if stream_name.starts_with(&format!("web/{}/", &app)) {
-                            let overlap = stream
-                                .first_event_timestamp
-                                .is_some_and(|ts| ts <= end_date)
-                                && stream
-                                    .last_event_timestamp
-                                    .is_some_and(|ts| ts >= start_date);
-                            stream_names.push(stream_name.to_owned());
-                            is_over_time = !overlap;
-                            found_matching_stream = true
+                        for app in apps.iter() {
+                            if stream_name.starts_with(&format!("web/{}/", &app)) {
+                                let overlap = stream
+                                    .first_event_timestamp
+                                    .is_some_and(|ts| ts <= end_date)
+                                    && stream
+                                        .last_event_timestamp
+                                        .is_some_and(|ts| ts >= start_date);
+                                stream_names.push(stream_name.to_owned());
+                                is_over_time = !overlap;
+                                found_matching_stream = true
+                            }
                         }
                     }
 
@@ -681,9 +685,10 @@ pub async fn find_logs(
                 if let Some(limit) = limit {
                     if log_count > limit {
                         warn!("LOGS Exceeded max log count");
-                        notifier.error("Exceeded amount of logs. Limit 1000.".to_owned());
+                        let msg = format!("Exceeded amount of logs. Limit {}/{}.", &log_count, &limit).to_owned();
+                        notifier.error(msg.to_owned());
                         return Result::Err(BError {
-                            message: "Exceeded amount of logs. Limit 1000.".to_owned(),
+                            message: msg,
                             command: "find_logs".to_owned(),
                         });
                     }

@@ -8,19 +8,12 @@
 	import { writeText } from '@tauri-apps/api/clipboard';
 	import { beforeNavigate } from '$app/navigation';
 	import { logStore } from '$lib/stores/log-store';
+	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 
 	$: activeCluser = clusterStore.activeCluser;
-	$: tracked_names = $userStore.tracked_names;
-	$: services = serviceStore.getServices($activeCluser).then((services) => [
-		services.filter((a) => {
-			return tracked_names.includes(a.name);
-		}),
-		services.filter((a) => {
-			return !tracked_names.includes(a.name);
-		})
-	]);
+	
 
-	$: selectedService = serviceStore.selectedService;
+	$: selectedServices = serviceStore.selectedServices;
 
 	$: clusters = clusterStore.clusters;
 	const toLocalDateStr = (date: Date) => {
@@ -51,32 +44,13 @@
 </svelte:head>
 
 <div class="flex gap-8 content-end flex-col-reverse lg:flex-row px-2">
-	<div class="flex flex-col gap-2">
+	<div class="flex flex-col gap-2 w-1/2">
 		<div class="flex gap-2">
-			<div>
-				<select class="select select-bordered" bind:value={$activeCluser}>
+			<div class="grow">
+				<select class="w-full select select-bordered" bind:value={$activeCluser}>
 					{#each $clusters as cluster}
 						<option value={cluster}>{cluster.name}</option>
 					{/each}
-				</select>
-			</div>
-
-			<div>
-				<select class="select select-bordered" bind:value={$selectedService}>
-					{#await services then services}
-						<option value={undefined}> -- favorite -- </option>
-						{#each services[0] as service}
-							<option value={service} selected={$selectedService?.arn === service.arn}
-								>{service.name}</option
-							>
-						{/each}
-						<option value={undefined}> -- rest -- </option>
-						{#each services[1] as service}
-							<option value={service} selected={$selectedService?.arn === service.arn}
-								>{service.name}</option
-							>
-						{/each}
-					{/await}
 				</select>
 			</div>
 
@@ -117,10 +91,10 @@
 			{#if !$storeState.isLookingForLogs}
 				<button
 					class="btn btn-active btn-primary"
-					disabled={!$selectedService || $selectedService?.env !== $activeCluser.env}
+					disabled={$selectedServices.length === 0}
 					on:click={() => {
-						if ($selectedService?.name && $activeCluser?.env) {
-							logStore.search($selectedService.name, $activeCluser.env);
+						if ($selectedServices.length > 0 && $activeCluser?.env) {
+							logStore.search($selectedServices.map(s => s.name), $activeCluser.env);
 						}
 					}}
 				>
@@ -143,10 +117,10 @@
 				>
 				<button
 					class="btn btn-active btn-primary"
-					disabled={!$selectedService || $selectedService?.env !== $activeCluser.env}
+					disabled={$selectedServices.length === 0}
 					on:click={() => {
-						if ($selectedService?.name && $activeCluser?.env) {
-							logStore.dumpLogs($selectedService.name, $activeCluser.env);
+						if ($selectedServices.length > 0 && $activeCluser?.env) {
+							logStore.dumpLogs($selectedServices.map(s => s.name), $activeCluser.env);
 						}
 					}}
 				>
@@ -194,6 +168,8 @@
 				>
 			{/if}
 		</div>
+
+		<ServiceMultiselect />
 	</div>
 	<div class="flex h-full flex-col gap-2">
 		Ping me for custom search filter templates.
@@ -256,7 +232,7 @@
 			>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			{#if $selectedService?.name == 'rome'}
+			{#if $selectedServices.some(s => s.name == 'rome')}
 				<button
 					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
@@ -272,7 +248,9 @@
 			{/if}
 		</div>
 	</div>
+	
 </div>
+
 <div class="p-1 min-h-6">
 	{#if !!$storeState.searchError}{$storeState.searchError}{/if}
 	{#if $storeState.isLookingForLogs}<progress
@@ -304,6 +282,7 @@
 							$selectedLog === log.data ? log.style.active : ''
 						}`}
 					>
+						<td>{log.app}</td>
 						<td>{log.level}</td>
 						<td class="min-w-[200px] max-w-[200px]"
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
