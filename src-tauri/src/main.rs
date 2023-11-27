@@ -714,8 +714,8 @@ async fn find_logs(
                 }
             },
             match &filename.is_some() {
-                true => Some(1000),
-                false => None,
+                true => None,
+                false => Some(1000),
             },
         )
         .await;
