@@ -67,7 +67,7 @@
 				<label class="cursor-pointer label flex flex-row gap-2">
 					<input
 						type="checkbox"
-						class="toggle toggle-primary"
+						class="toggle toggle-accent"
 						checked={selectedClusters.includes(env)}
 						on:change={(e) => {
 							columnToggleHandler(env, e);

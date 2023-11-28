@@ -2,6 +2,7 @@ import { get, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import type { Cluster, EcsService } from '$lib/types';
 import { invoke } from '@tauri-apps/api';
+import { clusterStore } from './cluster-store';
 
 const createServiceStore = () => {
 	const innerStore = writable(new Map<Cluster, EcsService[]>());
@@ -28,7 +29,23 @@ const createServiceStore = () => {
 			}
 		})
 	}
+	clusterStore.activeCluser.subscribe(activeCluster => {
+		getServices(activeCluster).then(servicesInNewCluster => {
+			const service = get(selectedService)
+			if (service) {
+				if (service.cluster_arn != activeCluster.arn) {
+					const serviceFromNewCluster = servicesInNewCluster.find(s => s.name === service.name)
+					selectedService.set(serviceFromNewCluster ?? null)
+				}
+			}
 
+			const newSelectedServices = get(selectedServices)
+				.map(service => servicesInNewCluster.find(s => s.name === service.name))
+				.filter(o => !!o) as EcsService[];
+			selectedServices.set(newSelectedServices)
+		})
+		
+	})
 	return { ...innerStore, selectedService, selectedServices, getServices, selectService };
 };
 

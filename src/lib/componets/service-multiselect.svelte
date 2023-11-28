@@ -20,12 +20,13 @@
 	$: select = serviceStore.selectService;
 </script>
 
-
-<div class={`w-full flex flex-col items-center mx-auto group ${open ? 'is-open' : ''}`}>
+<div class={`w-full flex flex-col items-center mx-auto`}>
 	<div class="w-full">
 		<div class="flex flex-col items-center relative">
-			<div class="w-full">
-				<div class="p-1 flex border border-base-content/[.2] rounded-lg">
+			<div class="w-full ">
+				<div
+					class="p-1.5 min-h-12 flex flex-row form-control border border-radius-sm border-slate select-bordered rounded-btn"
+				>
 					<div class="flex flex-auto flex-wrap">
 						{#each $selectedServices as s}
 							<div
@@ -48,7 +49,7 @@
 											stroke-width="2"
 											stroke-linecap="round"
 											stroke-linejoin="round"
-											class="feather feather-x cursor-pointer hover:text-teal-400 rounded-full w-4 h-4 ml-2"
+											class="feather feather-x cursor-pointer hover:text-black rounded-full w-4 h-4 ml-2"
 										>
 											<line x1="18" y1="6" x2="6" y2="18"></line>
 											<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -57,36 +58,37 @@
 								</div>
 							</div>
 						{/each}
-						<div class="flex-1">
-							<input
-								placeholder=""
-								class="bg-transparent p-1 px-2 appearance-none outline-none h-full w-full text-gray-800"
-							/>
-						</div>
 					</div>
-					<div class="w-8 py-1 pl-2 pr-1 border-l flex items-center border-neutral">
-						<button
-							class={`cursor-pointer w-6 h-6 outline-none focus:outline-none ${
-								open ? '' : 'rotate-180'
-							}`}
-							on:click={() => (open = !open)}
-						>
+
+					<button class={`outline-none focus:outline-none`} on:click={() => (open = !open)}>
+						{#if open}
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
-								width="100%"
-								height="100%"
-								fill="none"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								class="feather feather-chevron-up w-4 h-4"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="w-5 h-5"
 							>
-								<polyline points="18 15 12 9 6 15"></polyline>
+								<path
+									fill-rule="evenodd"
+									d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.832 6.29 12.77a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z"
+									clip-rule="evenodd"
+								/>
 							</svg>
-						</button>
-					</div>
+						{:else}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="w-5 h-5"
+							>
+								<path
+									fill-rule="evenodd"
+									d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+									clip-rule="evenodd"
+								/>
+							</svg>
+						{/if}
+					</button>
 				</div>
 			</div>
 			{#if open}
@@ -96,16 +98,6 @@
 					<div class="flex flex-col w-full base-300">
 						{#await services then services}
 							{#each services as services, i}
-								<!-- {#if services.length > 0}
-									<div class="w-full rounded-t p-2 text-xs pl-4">
-										{#if i == 0}
-											-- favorite --
-										{/if}
-										{#if i == 1}
-											-- rest --
-										{/if}
-									</div>
-								{/if} -->
 								{#each services as o}
 									<!-- svelte-ignore a11y-click-events-have-key-events -->
 									<!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -117,7 +109,14 @@
 											class="flex w-full items-center p-1 border-transparent border-l-2 relative"
 										>
 											<div class="w-full items-center flex">
-												<div class="mx-2 leading-6 text-sm"> {#if i == 0} * {/if} {o.name}</div>
+												<div class="mx-2 leading-6 text-sm flex items-center gap-1">
+													{#if i == 0}
+														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 text-warning">
+															<path fill-rule="evenodd" d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z" clip-rule="evenodd" />
+														</svg>
+													{/if}
+													{o.name}
+												</div>
 											</div>
 										</div>
 									</div>
@@ -134,8 +133,12 @@
 {#if open}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div class="w-screen h-screen fixed" on:click={() => open = !open}></div>
+	<div
+		class="w-screen h-screen bottom-0 left-0 fixed bg-salte"
+		on:click={() => (open = !open)}
+	></div>
 {/if}
+
 <style>
 	.top-100 {
 		top: 100%;

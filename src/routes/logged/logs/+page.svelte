@@ -44,16 +44,96 @@
 </svelte:head>
 
 <div class="flex gap-8 content-end flex-col-reverse lg:flex-row px-2">
-	<div class="flex flex-col gap-2 w-1/2">
+
+	<div class="flex flex-col gap-2">
+		<div class="flex h-full gap-4">
+		Ping me for custom search filter templates.
+		<div class="flex flex-wrap gap-2">
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { minutes: 5 }));
+					endDate.set(new Date());
+				}}>Last 5m</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { minutes: 15 }));
+					endDate.set(new Date());
+				}}>Last 15m</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { minutes: 30 }));
+					endDate.set(new Date());
+				}}>Last 30m</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 1 }));
+					endDate.set(new Date());
+				}}>Last 1h</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 4 }));
+					endDate.set(new Date());
+				}}>Last 4h</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 8 }));
+					endDate.set(new Date());
+				}}>Last 8h</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(sub(new Date(), { hours: 24 }));
+					endDate.set(new Date());
+				}}>Last 24h</button
+			>
+			<button
+				class="btn btn-accent btn-xs"
+				on:click={() => {
+					startDate.set(startOfDay(new Date()));
+					endDate.set(endOfDay(new Date()));
+				}}>Today</button
+			>
+		</div>
+		<div class="flex flex-wrap gap-2">
+			{#if $selectedServices.some(s => s.name == 'rome')}
+				<button
+					class="btn btn-active btn-success btn-xs"
+					on:click={() => {
+						filterString.set(`{ $.level = "ERROR" }`);
+					}}>Only Errors</button
+				>
+				<button
+					class="btn btn-active btn-success btn-xs"
+					on:click={() => {
+						filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
+					}}>By Trace</button
+				>
+			{/if}
+		</div>
+	</div>	
 		<div class="flex gap-2">
-			<div class="grow">
+			<div class="min-w-[200px]">
 				<select class="w-full select select-bordered" bind:value={$activeCluser}>
 					{#each $clusters as cluster}
 						<option value={cluster}>{cluster.name}</option>
 					{/each}
 				</select>
 			</div>
-
+			<div class="grow">
+				<ServiceMultiselect />
+			</div>
 			<div>
 				<input
 					type="datetime-local"
@@ -165,85 +245,6 @@
 					</svg>
 
 					Abort</button
-				>
-			{/if}
-		</div>
-
-		<ServiceMultiselect />
-	</div>
-	<div class="flex h-full flex-col gap-2">
-		Ping me for custom search filter templates.
-		<div class="flex flex-wrap gap-2">
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { minutes: 5 }));
-					endDate.set(new Date());
-				}}>Last 5m</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { minutes: 15 }));
-					endDate.set(new Date());
-				}}>Last 15m</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { minutes: 30 }));
-					endDate.set(new Date());
-				}}>Last 30m</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 1 }));
-					endDate.set(new Date());
-				}}>Last 1h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 4 }));
-					endDate.set(new Date());
-				}}>Last 4h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 8 }));
-					endDate.set(new Date());
-				}}>Last 8h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 24 }));
-					endDate.set(new Date());
-				}}>Last 24h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(startOfDay(new Date()));
-					endDate.set(endOfDay(new Date()));
-				}}>Today</button
-			>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			{#if $selectedServices.some(s => s.name == 'rome')}
-				<button
-					class="btn btn-active btn-secondary btn-xs"
-					on:click={() => {
-						filterString.set(`{ $.level = "ERROR" }`);
-					}}>Only Errors</button
-				>
-				<button
-					class="btn btn-active btn-secondary btn-xs"
-					on:click={() => {
-						filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
-					}}>By Trace</button
 				>
 			{/if}
 		</div>
