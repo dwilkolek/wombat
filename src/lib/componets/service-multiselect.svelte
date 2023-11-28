@@ -20,17 +20,20 @@
 	$: select = serviceStore.selectService;
 </script>
 
-<div class="w-full flex flex-col items-center mx-auto">
+
+<div class={`w-full flex flex-col items-center mx-auto group ${open ? 'is-open' : ''}`}>
 	<div class="w-full">
 		<div class="flex flex-col items-center relative">
 			<div class="w-full">
-				<div class="my-2 p-1 flex border border-neutral rounded">
+				<div class="p-1 flex border border-base-content/[.2] rounded-lg">
 					<div class="flex flex-auto flex-wrap">
 						{#each $selectedServices as s}
 							<div
 								class="flex justify-center items-center m-1 font-medium py-1 px-2 rounded-full bg-success text-black border border-neutral"
 							>
-								<div class="text-xs font-normal leading-none max-w-full flex-initial">{s.name} @ {s.env}</div>
+								<div class="text-xs font-normal leading-none max-w-full flex-initial">
+									{s.name}
+								</div>
 								<div class="flex flex-auto flex-row-reverse">
 									<!-- svelte-ignore a11y-click-events-have-key-events -->
 									<!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -61,9 +64,11 @@
 							/>
 						</div>
 					</div>
-					<div class="text-gray-300 w-8 py-1 pl-2 pr-1 border-l flex items-center border-neutral">
+					<div class="w-8 py-1 pl-2 pr-1 border-l flex items-center border-neutral">
 						<button
-							class="cursor-pointer w-6 h-6 text-gray-600 outline-none focus:outline-none"
+							class={`cursor-pointer w-6 h-6 outline-none focus:outline-none ${
+								open ? '' : 'rotate-180'
+							}`}
 							on:click={() => (open = !open)}
 						>
 							<svg
@@ -91,7 +96,7 @@
 					<div class="flex flex-col w-full base-300">
 						{#await services then services}
 							{#each services as services, i}
-								{#if services.length > 0}
+								<!-- {#if services.length > 0}
 									<div class="w-full rounded-t p-2 text-xs pl-4">
 										{#if i == 0}
 											-- favorite --
@@ -100,7 +105,7 @@
 											-- rest --
 										{/if}
 									</div>
-								{/if}
+								{/if} -->
 								{#each services as o}
 									<!-- svelte-ignore a11y-click-events-have-key-events -->
 									<!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -112,7 +117,7 @@
 											class="flex w-full items-center p-1 border-transparent border-l-2 relative"
 										>
 											<div class="w-full items-center flex">
-												<div class="mx-2 leading-6 text-sm">{o.name}</div>
+												<div class="mx-2 leading-6 text-sm"> {#if i == 0} * {/if} {o.name}</div>
 											</div>
 										</div>
 									</div>
@@ -126,6 +131,11 @@
 	</div>
 </div>
 
+{#if open}
+	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<div class="w-screen h-screen fixed" on:click={() => open = !open}></div>
+{/if}
 <style>
 	.top-100 {
 		top: 100%;
