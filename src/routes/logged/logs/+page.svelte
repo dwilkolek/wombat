@@ -109,13 +109,13 @@
 		<div class="flex flex-wrap gap-2">
 			{#if $selectedServices.some(s => s.name == 'rome')}
 				<button
-					class="btn btn-active btn-success btn-xs"
+					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
 						filterString.set(`{ $.level = "ERROR" }`);
 					}}>Only Errors</button
 				>
 				<button
-					class="btn btn-active btn-success btn-xs"
+					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
 						filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
 					}}>By Trace</button
@@ -125,7 +125,7 @@
 	</div>	
 		<div class="flex gap-2">
 			<div class="min-w-[200px]">
-				<select class="w-full select select-bordered" bind:value={$activeCluser}>
+				<select class="w-full select-sm select select-bordered" bind:value={$activeCluser}>
 					{#each $clusters as cluster}
 						<option value={cluster}>{cluster.name}</option>
 					{/each}
@@ -138,7 +138,7 @@
 				<input
 					type="datetime-local"
 					placeholder="Start date"
-					class="input input-bordered w-full max-w-xs"
+					class="input input-sm input-bordered w-full max-w-xs"
 					on:change={(event) => {
 						startDate.set(new Date(event.currentTarget.value));
 					}}
@@ -149,7 +149,7 @@
 				<input
 					type="datetime-local"
 					placeholder="End date"
-					class="input input-bordered w-full max-w-xs"
+					class="input input-sm input-bordered w-full max-w-xs"
 					on:change={(event) => {
 						endDate.set(new Date(event.currentTarget.value));
 					}}
@@ -165,12 +165,12 @@
 				autocorrect="off"
 				autocapitalize="off"
 				spellcheck="false"
-				class="input input-bordered grow"
+				class="input input-sm input-bordered grow"
 				bind:value={$filterString}
 			/>
 			{#if !$storeState.isLookingForLogs}
 				<button
-					class="btn btn-active btn-primary"
+					class="btn btn-sm btn-active btn-primary"
 					disabled={$selectedServices.length === 0}
 					on:click={() => {
 						if ($selectedServices.length > 0 && $activeCluser?.env) {
@@ -196,7 +196,7 @@
 					Search!</button
 				>
 				<button
-					class="btn btn-active btn-primary"
+					class="btn btn-sm btn-active btn-primary"
 					disabled={$selectedServices.length === 0}
 					on:click={() => {
 						if ($selectedServices.length > 0 && $activeCluser?.env) {
@@ -224,7 +224,7 @@
 			{/if}
 			{#if $storeState.isLookingForLogs}
 				<button
-					class="btn btn-active btn-warning"
+					class="btn btn-sm btn-active btn-warning"
 					on:click={() => {
 						logStore.abort('user-request');
 					}}
