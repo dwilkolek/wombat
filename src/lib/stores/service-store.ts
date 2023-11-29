@@ -2,10 +2,12 @@ import { get, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import type { Cluster, EcsService } from '$lib/types';
 import { invoke } from '@tauri-apps/api';
+import { clusterStore } from './cluster-store';
 
 const createServiceStore = () => {
 	const innerStore = writable(new Map<Cluster, EcsService[]>());
 	const selectedService = writable<EcsService | null>(null);
+	const selectedServices = writable<EcsService[]>([]);
 	const getServices = async (cluster: Cluster): Promise<EcsService[]> => {
 		if (get(innerStore).has(cluster)) {
 			return get(innerStore).get(cluster)!;
@@ -17,10 +19,34 @@ const createServiceStore = () => {
 			return services;
 		}
 	};
-	const selectService = (service: EcsService) => {
-		selectedService.set(service)
+	const selectService = (selection: EcsService) => {
+		selectedService.set(selection)
+		selectedServices.update(services => {
+			if (services.includes(selection)) {
+				return services.filter(s => s.arn != selection.arn)
+			} else {
+				return [...services, selection]
+			}
+		})
 	}
-	return { ...innerStore,selectedService, getServices, selectService };
+	clusterStore.activeCluser.subscribe(activeCluster => {
+		getServices(activeCluster).then(servicesInNewCluster => {
+			const service = get(selectedService)
+			if (service) {
+				if (service.cluster_arn != activeCluster.arn) {
+					const serviceFromNewCluster = servicesInNewCluster.find(s => s.name === service.name)
+					selectedService.set(serviceFromNewCluster ?? null)
+				}
+			}
+
+			const newSelectedServices = get(selectedServices)
+				.map(service => servicesInNewCluster.find(s => s.name === service.name))
+				.filter(o => !!o) as EcsService[];
+			selectedServices.set(newSelectedServices)
+		})
+		
+	})
+	return { ...innerStore, selectedService, selectedServices, getServices, selectService };
 };
 
 listen('cache-refreshed', () => {

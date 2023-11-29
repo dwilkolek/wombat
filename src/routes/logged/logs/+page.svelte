@@ -8,19 +8,12 @@
 	import { writeText } from '@tauri-apps/api/clipboard';
 	import { beforeNavigate } from '$app/navigation';
 	import { logStore } from '$lib/stores/log-store';
+	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 
 	$: activeCluser = clusterStore.activeCluser;
-	$: tracked_names = $userStore.tracked_names;
-	$: services = serviceStore.getServices($activeCluser).then((services) => [
-		services.filter((a) => {
-			return tracked_names.includes(a.name);
-		}),
-		services.filter((a) => {
-			return !tracked_names.includes(a.name);
-		})
-	]);
+	
 
-	$: selectedService = serviceStore.selectedService;
+	$: selectedServices = serviceStore.selectedServices;
 
 	$: clusters = clusterStore.clusters;
 	const toLocalDateStr = (date: Date) => {
@@ -51,151 +44,9 @@
 </svelte:head>
 
 <div class="flex gap-8 content-end flex-col-reverse lg:flex-row px-2">
+
 	<div class="flex flex-col gap-2">
-		<div class="flex gap-2">
-			<div>
-				<select class="select select-bordered" bind:value={$activeCluser}>
-					{#each $clusters as cluster}
-						<option value={cluster}>{cluster.name}</option>
-					{/each}
-				</select>
-			</div>
-
-			<div>
-				<select class="select select-bordered" bind:value={$selectedService}>
-					{#await services then services}
-						<option value={undefined}> -- favorite -- </option>
-						{#each services[0] as service}
-							<option value={service} selected={$selectedService?.arn === service.arn}
-								>{service.name}</option
-							>
-						{/each}
-						<option value={undefined}> -- rest -- </option>
-						{#each services[1] as service}
-							<option value={service} selected={$selectedService?.arn === service.arn}
-								>{service.name}</option
-							>
-						{/each}
-					{/await}
-				</select>
-			</div>
-
-			<div>
-				<input
-					type="datetime-local"
-					placeholder="Start date"
-					class="input input-bordered w-full max-w-xs"
-					on:change={(event) => {
-						startDate.set(new Date(event.currentTarget.value));
-					}}
-					value={toLocalDateStr($startDate)}
-				/>
-			</div>
-			<div>
-				<input
-					type="datetime-local"
-					placeholder="End date"
-					class="input input-bordered w-full max-w-xs"
-					on:change={(event) => {
-						endDate.set(new Date(event.currentTarget.value));
-					}}
-					value={toLocalDateStr($endDate)}
-				/>
-			</div>
-		</div>
-		<div class="w-full flex gap-2">
-			<input
-				type="text"
-				placeholder="Filter"
-				autocomplete="off"
-				autocorrect="off"
-				autocapitalize="off"
-				spellcheck="false"
-				class="input input-bordered grow"
-				bind:value={$filterString}
-			/>
-			{#if !$storeState.isLookingForLogs}
-				<button
-					class="btn btn-active btn-primary"
-					disabled={!$selectedService || $selectedService?.env !== $activeCluser.env}
-					on:click={() => {
-						if ($selectedService?.name && $activeCluser?.env) {
-							logStore.search($selectedService.name, $activeCluser.env);
-						}
-					}}
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-						/>
-					</svg>
-
-					Search!</button
-				>
-				<button
-					class="btn btn-active btn-primary"
-					disabled={!$selectedService || $selectedService?.env !== $activeCluser.env}
-					on:click={() => {
-						if ($selectedService?.name && $activeCluser?.env) {
-							logStore.dumpLogs($selectedService.name, $activeCluser.env);
-						}
-					}}
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-						/>
-					</svg>
-
-					Dump logs</button
-				>
-			{/if}
-			{#if $storeState.isLookingForLogs}
-				<button
-					class="btn btn-active btn-warning"
-					on:click={() => {
-						logStore.abort('user-request');
-					}}
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M15.75 5.25v13.5m-7.5-13.5v13.5"
-						/>
-					</svg>
-
-					Abort</button
-				>
-			{/if}
-		</div>
-	</div>
-	<div class="flex h-full flex-col gap-2">
+		<div class="flex h-full gap-4">
 		Ping me for custom search filter templates.
 		<div class="flex flex-wrap gap-2">
 			<button
@@ -256,7 +107,7 @@
 			>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			{#if $selectedService?.name == 'rome'}
+			{#if $selectedServices.some(s => s.name == 'rome')}
 				<button
 					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
@@ -271,8 +122,136 @@
 				>
 			{/if}
 		</div>
+	</div>	
+		<div class="flex gap-2">
+			<div class="min-w-[200px]">
+				<select class="w-full select-sm select select-bordered" bind:value={$activeCluser}>
+					{#each $clusters as cluster}
+						<option value={cluster}>{cluster.name}</option>
+					{/each}
+				</select>
+			</div>
+			<div class="grow">
+				<ServiceMultiselect />
+			</div>
+			<div>
+				<input
+					type="datetime-local"
+					placeholder="Start date"
+					class="input input-sm input-bordered w-full max-w-xs"
+					on:change={(event) => {
+						startDate.set(new Date(event.currentTarget.value));
+					}}
+					value={toLocalDateStr($startDate)}
+				/>
+			</div>
+			<div>
+				<input
+					type="datetime-local"
+					placeholder="End date"
+					class="input input-sm input-bordered w-full max-w-xs"
+					on:change={(event) => {
+						endDate.set(new Date(event.currentTarget.value));
+					}}
+					value={toLocalDateStr($endDate)}
+				/>
+			</div>
+		</div>
+		<div class="w-full flex gap-2">
+			<input
+				type="text"
+				placeholder="Filter"
+				autocomplete="off"
+				autocorrect="off"
+				autocapitalize="off"
+				spellcheck="false"
+				class="input input-sm input-bordered grow"
+				bind:value={$filterString}
+			/>
+			{#if !$storeState.isLookingForLogs}
+				<button
+					class="btn btn-sm btn-active btn-primary"
+					disabled={$selectedServices.length === 0}
+					on:click={() => {
+						if ($selectedServices.length > 0 && $activeCluser?.env) {
+							logStore.search($selectedServices.map(s => s.name), $activeCluser.env);
+						}
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+						/>
+					</svg>
+
+					Search!</button
+				>
+				<button
+					class="btn btn-sm btn-active btn-primary"
+					disabled={$selectedServices.length === 0}
+					on:click={() => {
+						if ($selectedServices.length > 0 && $activeCluser?.env) {
+							logStore.dumpLogs($selectedServices.map(s => s.name), $activeCluser.env);
+						}
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+						/>
+					</svg>
+
+					Dump logs</button
+				>
+			{/if}
+			{#if $storeState.isLookingForLogs}
+				<button
+					class="btn btn-sm btn-active btn-warning"
+					on:click={() => {
+						logStore.abort('user-request');
+					}}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-6 h-6"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M15.75 5.25v13.5m-7.5-13.5v13.5"
+						/>
+					</svg>
+
+					Abort</button
+				>
+			{/if}
+		</div>
 	</div>
+	
 </div>
+
 <div class="p-1 min-h-6">
 	{#if !!$storeState.searchError}{$storeState.searchError}{/if}
 	{#if $storeState.isLookingForLogs}<progress
@@ -304,6 +283,7 @@
 							$selectedLog === log.data ? log.style.active : ''
 						}`}
 					>
+						<td>{log.app}</td>
 						<td>{log.level}</td>
 						<td class="min-w-[200px] max-w-[200px]"
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td

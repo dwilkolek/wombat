@@ -21,6 +21,7 @@ type UiLogEntry = {
 	timestamp: number;
 	data: unknown;
 	style: LogStyle;
+	app: string;
 };
 function transformLog(newLog: LogEntry) {
 	let isString;
@@ -38,10 +39,16 @@ function transformLog(newLog: LogEntry) {
 	} catch (e) {
 		isString = true;
 	}
+	let app = '-';
+	const streamParts = newLog.log_stream_name.split('/')
+	if (streamParts.length > 0) {
+		app  = streamParts[1]
+	}
 	if (isString) {
 		const level = (newLog.message.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ??
 			'UNKNOWN') as LogLevel;
 		return {
+			app,
 			timestamp: newLog.timestamp,
 			level,
 			message: newLog.message,
@@ -52,6 +59,7 @@ function transformLog(newLog: LogEntry) {
 		const logData = JSON.parse(newLog.message);
 		const level = logData?.level?.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ?? 'UNKNOWN';
 		return {
+			app,
 			timestamp: newLog.timestamp,
 			level,
 			message: logData.message,
@@ -152,9 +160,9 @@ const createLogStore = () => {
 		});
 	});
 
-	const search = (app: string, env: AwsEnv) => {
+	const search = (apps: string[], env: AwsEnv) => {
 		invoke('find_logs', {
-			app,
+			apps,
 			env,
 			start: get(startDate).getTime(),
 			end: get(endDate).getTime(),
@@ -171,14 +179,14 @@ const createLogStore = () => {
 			};
 		});
 	};
-	const dumpLogs = (app: string, env: AwsEnv) => {
+	const dumpLogs = (apps: string[], env: AwsEnv) => {
 		invoke('find_logs', {
-			app,
+			apps,
 			env,
 			start: get(startDate).getTime(),
 			end: get(endDate).getTime(),
 			filter: get(filterString),
-			filename: `${app}-${env?.toLowerCase()}`
+			filename: `${apps.join('_')}-${env?.toLowerCase()}`
 		});
 		storeState.update((state) => {
 			return {
