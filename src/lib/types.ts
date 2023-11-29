@@ -20,6 +20,7 @@ export type UserConfig = {
 	dbeaver_path: string | undefined;
 	preffered_environments: AwsEnv[];
 	logs_dir: string
+	last_selected_apps: string[]
 };
 
 export type EcsService = {
