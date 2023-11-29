@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbInstance, DbSecret, EcsService, LogEntry, ServiceDetails};
+use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use log::{error, info, warn, LevelFilter};
 use regex::Regex;
@@ -152,7 +153,7 @@ async fn login(
     {
         let mut app_state = app_state.0.lock().await;
         app_state.active_profile = Some(profile.to_owned());
-        app_state.sdk_config = Some(aws_config::from_env().profile_name(profile).load().await);
+        app_state.sdk_config = Some(aws_config::defaults(BehaviorVersion::latest()).profile_name(profile).load().await);
     }
 
     let _ = window.emit("message", "Authenticating...");

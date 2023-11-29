@@ -2,9 +2,9 @@
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { serviceStore } from '$lib/stores/service-store';
-	import { get } from 'svelte/store';
-	let open = false;
+	import { onMount } from 'svelte';
 
+	let open = false;
 	$: activeCluser = clusterStore.activeCluser;
 	$: tracked_names = $userStore.tracked_names;
 	$: selectedServices = serviceStore.selectedServices;
@@ -20,19 +20,32 @@
 				return bT + bSelect - (aT + aSelect);
 			});
 	});
+	const toggle = () => {
+		open = !open;
+		if (!open) {
+			inputValue = ''
+		}
+	};
+	
 	let inputValue = '';
-
+	let inputElement: HTMLElement;
+	$: if (inputElement) { setTimeout(() => {
+		inputElement.focus()
+	})}
+	
 	$: select = serviceStore.selectService;
 </script>
 
 <div class={`w-full flex flex-col items-center mx-auto`}>
 	<div class="w-full">
-		<div class="flex flex-col items-center relative">
+		<!-- svelte-ignore a11y-no-static-element-interactions -->
+		<!-- svelte-ignore a11y-click-events-have-key-events -->
+		<div class="flex flex-col items-center relative cursor-pointer">
 			<div class="w-full">
 				<div
 					class="h-8 flex flex-row justify-center items-center p-1 form-control border border-radius-sm border-slate select-bordered rounded-btn"
 				>
-					<div class="flex flex-auto flex-wrap gap-1">
+					<div class="flex flex-auto flex-wrap items-center gap-1 shrink">
 						{#each $selectedServices as s}
 							<div class="badge badge-info text-xs">
 								{s.name}
@@ -52,8 +65,10 @@
 								</button>
 							</div>
 						{/each}
+						<div class="grow h-full" on:pointerdown={toggle}>&nbsp;</div>
 					</div>
-					<button class={`z-50 outline-none focus:outline-none ml-2`} on:click={() => (open = !open)}>
+
+					<button class={`z-50 outline-none focus:outline-none ml-2`} on:click={toggle}>
 						{#if open}
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -90,6 +105,7 @@
 				>
 					<div class="flex flex-col w-full base-300">
 						<div class="m-2">
+							<!-- svelte-ignore a11y-autofocus -->
 							<input
 								autocomplete="off"
 								autocorrect="off"
@@ -99,6 +115,7 @@
 								placeholder="Search"
 								class="input input-sm input-bordered input-accent w-full"
 								bind:value={inputValue}
+								bind:this={inputElement}
 							/>
 						</div>
 						{#await services then services}
@@ -175,7 +192,7 @@
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
 	<div
 		class="w-screen h-screen bottom-0 left-0 fixed bg-salte"
-		on:click={(e) => (open = !open)}
+		on:click={toggle}
 	></div>
 {/if}
 

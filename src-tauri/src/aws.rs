@@ -106,18 +106,17 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
     let res = ec2_client.describe_instances().filters(filter).send().await;
 
     let res = res.expect_or_log("Failed to get ec2 bastion instances");
-    let res = res.reservations().unwrap_or_default();
+    let res = res.reservations();
     let res = res
         .iter()
         .map(|r| {
-            if let Some(instances) = r.instances() {
+            let instances = r.instances();
                 instances
                     .into_iter()
                     .map(|instance| {
                         let env = Env::from_exact(
                             instance
                                 .tags()
-                                .unwrap_or_default()
                                 .into_iter()
                                 .find(|env_tag_maybe| {
                                     env_tag_maybe.key().unwrap_or("unknown").eq("Environment")
@@ -132,9 +131,6 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
                         }
                     })
                     .collect::<Vec<Bastion>>()
-            } else {
-                vec![]
-            }
         })
         .flatten()
         .collect::<Vec<Bastion>>();
@@ -179,7 +175,7 @@ pub async fn db_secret(
         let secret_arn = secret_client.list_secrets().filters(filter).send().await;
 
         let secret_arn = secret_arn.expect("Failed to fetch!");
-        let secret_arn = secret_arn.secret_list().expect("No arn list!");
+        let secret_arn = secret_arn.secret_list();
         if secret_arn.len() == 1 {
             let secret_arn = secret_arn.first().unwrap_or_log();
             let secret_arn = secret_arn.arn().expect("Expected arn password");
@@ -277,8 +273,7 @@ pub async fn databases(
             .await
             .unwrap_or_log();
         marker = resp.marker().map(|m| m.to_owned());
-        let instances = resp.db_instances();
-        let rdses = instances.as_deref().unwrap_or_log();
+        let rdses = resp.db_instances();
         there_is_more = rdses.len() == 100 && marker.is_some();
         rdses.into_iter().for_each(|rds| {
             if let Some(_) = rds.db_name() {
@@ -288,14 +283,14 @@ pub async fn databases(
                     .and_then(|c| c.get(2))
                     .and_then(|c| Some(c.as_str().to_owned()))
                     .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
-                let tags = rds.tag_list().unwrap_or_log();
+                let tags = rds.tag_list();
                 let mut appname_tag = String::from("");
                 let mut environment_tag = String::from("");
                 let endpoint = rds
                     .endpoint()
                     .map(|e| Endpoint {
                         address: e.address().unwrap_or_log().to_owned(),
-                        port: u16::try_from(e.port()).unwrap_or_log(),
+                        port: u16::try_from(e.port().unwrap_or_log()).unwrap_or_log(),
                     })
                     .unwrap_or_log()
                     .clone();
@@ -350,7 +345,7 @@ pub async fn clusters(
         .await
         .expect("Failed to get Cluster list");
 
-    let cluster_arns = cluster_resp.cluster_arns().unwrap_or_default();
+    let cluster_arns = cluster_resp.cluster_arns();
 
     let mut clusters = vec![];
     for cluster_arn in cluster_arns {
@@ -431,7 +426,6 @@ pub async fn service(
 
         services_resp
             .service_arns()
-            .unwrap_or_log()
             .iter()
             .for_each(|service_arn| {
                 values.push(EcsService {
@@ -497,7 +491,7 @@ pub async fn service_detail(
         .send()
         .await
         .unwrap_or_log();
-    let service = service.services().unwrap_or_log();
+    let service = service.services();
     let service = &service[0];
     let task_def_arn = service.task_definition().unwrap_or_log();
     let task_def = ecs_client
@@ -508,7 +502,7 @@ pub async fn service_detail(
         .unwrap_or_log();
 
     let task_def = task_def.task_definition().unwrap_or_log();
-    let container_def = &task_def.container_definitions().unwrap_or_log()[0];
+    let container_def = &task_def.container_definitions()[0];
     let version = container_def
         .image()
         .unwrap_or_log()
@@ -558,7 +552,7 @@ pub async fn find_logs(
     let response_data = response.unwrap();
     let apps_dbg_str = format!("web/{:#?}/", &apps);
 
-    let groups = response_data.log_groups().unwrap_or_default();
+    let groups = response_data.log_groups();
     let mut log_count: usize = 0;
 
     info!("Limit: {:?}", &limit);
