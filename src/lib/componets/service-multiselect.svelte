@@ -36,7 +36,10 @@
 
 	$: select = (app: EcsService) => {
 		serviceStore.selectService(app)
-		userStore.setLastSelectedApps(selectedServicesState.map(s => s.name))
+		setTimeout(() => {
+			userStore.setLastSelectedApps(selectedServicesState.map(s => s.name))
+		}, 100)
+		
 	}
 
 	onMount(() => {
