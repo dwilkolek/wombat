@@ -2,7 +2,6 @@ import { writable } from 'svelte/store';
 import { execute } from './error-store';
 import type { AwsEnv, UserConfig } from '../types';
 import { emit } from '@tauri-apps/api/event';
-// import { homeStore } from './home-store';
 
 const createUserStore = () => {
 	const loggedIn = writable(false);
@@ -13,7 +12,8 @@ const createUserStore = () => {
 		known_profiles: [],
 		last_used_profile: undefined,
 		preffered_environments: [],
-		logs_dir: ''
+		logs_dir: '',
+		last_selected_apps: []
 	});
 	execute<UserConfig>('user_config').then((config) => {
 		console.log(config);
@@ -27,6 +27,12 @@ const createUserStore = () => {
 
 	const setLogsDir = async (path: string) => {
 		const config = await execute<UserConfig>('set_logs_dir_path', { logsDir: path }, true);
+		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+	};
+
+
+	const setLastSelectedApps = async (apps: string[]) => {
+		const config = await execute<UserConfig>('set_last_selected_apps', { apps }, true);
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
@@ -51,6 +57,14 @@ const createUserStore = () => {
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
-	return { subscribe, login, setDbeaverPath, setLogsDir, favoriteTrackedName, savePrefferedEnvs };
+	return {
+		subscribe,
+		login,
+		setDbeaverPath,
+		setLogsDir,
+		setLastSelectedApps,
+		favoriteTrackedName,
+		savePrefferedEnvs
+	};
 };
 export const userStore = createUserStore();

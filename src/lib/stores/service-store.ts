@@ -8,7 +8,10 @@ const createServiceStore = () => {
 	const innerStore = writable(new Map<Cluster, EcsService[]>());
 	const selectedService = writable<EcsService | null>(null);
 	const selectedServices = writable<EcsService[]>([]);
-	const getServices = async (cluster: Cluster): Promise<EcsService[]> => {
+	const getServices = async (cluster?: Cluster): Promise<EcsService[]> => {
+		if (!cluster) {
+			return []
+		}
 		if (get(innerStore).has(cluster)) {
 			return get(innerStore).get(cluster)!;
 		} else {
@@ -19,16 +22,21 @@ const createServiceStore = () => {
 			return services;
 		}
 	};
+	
 	const selectService = (selection: EcsService) => {
 		selectedService.set(selection)
 		selectedServices.update(services => {
+			let newSelection
 			if (services.includes(selection)) {
-				return services.filter(s => s.arn != selection.arn)
+				newSelection = services.filter(s => s.arn != selection.arn)
 			} else {
-				return [...services, selection]
+				newSelection = [...services, selection]
 			}
+			
+			return newSelection;
 		})
 	}
+
 	clusterStore.activeCluser.subscribe(activeCluster => {
 		getServices(activeCluster).then(servicesInNewCluster => {
 			const service = get(selectedService)
