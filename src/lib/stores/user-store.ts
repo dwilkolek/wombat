@@ -32,7 +32,7 @@ const createUserStore = () => {
 
 
 	const setLastSelectedApps = async (apps: string[]) => {
-		const config = await execute<UserConfig>('set_last_selected_apps', { apps }, true);
+		const config = await execute<UserConfig>('set_last_selected_apps', { apps }, false);
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
