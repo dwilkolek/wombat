@@ -3,6 +3,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { serviceStore } from '$lib/stores/service-store';
 	import { onMount } from 'svelte';
+	import type { EcsService } from '$lib/types';
 
 	let open = false;
 	$: activeCluser = clusterStore.activeCluser;
@@ -13,27 +14,38 @@
 		return services
 			.filter((a) => a.name.includes(inputValue))
 			.toSorted((a, b) => {
-				const aT = tracked_names.includes(a.name) ? 10 : 0;
-				const bT = tracked_names.includes(b.name) ? 10 : 0;
-				const aSelect = selectedServicesState.some((sa) => sa.name == a.name) ? 100 : 0;
-				const bSelect = selectedServicesState.some((sb) => sb.name == b.name) ? 100 : 0;
-				return bT + bSelect - (aT + aSelect);
+				const aT = tracked_names.includes(a.name) ? 1 : 0;
+				const bT = tracked_names.includes(b.name) ? 1 : 0;
+				return bT - aT;
 			});
 	});
 	const toggle = () => {
 		open = !open;
 		if (!open) {
-			inputValue = ''
+			inputValue = '';
 		}
 	};
-	
+
 	let inputValue = '';
 	let inputElement: HTMLElement;
-	$: if (inputElement) { setTimeout(() => {
-		inputElement.focus()
-	})}
-	
-	$: select = serviceStore.selectService;
+	$: if (inputElement) {
+		setTimeout(() => {
+			inputElement.focus();
+		});
+	}
+
+	$: select = (app: EcsService) => {
+		serviceStore.selectService(app)
+		userStore.setLastSelectedApps(selectedServicesState.map(s => s.name))
+	}
+
+	onMount(() => {
+		$userStore.last_selected_apps.forEach((lastSelectedApps) => {
+			services.then((servicesList) => {
+				servicesList.filter((s) => lastSelectedApps.includes(s.name)).forEach((ecs) => select(ecs));
+			});
+		});
+	});
 </script>
 
 <div class={`w-full flex flex-col items-center mx-auto`}>
@@ -101,11 +113,11 @@
 			</div>
 			{#if open}
 				<div
-					class="absolute shadow top-100 bg-base-200 w-full left-0 rounded max-h-select overflow-y-auto z-50"
+					class="absolute shadow top-full hh
+					bg-base-200 w-full left-0 rounded overflow-y-auto z-50"
 				>
 					<div class="flex flex-col w-full base-300">
 						<div class="m-2">
-							<!-- svelte-ignore a11y-autofocus -->
 							<input
 								autocomplete="off"
 								autocorrect="off"
@@ -190,20 +202,5 @@
 {#if open}
 	<!-- svelte-ignore a11y-no-static-element-interactions -->
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div
-		class="w-screen h-screen bottom-0 left-0 fixed bg-salte"
-		on:click={toggle}
-	></div>
+	<div class="w-screen h-screen bottom-0 left-0 fixed bg-salte" on:click={toggle}></div>
 {/if}
-
-<style>
-	.top-100 {
-		top: 100%;
-	}
-	.bottom-100 {
-		bottom: 100%;
-	}
-	.max-h-select {
-		max-height: 300px;
-	}
-</style>
