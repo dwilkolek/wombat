@@ -107,7 +107,7 @@
 			>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			{#if $selectedServices.some(s => s.name == 'rome')}
+			{#if $selectedServices.some(s => ['rome', 'dvmb'].includes(s.name))}
 				<button
 					class="btn btn-active btn-secondary btn-xs"
 					on:click={() => {
