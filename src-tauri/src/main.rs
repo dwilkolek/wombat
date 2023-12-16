@@ -232,9 +232,9 @@ async fn login(
 
     let _ = window.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
-        let initial_wait = tokio::time::sleep(Duration::from_secs(30 * 60));
+        let initial_wait = tokio::time::sleep(Duration::from_secs(3600));
         initial_wait.await;
-        let mut interval = tokio::time::interval(Duration::from_secs(30 * 60));
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
         loop {
             interval.tick().await;
             {
