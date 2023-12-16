@@ -1,6 +1,6 @@
 {
     "name": "wombat",
-    "version": "1.6.1",
+    "version": "1.6.2",
     "scripts": {
         "start": "tauri dev",
         "dev": "vite dev",

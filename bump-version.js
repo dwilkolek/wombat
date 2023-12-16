@@ -31,6 +31,6 @@ cp.execSync('npm install');
 cp.execSync('cd src-tauri && cargo generate-lockfile && cd ..');
 cp.execSync(`git commit -a -m"Release v${newVersion}"`);
 cp.execSync(`git tag v${newVersion}`);
-cp.execSync(`git push origin v${newVersion}`);
+console.log(`git push origin v${newVersion}`);
 
 console.log(`Done`);
