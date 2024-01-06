@@ -5293,7 +5293,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "1.6.2"
+version = "1.6.3"
 dependencies = [
  "aws-config",
  "aws-sdk-cloudwatchlogs",
