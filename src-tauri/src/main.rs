@@ -153,7 +153,12 @@ async fn login(
     {
         let mut app_state = app_state.0.lock().await;
         app_state.active_profile = Some(profile.to_owned());
-        app_state.sdk_config = Some(aws_config::defaults(BehaviorVersion::latest()).profile_name(profile).load().await);
+        app_state.sdk_config = Some(
+            aws_config::defaults(BehaviorVersion::latest())
+                .profile_name(profile)
+                .load()
+                .await,
+        );
     }
 
     let _ = window.emit("message", "Authenticating...");
@@ -359,7 +364,6 @@ async fn set_last_selected_apps(
     .await;
     user_config.set_last_selected_apps(apps)
 }
-
 
 #[tauri::command]
 async fn save_preffered_envs(
@@ -708,7 +712,10 @@ async fn find_logs(
             apps,
             start,
             end,
-            filter,
+            match filter.is_empty() {
+                true => None,
+                false => Some(filter),
+            },
             match &filename {
                 None => Arc::new(Mutex::new(WindowNotifier { window })),
                 Some(filename) => {
