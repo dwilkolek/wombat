@@ -111,26 +111,26 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
         .iter()
         .map(|r| {
             let instances = r.instances();
-                instances
-                    .into_iter()
-                    .map(|instance| {
-                        let env = Env::from_exact(
-                            instance
-                                .tags()
-                                .into_iter()
-                                .find(|env_tag_maybe| {
-                                    env_tag_maybe.key().unwrap_or("unknown").eq("Environment")
-                                })
-                                .map(|env_tag| env_tag.value().unwrap_or_default())
-                                .unwrap_or_default(),
-                        );
+            instances
+                .into_iter()
+                .map(|instance| {
+                    let env = Env::from_exact(
+                        instance
+                            .tags()
+                            .into_iter()
+                            .find(|env_tag_maybe| {
+                                env_tag_maybe.key().unwrap_or("unknown").eq("Environment")
+                            })
+                            .map(|env_tag| env_tag.value().unwrap_or_default())
+                            .unwrap_or_default(),
+                    );
 
-                        Bastion {
-                            instance_id: instance.instance_id().unwrap_or_log().to_owned(),
-                            env,
-                        }
-                    })
-                    .collect::<Vec<Bastion>>()
+                    Bastion {
+                        instance_id: instance.instance_id().unwrap_or_log().to_owned(),
+                        env,
+                    }
+                })
+                .collect::<Vec<Bastion>>()
         })
         .flatten()
         .collect::<Vec<Bastion>>();
@@ -424,17 +424,14 @@ pub async fn service(
         next_token = services_resp.next_token().map(|t| t.to_owned());
         has_more = next_token.is_some();
 
-        services_resp
-            .service_arns()
-            .iter()
-            .for_each(|service_arn| {
-                values.push(EcsService {
-                    name: service_arn.split("/").last().unwrap_or_log().to_owned(),
-                    arn: service_arn.to_owned(),
-                    cluster_arn: cluster.arn.to_owned(),
-                    env: cluster.env.clone(),
-                })
+        services_resp.service_arns().iter().for_each(|service_arn| {
+            values.push(EcsService {
+                name: service_arn.split("/").last().unwrap_or_log().to_owned(),
+                arn: service_arn.to_owned(),
+                cluster_arn: cluster.arn.to_owned(),
+                env: cluster.env.clone(),
             })
+        })
     }
     values.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -538,7 +535,7 @@ pub async fn find_logs(
     apps: Vec<String>,
     start_date: i64,
     end_date: i64,
-    filter: String,
+    filter: Option<String>,
     on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
     limit: Option<usize>,
 ) -> Result<usize, BError> {
@@ -563,7 +560,7 @@ pub async fn find_logs(
             let mut stream_names = vec![];
             let mut streams_marker = None;
             let mut first_streams = true;
-            info!("Looking for {} in {}", &filter, apps_dbg_str);
+            info!("Looking for {:?} in {}", &filter, apps_dbg_str);
             while first_streams || streams_marker.is_some() {
                 {
                     first_streams = false;
@@ -635,7 +632,7 @@ pub async fn find_logs(
                     .set_log_group_name(Some(group_name.to_owned()))
                     .set_log_stream_names(Some(stream_names.clone()))
                     .set_next_token(marker)
-                    .set_filter_pattern(Some(filter.clone()))
+                    .set_filter_pattern(filter.clone())
                     .set_start_time(Some(start_date))
                     .set_end_time(Some(end_date))
                     .send()
@@ -679,7 +676,9 @@ pub async fn find_logs(
                 if let Some(limit) = limit {
                     if log_count > limit {
                         warn!("LOGS Exceeded max log count");
-                        let msg = format!("Exceeded amount of logs. Limit {}/{}.", &log_count, &limit).to_owned();
+                        let msg =
+                            format!("Exceeded amount of logs. Limit {}/{}.", &log_count, &limit)
+                                .to_owned();
                         notifier.error(msg.to_owned());
                         return Result::Err(BError {
                             message: msg,
