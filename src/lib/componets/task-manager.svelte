@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { open } from '@tauri-apps/api/shell';
 	import { taskStore, type ProxyEventMessage } from '$lib/stores/task-store';
 	import { envImportance } from '$lib/stores/cluster-store';
 	import DbeaverBtn from './dbeaver-btn.svelte';
