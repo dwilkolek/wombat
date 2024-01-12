@@ -163,7 +163,6 @@ pub async fn db_secret(
     possible_secrets.push(format!("{}-{}/db-credentials", name, env));
     possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
     possible_secrets.push(format!("{}-{}/datasource-password", name, env));
-    dbg!(&possible_secrets);
 
     let secret_client = secretsmanager::Client::new(&config);
 
@@ -173,10 +172,14 @@ pub async fn db_secret(
             .values(&secret)
             .build();
         let secret_arn = secret_client.list_secrets().filters(filter).send().await;
-
+        if secret_arn.is_err() {
+            return Err(BError::new("db_secret", "Auth error?"));
+        }
         let secret_arn = secret_arn.expect("Failed to fetch!");
+        
         let secret_arn = secret_arn.secret_list();
         if secret_arn.len() == 1 {
+
             let secret_arn = secret_arn.first().unwrap_or_log();
             let secret_arn = secret_arn.arn().expect("Expected arn password");
 

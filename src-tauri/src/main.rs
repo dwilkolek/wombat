@@ -383,18 +383,47 @@ async fn save_preffered_envs(
     user_config.save_preffered_envs(envs)
 }
 
+async fn db_credentials(
+    authorized_user: &AuthorizedUser,
+    user_config: &tauri::State<'_, UserConfigState>,
+    db: &aws::DbInstance,
+) -> Result<DbSecret, BError> {
+    let user_config = user_config.0.lock().await;
+    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
+    let infra_default_role = format!("{}-{}", &db.name, "infra");
+    let profile_name = ssm_role
+        .get(&db.name)
+        .unwrap_or(&infra_default_role);
+    println!("Using infra profile: {}", &profile_name);
+    let db_infra_sdk = aws_config::defaults(BehaviorVersion::latest())
+        .profile_name(profile_name)
+        .load()
+        .await;
+
+    let secret = aws::db_secret(&db_infra_sdk, &db.name, &db.env).await;
+
+    if secret.is_err() {
+        println!("Falling back to user profile: {}", &authorized_user.profile);
+        return aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
+    } else {
+        return secret;
+    }
+}
+
 #[tauri::command]
 async fn credentials(
     window: Window,
     db: aws::DbInstance,
     app_state: tauri::State<'_, AppContextState>,
+    user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<DbSecret, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
-    let secret = aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
+
+    let secret = db_credentials(&authorized_user, &user_config, &db).await;
     match &secret {
         Ok(_) => {
             ingest_log(
@@ -1194,8 +1223,8 @@ async fn open_dbeaver(
             .clone();
     }
 
-    let db_secret = aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
-    if let Err(err) = db_secret {
+    let secret = db_credentials(&authorized_user, &user_config, &db).await;
+    if let Err(err) = secret {
         ingest_log(
             &axiom.0,
             &authorized_user.id,
@@ -1206,7 +1235,7 @@ async fn open_dbeaver(
         .await;
         return Err(err);
     }
-    let db_secret = db_secret.unwrap_or_log();
+    let db_secret = secret.unwrap_or_log();
     ingest_log(
         &axiom.0,
         &authorized_user.id,
