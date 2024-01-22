@@ -1325,7 +1325,7 @@ async fn start_aws_ssm_proxy(
     ]);
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
-    info!("Execudtnig cmd: {:?} ", command);
+    info!("Executnig cmd: {:?} ", command);
     let shared_child = SharedChild::spawn(&mut command).unwrap_or_log();
     let shared_child_arc = Arc::new(shared_child);
     let child_arc_clone = shared_child_arc.clone();

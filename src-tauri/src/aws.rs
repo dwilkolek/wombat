@@ -189,7 +189,7 @@ pub async fn db_secret(
                 .send()
                 .await;
             if secret.is_err() {
-                return Err(BError::new("db_secret", "No secrets found"));
+                return Err(BError::new("db_secret", "No secret found"));
             }
             let secret = secret.unwrap_or_log();
             let secret = secret.secret_string().expect("There should be a secret");
@@ -250,7 +250,7 @@ pub async fn db_secret(
         }
     }
 
-    return Err(BError::new("db_secret", "No secrets found"));
+    return Err(BError::new("db_secret", "No secret found"));
 }
 
 pub async fn databases(
