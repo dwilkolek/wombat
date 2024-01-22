@@ -390,7 +390,7 @@ async fn db_credentials(
 ) -> Result<DbSecret, BError> {
     let user_config = user_config.0.lock().await;
     let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
-    let infra_default_role = format!("{}-{}", &db.name, "infra");
+    let infra_default_role = &db.name;
     let profile_name = ssm_role
         .get(&db.name)
         .unwrap_or(&infra_default_role);
