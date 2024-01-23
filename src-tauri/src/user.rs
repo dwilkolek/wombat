@@ -51,6 +51,7 @@ pub struct UserConfig {
     pub preffered_environments: Vec<Env>,
     pub logs_dir: Option<PathBuf>,
     pub last_selected_apps: Option<Vec<String>>,
+    pub ssm_role: Option<HashMap<TrackedName, String>>,
 }
 
 impl UserConfig {
@@ -104,6 +105,7 @@ impl UserConfig {
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
                 logs_dir: Some(UserConfig::logs_path()),
                 last_selected_apps: Some(vec![]),
+                ssm_role: Some(HashMap::new()),
             };
             new_config.save();
             let _ = fs::remove_file(UserConfigOld::config_path());
@@ -125,6 +127,7 @@ impl UserConfig {
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
                 logs_dir: Some(UserConfig::logs_path()),
                 last_selected_apps: Some(vec![]),
+                ssm_role: Some(HashMap::new()),
             },
         };
 
@@ -137,6 +140,9 @@ impl UserConfig {
         }
         if user_config.last_selected_apps.is_none() {
             user_config.last_selected_apps = Some(vec![]);
+        }
+        if user_config.ssm_role.is_none() {
+            user_config.ssm_role = Some(HashMap::new());
         }
 
         user_config

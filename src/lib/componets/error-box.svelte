@@ -3,8 +3,8 @@
 </script>
 
 {#if $error}
-	<div class="alert alert-error shadow-lg fixed bottom-0">
-		<div>
+	<div class="alert alert-error shadow-lg fixed bottom-0 rounded-b-[0px]">
+		<div class="flex items-center gap-2">
 			<button
 				on:click={() => {
 					error.set(undefined);
@@ -23,7 +23,14 @@
 					/></svg
 				>
 			</button>
-			<span>{$error}</span>
+			{#if $error === 'No secret found'}
+				<div>Secret to databse not found. See: <a 
+					class="ttext-red-950 underline"
+					target="_blank" href="https://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store">
+				Configuration: Setup profile to access ssm/parameter store</a></div>
+			{:else}
+				<span>{$error}</span>
+			{/if}
 		</div>
 	</div>
 {/if}

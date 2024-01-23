@@ -26,7 +26,7 @@
 					await writeText(credentials.password);
 				}
 			} catch (e) {
-				message(`Credentials not found for ${database?.name}`, { title: 'Ooops!', type: 'error' });
+				message(`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?\n\nhttps://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store`, { title: 'Ooops!', type: 'error' });
 			}
 		}
 	};
