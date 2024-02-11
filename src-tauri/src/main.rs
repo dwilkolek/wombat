@@ -4,6 +4,7 @@ use aws::{Cluster, DbInstance, DbSecret, EcsService, LogEntry, ServiceDetails};
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use log::{error, info, warn, LevelFilter};
+use port_killer::kill;
 use regex::Regex;
 use serde_json::json;
 use shared::{arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, ResourceType};
@@ -20,19 +21,22 @@ use std::{env, fs};
 use tauri::Window;
 use tauri_plugin_log::LogTarget;
 use tokio::sync::Mutex;
+use tokio::time::sleep;
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
+use wait_timeout::ChildExt;
 use warp::http::HeaderValue;
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;
 use warp::Filter as WarpFilter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
-
-use wait_timeout::ChildExt;
 mod aws;
 mod shared;
 mod user;
+
+use filepath::FilePath;
+use tempdir::TempDir;
 
 #[derive(Clone, serde::Serialize)]
 struct ProxyEventMessage {
@@ -391,9 +395,7 @@ async fn db_credentials(
     let user_config = user_config.0.lock().await;
     let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
     let infra_default_role = &db.name;
-    let profile_name = ssm_role
-        .get(&db.name)
-        .unwrap_or(&infra_default_role);
+    let profile_name = ssm_role.get(&db.name).unwrap_or(&infra_default_role);
     println!("Using infra profile: {}", &profile_name);
     let db_infra_sdk = aws_config::defaults(BehaviorVersion::latest())
         .profile_name(profile_name)
@@ -960,7 +962,12 @@ async fn start_db_proxy(
     };
 
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
-
+    window
+    .emit(
+        "proxy-starting",
+        ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone()),
+    )
+    .unwrap_or_log();
     let bastions = aws::bastions(&authorized_user.sdk_config).await;
     let bastion = bastions
         .into_iter()
@@ -1142,7 +1149,15 @@ async fn start_service_proxy(
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
+
     let aws_local_port = local_port + 10000;
+
+    window
+        .emit(
+            "proxy-starting",
+            ProxyEventMessage::new(service.arn.clone(), "STARTING".into(), aws_local_port),
+        )
+        .unwrap_or_log();
 
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_service_proxy", msg)),
@@ -1323,10 +1338,27 @@ async fn start_aws_ssm_proxy(
             target, target_port, local_port
         ),
     ]);
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::piped());
+
+    let tmp_dir = TempDir::new("wombat").unwrap();
+    let out_log: File =
+        File::create(tmp_dir.path().join(format!("out-{}.log", local_port))).unwrap();
+    let err_log: File =
+        File::create(tmp_dir.path().join(format!("err-{}.log", local_port))).unwrap();
+
+    let out_log_path = format!("{}", out_log.path().unwrap().display());
+    let err_log_path = format!("{}", err_log.path().unwrap().display());
+
+    command.stdout(Stdio::from(out_log));
+    command.stderr(Stdio::from(err_log));
+
+    info!("Out log path: {:?}", out_log_path.clone());
+    info!("Error log path: {:?}", err_log_path.clone());
+
+    let _ = kill(local_port);
     info!("Executnig cmd: {:?} ", command);
+
     let shared_child = SharedChild::spawn(&mut command).unwrap_or_log();
+
     let shared_child_arc = Arc::new(shared_child);
     let child_arc_clone = shared_child_arc.clone();
 
@@ -1336,7 +1368,33 @@ async fn start_aws_ssm_proxy(
         .await
         .proxies_handlers
         .insert(arn.clone(), shared_child_arc);
+    let started_at = SystemTime::now();
 
+    loop {
+        sleep(Duration::from_millis(100)).await;
+        let contents = fs::read_to_string(out_log_path.clone()).unwrap_or_default();
+
+        info!("Output: {}", contents);
+        if contents.contains("Waiting for connections...") {
+            break;
+        }
+        if SystemTime::now()
+            .duration_since(started_at)
+            .unwrap()
+            .as_secs()
+            > 10
+        {
+            let contents = fs::read_to_string(err_log_path.clone()).unwrap_or_default();
+            error!("Failed to start proxy: {}", contents);
+            window
+                .emit(
+                    "proxy-end",
+                    ProxyEventMessage::new(arn.clone(), "ERROR".into(), access_port),
+                )
+                .unwrap_or_log();
+            break;
+        }
+    }
     tokio::task::spawn(async move {
         // {\"host\":[\"$endpoint\"], \"portNumber\":[\"5432\"], \"localPortNumber\":[\"$port\"]}
         // aws ssm start-session \
@@ -1344,17 +1402,19 @@ async fn start_aws_ssm_proxy(
         //  --profile "$profile" \
         //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
         //  --parameters "$parameters"
+
         window
             .emit(
                 "proxy-start",
-                ProxyEventMessage::new(arn.clone(), "START".into(), access_port),
+                ProxyEventMessage::new(arn.clone(), "STARTED".into(), access_port),
             )
             .unwrap_or_log();
         let _ = child_arc_clone.wait();
 
         if let Some(handle) = abort_on_exit {
             info!("Killing dependant job");
-            handle.abort()
+            let _ = kill(local_port);
+            handle.abort();
         }
         window
             .emit(

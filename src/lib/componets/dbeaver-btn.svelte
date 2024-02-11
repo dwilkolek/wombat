@@ -16,24 +16,28 @@
 				? 'Open connection in dbeaver'
 				: 'Install dbeaver to get instant conneciton'}
 		>
-			<button
-				disabled={!$userStore.dbeaver_path}
-				class={`link text-sm gap-1 text-amber-300 flex items-center ${
-					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
-				}`}
-				on:click={() => {
-					execute(
-						'open_dbeaver',
-						{
-							db,
-							port: task.port
-						},
-						false
-					);
-				}}
-			>
-				{task.port}
-			</button>
+			{#if task.status !== 'STARTING'}
+				<button
+					disabled={!$userStore.dbeaver_path}
+					class={`link text-sm gap-1 text-amber-300 flex items-center ${
+						$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
+					}`}
+					on:click={() => {
+						execute(
+							'open_dbeaver',
+							{
+								db,
+								port: task.port
+							},
+							false
+						);
+					}}
+				>
+					{task.port}
+				</button>
+			{:else}
+				<span class="text-md text-amber-300">Starting...</span>
+			{/if}
 		</div>
 	</div>
 {/await}
