@@ -35,7 +35,6 @@ mod aws;
 mod shared;
 mod user;
 use filepath::FilePath;
-use port_selector::is_free;
 use tempdir::TempDir;
 
 #[derive(Clone, serde::Serialize)]
@@ -1423,10 +1422,7 @@ async fn start_aws_ssm_proxy(
                 ProxyEventMessage::new(arn.clone(), "END".into(), access_port),
             )
             .unwrap_or_log();
-        if !is_free(local_port) {
-            info!("Killing process on local port: {}", local_port);
-            let _ = kill(local_port);
-        }
+        kill_pid_on_port(local_port).await;
     });
 }
 
