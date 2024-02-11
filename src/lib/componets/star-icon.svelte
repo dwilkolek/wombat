@@ -3,8 +3,8 @@
 	export let size = '1.8em';
 	import Icon from 'svelte-icon/Icon.svelte';
 	import star from '$lib/images/star-solid.svg?raw';
-	let selected = 'oklch(var(--wa))';
-	let notSelected = 'oklch(var(--er))';
+	let selected = '#fcd703';
+	let notSelected = 'rgba(252, 215, 3, 0.5)';
 	let transition = state ? notSelected : selected
 	let color = state ? selected : notSelected;
 </script>

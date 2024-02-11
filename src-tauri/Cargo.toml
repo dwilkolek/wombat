@@ -41,6 +41,7 @@ wait-timeout = "0.2.0"
 port-killer = "0.1.0"
 filepath = "0.1.2"
 tempdir = "0.3.7"
+port-selector = "0.1.6"
 
 [dependencies.uuid]
 version = "1.4.1"

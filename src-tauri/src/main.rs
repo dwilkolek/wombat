@@ -34,8 +34,8 @@ use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_respo
 mod aws;
 mod shared;
 mod user;
-
 use filepath::FilePath;
+use port_selector::is_free;
 use tempdir::TempDir;
 
 #[derive(Clone, serde::Serialize)]
@@ -963,11 +963,11 @@ async fn start_db_proxy(
 
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
     window
-    .emit(
-        "proxy-starting",
-        ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone()),
-    )
-    .unwrap_or_log();
+        .emit(
+            "proxy-starting",
+            ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone()),
+        )
+        .unwrap_or_log();
     let bastions = aws::bastions(&authorized_user.sdk_config).await;
     let bastion = bastions
         .into_iter()
@@ -1338,6 +1338,8 @@ async fn start_aws_ssm_proxy(
             target, target_port, local_port
         ),
     ]);
+    
+    kill_pid_on_port(local_port).await;
 
     let tmp_dir = TempDir::new("wombat").unwrap();
     let out_log: File =
@@ -1353,8 +1355,6 @@ async fn start_aws_ssm_proxy(
 
     info!("Out log path: {:?}", out_log_path.clone());
     info!("Error log path: {:?}", err_log_path.clone());
-
-    let _ = kill(local_port);
     info!("Executnig cmd: {:?} ", command);
 
     let shared_child = SharedChild::spawn(&mut command).unwrap_or_log();
@@ -1392,7 +1392,9 @@ async fn start_aws_ssm_proxy(
                     ProxyEventMessage::new(arn.clone(), "ERROR".into(), access_port),
                 )
                 .unwrap_or_log();
-            break;
+
+            kill_pid_on_port(local_port).await;
+            return;
         }
     }
     tokio::task::spawn(async move {
@@ -1413,7 +1415,6 @@ async fn start_aws_ssm_proxy(
 
         if let Some(handle) = abort_on_exit {
             info!("Killing dependant job");
-            let _ = kill(local_port);
             handle.abort();
         }
         window
@@ -1422,7 +1423,22 @@ async fn start_aws_ssm_proxy(
                 ProxyEventMessage::new(arn.clone(), "END".into(), access_port),
             )
             .unwrap_or_log();
+        if !is_free(local_port) {
+            info!("Killing process on local port: {}", local_port);
+            let _ = kill(local_port);
+        }
     });
+}
+
+async fn kill_pid_on_port(port: u16) {
+    let _ = tokio::task::spawn(async move {
+        info!("Trying to kill process on local port: {}", port);
+        let kill_result = kill(port);
+        match kill_result {
+            Ok(res) => info!("Killed: {}", res),
+            Err(err) => warn!("Killing failed, {}", err),
+        }
+    }).await;
 }
 
 #[tokio::main]

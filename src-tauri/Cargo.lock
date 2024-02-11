@@ -3033,6 +3033,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f8f8abaf06419461fc718f5a0929c18d06dd825f26c066e376f365f2d8c2ec2"
 
 [[package]]
+name = "port-selector"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd119ef551a50cd8939f0ff93bd062891f7b0dbb771b4a05df8a9c13aebaff68"
+dependencies = [
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5645,6 +5654,7 @@ dependencies = [
  "home",
  "log",
  "port-killer",
+ "port-selector",
  "rand 0.8.5",
  "regex",
  "serde",

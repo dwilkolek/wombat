@@ -26,7 +26,7 @@
 			return acc;
 		},
 		[]
-	);
+	).sort((a, b) => a.name.localeCompare(b.name));
 </script>
 
 <div class="flex gap-2 flex-col w-full">
@@ -62,8 +62,7 @@
 				{#each taskGroup.rds as task}
 					<div class="flex gap-2 items-center">
 						<DbProxyStopBtn database_arn={task.arn} />
-							<DbeaverBtn {task} />
-						
+						<DbeaverBtn {task} />
 					</div>
 				{/each}
 			</div>
