@@ -26,6 +26,7 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 use wait_timeout::ChildExt;
+use warp::http::HeaderName;
 use warp::http::HeaderValue;
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;
@@ -1178,7 +1179,18 @@ async fn start_service_proxy(
     )
     .await;
 
-    let handle = start_proxy_to_aws_proxy(Some(host.clone()), local_port, aws_local_port).await;
+    let handle = start_proxy_to_aws_proxy(
+        local_port,
+        aws_local_port,
+        ProxyInterceptor {
+            path_prefix: String::from(""),
+            headers: HashMap::from([
+                (String::from("Host"), host.clone()),
+                (String::from("Origin"), host.clone()),
+            ]),
+        },
+    )
+    .await;
 
     start_aws_ssm_proxy(
         service.arn,
@@ -1273,25 +1285,43 @@ async fn open_dbeaver(
     return Ok(());
 }
 
+#[derive(Clone)]
+struct ProxyInterceptor {
+    path_prefix: String,
+    headers: HashMap<String, String>,
+}
+
+impl ProxyInterceptor {
+    fn applies(&self, uri: &str) -> bool {
+        return uri.starts_with(&self.path_prefix);
+    }
+    fn modify_headers(&self, headers: &mut Headers) {
+        let h = self.headers.clone();
+        for (name, value) in h.iter() {
+            let header_value = value.parse::<HeaderValue>().unwrap_or_log();
+            let header_name = name.parse::<HeaderName>().unwrap_or_log();
+            headers.insert(header_name, header_value);
+        }
+    }
+}
+
 async fn start_proxy_to_aws_proxy(
-    service_header: Option<String>,
     local_port: u16,
     aws_local_port: u16,
+    proxy_intercepter: ProxyInterceptor,
 ) -> tokio::task::JoinHandle<()> {
     tokio::task::spawn(async move {
         let request_filter = extract_request_data_filter();
-        let header_value = service_header
-            .unwrap_or(String::from(""))
-            .parse::<HeaderValue>()
-            .unwrap_or_log();
+
         let app = warp::any().and(request_filter).and_then(
             move |uri: warp::path::FullPath,
                   params: Option<String>,
                   method: Method,
                   mut headers: Headers,
                   body: Bytes| {
-                headers.insert("Origin", header_value.clone());
-                headers.insert("Host", header_value.clone());
+                if proxy_intercepter.applies(uri.as_str()) {
+                    proxy_intercepter.modify_headers(&mut headers);
+                }
 
                 proxy_to_and_forward_response(
                     format!("http://localhost:{}/", aws_local_port).to_owned(),
@@ -1337,7 +1367,7 @@ async fn start_aws_ssm_proxy(
             target, target_port, local_port
         ),
     ]);
-    
+
     kill_pid_on_port(local_port).await;
 
     let tmp_dir = TempDir::new("wombat").unwrap();
@@ -1434,7 +1464,8 @@ async fn kill_pid_on_port(port: u16) {
             Ok(res) => info!("Killed: {}", res),
             Err(err) => warn!("Killing failed, {}", err),
         }
-    }).await;
+    })
+    .await;
 }
 
 #[tokio::main]
