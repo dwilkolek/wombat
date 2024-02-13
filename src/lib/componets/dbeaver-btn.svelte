@@ -8,32 +8,37 @@
 </script>
 
 {#await db then db}
-	<div class="flex gap-2">
+	<div class="flex gap-2 items-center">
 		<span class="italic text-sm">Database {task.env}:</span>
-		<div
-			class="tooltip"
-			data-tip={$userStore.dbeaver_path
-				? 'Open connection in dbeaver'
-				: 'Install dbeaver to get instant conneciton'}
-		>
-			<button
-				disabled={!$userStore.dbeaver_path}
-				class={`link text-sm gap-1 text-amber-300 flex items-center ${
-					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
-				}`}
-				on:click={() => {
-					execute(
-						'open_dbeaver',
-						{
-							db,
-							port: task.port
-						},
-						false
-					);
-				}}
+
+		{#if task.status !== 'STARTING'}
+			<div
+				class="tooltip"
+				data-tip={$userStore.dbeaver_path
+					? 'Open connection in dbeaver'
+					: 'Install dbeaver to get instant conneciton'}
 			>
-				{task.port}
-			</button>
-		</div>
+				<button
+					disabled={!$userStore.dbeaver_path}
+					class={`link text-sm gap-1 text-amber-300 flex items-center ${
+						$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
+					}`}
+					on:click={() => {
+						execute(
+							'open_dbeaver',
+							{
+								db,
+								port: task.port
+							},
+							false
+						);
+					}}
+				>
+					{task.port}
+				</button>
+			</div>
+		{:else}
+			<span class="text-sm text-amber-300">Starting...</span>
+		{/if}
 	</div>
 {/await}
