@@ -26,7 +26,7 @@
 			return acc;
 		},
 		[]
-	);
+	).sort((a, b) => a.name.localeCompare(b.name));
 </script>
 
 <div class="flex gap-2 flex-col w-full">
@@ -37,21 +37,25 @@
 			</h5>
 			<div class="flex flex-col gap-2 pl-1">
 				{#each taskGroup.ecs as task}
-					<div class="flex gap-2 items-center text-sm">
+					<div class={`flex gap-2 items-center text-sm`}>
 						<ServiceProxyStopBtn service_arn={task.arn} />
 						<span class="italic text-sm">Service {task.env}:</span>
 						<div
-							class="tooltip flex items-center text-amber-300 hover:text-amber-500 gap-1"
+							class={`tooltip flex items-center text-amber-300 hover:text-amber-500 gap-1`}
 							data-tip={`Open ${task.name} in browser`}
 						>
-							<button
-								class="link text-md"
-								on:click|preventDefault={() => {
-									open('http://localhost:' + task.port);
-								}}
-							>
-								{task.port}</button
-							>
+							{#if task.status !== 'STARTING'}
+								<button
+									class={`link text-md`}
+									on:click|preventDefault={() => {
+										open('http://localhost:' + task.port);
+									}}
+								>
+									{task.port}</button
+								>
+							{:else}
+								<span class="text-md">Starting...</span>
+							{/if}
 						</div>
 					</div>
 				{/each}

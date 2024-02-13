@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
 	import { JsonView } from '@zerodevx/svelte-json-view';
 	import { endOfDay, format, startOfDay, sub } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
