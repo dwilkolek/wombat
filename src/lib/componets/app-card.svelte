@@ -21,6 +21,7 @@
 	};
 </script>
 
+
 {#if displayConfig.favorite == null || isFavourite(app) === displayConfig.favorite}
 	<div class="px-2 py-1 bg-base-300 shadow-2xl w-full gap-1 flex rounded-2xl">
 		<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
@@ -40,16 +41,16 @@
 			<span class="loading loading-dots loading-lg" />
 		{/if}
 		{#if details}
-			<div class="flex gap-2 flex-wrap w-full">
+			<div class={`grid w-full gap-2`} style={`grid-template-columns: repeat(${displayConfig.envs?.length ?? 1}, minmax(0, 1fr));`}>
 				{#each [...details.envs] as [env, value]}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(env)}
-						<div class="flex flex-col w-64">
+						<div class="flex flex-col app-env-cell">
 							<div class="font-medium w-16 text-xs italic">{env}:</div>
-							<div class="flex gap-3 grow">
+							<div class="flex gap-3 app-env-cell-stack">
 								{#each value.services as service}
 									<div class="flex flex-row items-center gap-1 px-1">
 										<ServiceCell {service} />
-										<span class="truncate w-20">{service.version}</span>
+										<span class="truncate w-32">{service.version}</span>
 									</div>
 								{/each}
 
@@ -67,3 +68,18 @@
 		{/if}
 	</div>
 {/if}
+
+<style>
+	
+	.app-env-cell {
+		container: envcell / inline-size;
+	}
+
+	@container envcell (width < 300px) {
+		.app-env-cell-stack {
+			flex-direction: column;
+		}
+	}
+
+	
+</style>
