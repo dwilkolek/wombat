@@ -9,8 +9,13 @@
 	import { logStore } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 
+	type LogFilter = {
+		filter: string;
+		services: string[];
+		label: string;
+	};
+
 	$: activeCluser = clusterStore.activeCluser;
-	
 
 	$: selectedServices = serviceStore.selectedServices;
 
@@ -35,6 +40,8 @@
 	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
+
+	$: filters = invoke<LogFilter[]>('log_filters');
 </script>
 
 <svelte:head>
@@ -42,86 +49,85 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 
-<div class="flex gap-8 content-end flex-col-reverse lg:flex-row px-2">
-
+<div class="px-2">
 	<div class="flex flex-col gap-2">
 		<div class="flex h-full gap-4">
-		Ping me for custom search filter templates.
-		<div class="flex flex-wrap gap-2">
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { minutes: 5 }));
-					endDate.set(new Date());
-				}}>Last 5m</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { minutes: 15 }));
-					endDate.set(new Date());
-				}}>Last 15m</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { minutes: 30 }));
-					endDate.set(new Date());
-				}}>Last 30m</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 1 }));
-					endDate.set(new Date());
-				}}>Last 1h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 4 }));
-					endDate.set(new Date());
-				}}>Last 4h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 8 }));
-					endDate.set(new Date());
-				}}>Last 8h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(sub(new Date(), { hours: 24 }));
-					endDate.set(new Date());
-				}}>Last 24h</button
-			>
-			<button
-				class="btn btn-accent btn-xs"
-				on:click={() => {
-					startDate.set(startOfDay(new Date()));
-					endDate.set(endOfDay(new Date()));
-				}}>Today</button
-			>
-		</div>
-		<div class="flex flex-wrap gap-2">
-			{#if $selectedServices.some(s => ['rome', 'dvmb'].includes(s.name))}
+			Ping me for custom search filter templates.
+			<div class="flex flex-wrap gap-2">
 				<button
-					class="btn btn-active btn-secondary btn-xs"
+					class="btn btn-accent btn-xs"
 					on:click={() => {
-						filterString.set(`{ $.level = "ERROR" }`);
-					}}>Only Errors</button
+						startDate.set(sub(new Date(), { minutes: 5 }));
+						endDate.set(new Date());
+					}}>Last 5m</button
 				>
 				<button
-					class="btn btn-active btn-secondary btn-xs"
+					class="btn btn-accent btn-xs"
 					on:click={() => {
-						filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
-					}}>By Trace</button
+						startDate.set(sub(new Date(), { minutes: 15 }));
+						endDate.set(new Date());
+					}}>Last 15m</button
 				>
-			{/if}
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						startDate.set(sub(new Date(), { minutes: 30 }));
+						endDate.set(new Date());
+					}}>Last 30m</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						startDate.set(sub(new Date(), { hours: 1 }));
+						endDate.set(new Date());
+					}}>Last 1h</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						startDate.set(sub(new Date(), { hours: 4 }));
+						endDate.set(new Date());
+					}}>Last 4h</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						startDate.set(sub(new Date(), { hours: 8 }));
+						endDate.set(new Date());
+					}}>Last 8h</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						startDate.set(sub(new Date(), { hours: 24 }));
+						endDate.set(new Date());
+					}}>Last 24h</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						startDate.set(startOfDay(new Date()));
+						endDate.set(endOfDay(new Date()));
+					}}>Today</button
+				>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				{#await filters}
+					<div>Loading filters...</div>
+				{:then filters}
+					{#each filters as filter}
+						{#if filter.services.some((ls) => $selectedServices.some((ecs) => ecs.name == ls))}
+							<button
+								class="btn btn-active btn-secondary btn-xs"
+								on:click={() => {
+									filterString.set(filter.filter);
+								}}>{filter.label}</button
+							>
+						{/if}
+					{/each}
+				{/await}
+			</div>
 		</div>
-	</div>	
 		<div class="flex gap-2">
 			<div class="min-w-[200px]">
 				<select class="w-full select-sm select select-bordered" bind:value={$activeCluser}>
@@ -173,7 +179,10 @@
 					disabled={$selectedServices.length === 0}
 					on:click={() => {
 						if ($selectedServices.length > 0 && $activeCluser?.env) {
-							logStore.search($selectedServices.map(s => s.name), $activeCluser.env);
+							logStore.search(
+								$selectedServices.map((s) => s.name),
+								$activeCluser.env
+							);
 						}
 					}}
 				>
@@ -199,7 +208,10 @@
 					disabled={$selectedServices.length === 0}
 					on:click={() => {
 						if ($selectedServices.length > 0 && $activeCluser?.env) {
-							logStore.dumpLogs($selectedServices.map(s => s.name), $activeCluser.env);
+							logStore.dumpLogs(
+								$selectedServices.map((s) => s.name),
+								$activeCluser.env
+							);
 						}
 					}}
 				>
@@ -248,7 +260,6 @@
 			{/if}
 		</div>
 	</div>
-	
 </div>
 
 <div class="p-1 min-h-6">

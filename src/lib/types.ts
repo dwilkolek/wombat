@@ -22,7 +22,6 @@ export type UserConfig = {
 	dbeaver_path: string | undefined;
 	preffered_environments: AwsEnv[];
 	logs_dir: string;
-	last_selected_apps: string[];
 	db_proxy_port_map: { [key: string]: EnvPortMap };
 	service_proxy_port_map: { [key: string]: EnvPortMap };
 };

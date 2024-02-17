@@ -14,7 +14,6 @@ const createUserStore = () => {
 		last_used_profile: undefined,
 		preffered_environments: [],
 		logs_dir: '',
-		last_selected_apps: [],
 		db_proxy_port_map: {},
 		service_proxy_port_map: {}
 	});
@@ -55,10 +54,6 @@ const createUserStore = () => {
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
-	const setLastSelectedApps = async (apps: string[]) => {
-		const config = await execute<UserConfig>('set_last_selected_apps', { apps }, false);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
-	};
 
 	const login = async (profile: string) => {
 		const config = await execute<UserConfig>('login', { profile });
@@ -86,7 +81,6 @@ const createUserStore = () => {
 		login,
 		setDbeaverPath,
 		setLogsDir,
-		setLastSelectedApps,
 		favoriteTrackedName,
 		savePrefferedEnvs
 	};
