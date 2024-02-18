@@ -176,10 +176,9 @@ pub async fn db_secret(
             return Err(BError::new("db_secret", "Auth error?"));
         }
         let secret_arn = secret_arn.expect("Failed to fetch!");
-        
+
         let secret_arn = secret_arn.secret_list();
         if secret_arn.len() == 1 {
-
             let secret_arn = secret_arn.first().unwrap_or_log();
             let secret_arn = secret_arn.arn().expect("Expected arn password");
 
