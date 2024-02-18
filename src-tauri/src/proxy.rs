@@ -2,8 +2,6 @@ use crate::{AsyncTaskManager, ProxyEventMessage};
 
 use filepath::FilePath;
 use log::{error, info};
-#[cfg(target_os = "linux")]
-use port_killer::kill;
 use shared_child::SharedChild;
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -211,7 +209,7 @@ async fn kill_pid_on_port(port: u16) {
             &format!(":{}", port),
             "|",
             "findStr",
-            "LISTENING"
+            "LISTENING",
         ])
         .output()
         .expect("Failed to execute powershell");
@@ -235,15 +233,29 @@ async fn kill_pid_on_port(port: u16) {
 
 #[cfg(target_os = "linux")]
 async fn kill_pid_on_port(port: u16) {
-    let _ = tokio::task::spawn(async move {
-        info!("Trying to kill process on local port: {}", port);
-        let kill_result = kill(port);
-        match kill_result {
-            Ok(res) => info!("Killed: {}", res),
-            Err(err) => error!("Killing failed, {}", err),
-        }
-    })
-    .await;
+    let lsof = Command::new("lsof")
+        .args(&[format!("-i:{}", port)])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap_or_log();
+    let grep_by_port = Command::new("grep")
+        .arg(format!(":{}", port))
+        .stdin(Stdio::from(lsof.stdout.unwrap())) // Pipe through.
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let cut = Command::new("cut")
+        .args(["-d", " ", "-f", "2"])
+        .stdin(Stdio::from(grep_by_port.stdout.unwrap()))
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let _ = Command::new("xargs")
+        .arg("kill")
+        .stdin(Stdio::from(cut.stdout.unwrap()))
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
 }
 
 #[cfg(target_os = "macos")]
