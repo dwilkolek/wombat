@@ -1,7 +1,8 @@
 use crate::{AsyncTaskManager, ProxyEventMessage};
 
 use filepath::FilePath;
-use log::{error, info, warn};
+use log::{error, info};
+#[cfg(target_os = "linux")]
 use port_killer::kill;
 use shared_child::SharedChild;
 use std::collections::HashMap;
@@ -239,7 +240,7 @@ async fn kill_pid_on_port(port: u16) {
         let kill_result = kill(port);
         match kill_result {
             Ok(res) => info!("Killed: {}", res),
-            Err(err) => warn!("Killing failed, {}", err),
+            Err(err) => error!("Killing failed, {}", err),
         }
     })
     .await;
