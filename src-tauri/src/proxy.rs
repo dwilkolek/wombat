@@ -14,10 +14,10 @@ use tauri::Window;
 use tempdir::TempDir;
 use tokio::time::sleep;
 use tracing_unwrap::ResultExt;
-use warp::hyper::body::Bytes;
-use warp::hyper::Method;
 use warp::http::HeaderName;
 use warp::http::HeaderValue;
+use warp::hyper::body::Bytes;
+use warp::hyper::Method;
 use warp::Filter as WarpFilter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
 
@@ -50,6 +50,11 @@ pub async fn start_aws_ssm_proxy(
             target, target_port, local_port
         ),
     ]);
+
+    println!(
+        "Local: {}, target: {}, access: {}",
+        &local_port, &target_port, &access_port
+    );
 
     kill_pid_on_port(local_port).await;
 
@@ -139,18 +144,6 @@ pub async fn start_aws_ssm_proxy(
     });
 }
 
-async fn kill_pid_on_port(port: u16) {
-    let _ = tokio::task::spawn(async move {
-        info!("Trying to kill process on local port: {}", port);
-        let kill_result = kill(port);
-        match kill_result {
-            Ok(res) => info!("Killed: {}", res),
-            Err(err) => warn!("Killing failed, {}", err),
-        }
-    })
-    .await;
-}
-
 #[derive(Clone)]
 pub struct ProxyInterceptor {
     pub path_prefix: String,
@@ -204,3 +197,56 @@ pub async fn start_proxy_to_aws_proxy(
     })
 }
 
+#[cfg(target_os = "windows")]
+async fn kill_pid_on_port(port: u16) {
+    let _ = tokio::task::spawn(async move {
+        info!("Trying to kill process on local port: {}", port);
+        let kill_result = kill(port);
+        match kill_result {
+            Ok(res) => info!("Killed: {}", res),
+            Err(err) => warn!("Killing failed, {}", err),
+        }
+    })
+    .await;
+}
+
+#[cfg(target_os = "linux")]
+async fn kill_pid_on_port(port: u16) {
+    let _ = tokio::task::spawn(async move {
+        info!("Trying to kill process on local port: {}", port);
+        let kill_result = kill(port);
+        match kill_result {
+            Ok(res) => info!("Killed: {}", res),
+            Err(err) => warn!("Killing failed, {}", err),
+        }
+    })
+    .await;
+}
+
+#[cfg(target_os = "macos")]
+async fn kill_pid_on_port(port: u16) {
+    // lsof -X -i -n | grep :62809 | cut -d' ' -f 2 | xargs kill
+    let lsof = Command::new("lsof")
+        .args(&["-X", "-i", "-n"])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap_or_log();
+    let grep_by_port = Command::new("grep")
+        .arg(format!(":{}", port))
+        .stdin(Stdio::from(lsof.stdout.unwrap())) // Pipe through.
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let cut = Command::new("cut")
+        .args(["-d", " ", "-f", "2"])
+        .stdin(Stdio::from(grep_by_port.stdout.unwrap()))
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let _ = Command::new("xargs")
+        .arg("kill")
+        .stdin(Stdio::from(cut.stdout.unwrap()))
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+}

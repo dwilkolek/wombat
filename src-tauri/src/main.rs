@@ -511,11 +511,6 @@ async fn stop_job(
                 Ok(output) => info!("Attempted to kill session in SSM: {:?}", output),
                 Err(e) => warn!("Failed to kill session in SSM {}", e),
             };
-        } else {
-            info!(
-                "SessionId {} to kill not found",
-                session_id.unwrap_or_default()
-            )
         }
     } else {
         ingest_log(
