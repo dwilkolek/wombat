@@ -3,7 +3,9 @@
 use aws::{Cluster, DbInstance, DbSecret, EcsService, LogEntry, ServiceDetails};
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
-use log::{error, info, warn, LevelFilter};
+use dotenvy::dotenv;
+use libsql::Database;
+use log::{error, info, warn};
 use regex::Regex;
 use serde_json::json;
 use shared::{arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, ResourceType};
@@ -17,7 +19,6 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{collections::HashMap, process::Command};
 use std::{env, fs};
 use tauri::Window;
-use tauri_plugin_log::LogTarget;
 use tokio::sync::Mutex;
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
@@ -25,6 +26,7 @@ use user::UserConfig;
 use wait_timeout::ChildExt;
 
 mod aws;
+mod db;
 mod proxy;
 mod shared;
 mod user;
@@ -140,9 +142,9 @@ async fn login(
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
-    database_cache: tauri::State<'_, DatabaseCache>,
+    database_cache: tauri::State<'_, RdsCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
-    service_cache: tauri::State<'_, ServiceCache>,
+    service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<UserConfig, BError> {
     {
@@ -517,9 +519,9 @@ async fn stop_job(
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
     cluster_cache: tauri::State<'_, ClusterCache>,
-    service_cache: tauri::State<'_, ServiceCache>,
+    service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
-    database_cache: tauri::State<'_, DatabaseCache>,
+    database_cache: tauri::State<'_, RdsCache>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_state: tauri::State<'_, UserConfigState>,
@@ -810,7 +812,7 @@ async fn services(
     window: Window,
     cluster: Cluster,
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, ServiceCache>,
+    cache: tauri::State<'_, EcsServiceCache>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::EcsService>, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
@@ -826,7 +828,7 @@ async fn databases(
     window: Window,
     env: shared::Env,
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, DatabaseCache>,
+    cache: tauri::State<'_, RdsCache>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::DbInstance>, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
@@ -844,8 +846,8 @@ async fn discover(
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database_cache: tauri::State<'_, DatabaseCache>,
-    service_cache: tauri::State<'_, ServiceCache>,
+    database_cache: tauri::State<'_, RdsCache>,
+    service_cache: tauri::State<'_, EcsServiceCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
 ) -> Result<Vec<String>, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
@@ -974,10 +976,12 @@ async fn refresh_cache(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database_cache: tauri::State<'_, DatabaseCache>,
+    database_cache: tauri::State<'_, RdsCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
-    service_cache: tauri::State<'_, ServiceCache>,
+    service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
+
+    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("refresh_cache", msg)),
@@ -1022,6 +1026,8 @@ async fn refresh_cache(
         .await;
     }
 
+    let db = database.0.lock().await;
+    let _ = db.sync().await;
     window.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
 }
@@ -1032,9 +1038,9 @@ async fn service_details(
     app: String,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database_cache: tauri::State<'_, DatabaseCache>,
+    database_cache: tauri::State<'_, RdsCache>,
     cluster_cache: tauri::State<'_, ClusterCache>,
-    service_cache: tauri::State<'_, ServiceCache>,
+    service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
@@ -1178,6 +1184,17 @@ async fn start_service_proxy(
 }
 
 #[tauri::command]
+async fn log_filters(
+    database: tauri::State<'_, DatabaseInstance>,
+) -> Result<Vec<db::LogFilter>, BError> {
+    let db = database.0.lock().await;
+    let conn = db.connect().unwrap_or_log();
+    let filters = db::log_filters(&conn).await;
+
+    return Ok(filters);
+}
+
+#[tauri::command]
 async fn open_dbeaver(
     window: Window,
     db: aws::DbInstance,
@@ -1253,17 +1270,61 @@ async fn open_dbeaver(
     return Ok(());
 }
 
-#[tokio::main]
-async fn main() {
-    fix_path_env::fix().unwrap_or_log();
+async fn initialize_database_connection() -> Database {
+    let db_file = env::var("DB_PATH").unwrap_or_else(|_| {
+        println!("Using default db path since DB_PATH was not set");
+        user::wombat_dir()
+            .join("wombat.db")
+            .to_str()
+            .unwrap_or_log()
+            .to_string()
+    });
 
-    let user = UserConfig::default();
-    let user_id = user.id.clone();
+    info!("Database {}", db_file);
+
+    let auth_token = env::var("TURSO_AUTH_TOKEN").unwrap_or_else(|_| {
+        println!("Using empty token since TURSO_AUTH_TOKEN was not set");
+        "%%TURSO_AUTH_TOKEN%%".to_string()
+    });
+
+    let url = env::var("TURSO_SYNC_URL")
+        .unwrap_or_else(|_| {
+            println!("Using empty token since TURSO_SYNC_URL was not set");
+            "%%TURSO_SYNC_URL%%".to_string()
+        })
+        .replace("libsql", "https");
+
+    let db = libsql::Builder::new_remote_replica(db_file, url, auth_token)
+        .periodic_sync(Duration::from_secs(3600))
+        .build()
+        .await
+        .unwrap();
+
+    let _ = db.sync().await.unwrap();
+
+    info!("Database ref created");
+
+    let conn = db.connect().unwrap();
+
+    info!("Database connected");
+
+    info!("Database synced");
+    db::migrate(&conn).await;
+    let _ = db.sync().await.unwrap();
+
+    if !db::is_feature_enabled(&conn, "wombat").await {
+        panic!("Wombat is disabled")
+    }
+
+    return db;
+}
+
+async fn initialize_axiom(user: &UserConfig) -> AxiomClientState {
     let client = Client::builder()
         .with_token("%%AXIOM_TOKEN%%")
         .with_org_id("%%AXIOM_ORG%%")
         .build();
-    let axiom_client = match format!("%%{}%%", "AXIOM_TOKEN") == "%%AXIOM_TOKEN%%" {
+    return match format!("%%{}%%", "AXIOM_TOKEN") == "%%AXIOM_TOKEN%%" {
         true => AxiomClientState(Arc::new(Mutex::new(None))),
         false => AxiomClientState(Arc::new(Mutex::new(match client {
             Ok(client) => {
@@ -1273,30 +1334,53 @@ async fn main() {
             Err(_) => None,
         }))),
     };
+}
+
+#[tokio::main]
+async fn main() {
+    dotenv().expect(".env file not found");
+    let logger = env::var("LOGGER").unwrap_or_else(|_| "file".to_string());
+
+    match logger.as_str() {
+        "console" => {
+            tracing_subscriber::fmt().init();
+        }
+        "file" => {
+            let file_appender = tracing_appender::rolling::daily(
+                user::wombat_dir().join("logs").as_path(),
+                "wombat",
+            );
+            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+            tracing_subscriber::fmt().with_writer(non_blocking).init();
+            fix_path_env::fix().unwrap_or_log();
+        }
+        _ => {
+            panic!("Unknown logger: {}", logger);
+        }
+    }
+
+    let user = UserConfig::default();
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::default()
-                .targets([LogTarget::LogDir, LogTarget::Stdout, LogTarget::Webview])
-                .level(LevelFilter::Info)
-                .build(),
-        )
-        .manage(UserConfigState(Arc::new(Mutex::new(user))))
-        .manage(axiom_client)
+        .manage(DatabaseInstance(Arc::new(Mutex::new(
+            initialize_database_connection().await,
+        ))))
+        .manage(initialize_axiom(&user).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
-            user_id,
+            user_id: user.id.clone(),
             last_auth_check: 0,
             sdk_config: None,
             no_of_failed_logins: 0,
         }))))
+        .manage(UserConfigState(Arc::new(Mutex::new(user))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             aws_resource_refresher: None,
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(DatabaseCache(Arc::new(Mutex::new(Vec::new()))))
+        .manage(RdsCache(Arc::new(Mutex::new(Vec::new()))))
         .manage(ClusterCache(Arc::new(Mutex::new(Vec::new()))))
-        .manage(ServiceCache(Arc::new(Mutex::new(HashMap::new()))))
+        .manage(EcsServiceCache(Arc::new(Mutex::new(HashMap::new()))))
         .manage(ServiceDetailsCache(Arc::new(Mutex::new(HashMap::new()))))
         .invoke_handler(tauri::generate_handler![
             user_config,
@@ -1318,7 +1402,8 @@ async fn main() {
             credentials,
             stop_job,
             find_logs,
-            abort_find_logs
+            abort_find_logs,
+            log_filters,
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1343,10 +1428,12 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct ServiceDetailsCache(Arc<Mutex<HashMap<String, ServiceDetails>>>);
-struct ServiceCache(Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>);
+struct EcsServiceCache(Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>);
 struct ClusterCache(Arc<Mutex<Vec<Cluster>>>);
 
-struct DatabaseCache(Arc<Mutex<Vec<DbInstance>>>);
+struct RdsCache(Arc<Mutex<Vec<DbInstance>>>);
+
+struct DatabaseInstance(Arc<Mutex<Database>>);
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
