@@ -199,15 +199,37 @@ pub async fn start_proxy_to_aws_proxy(
 
 #[cfg(target_os = "windows")]
 async fn kill_pid_on_port(port: u16) {
-    let _ = tokio::task::spawn(async move {
-        info!("Trying to kill process on local port: {}", port);
-        let kill_result = kill(port);
-        match kill_result {
-            Ok(res) => info!("Killed: {}", res),
-            Err(err) => warn!("Killing failed, {}", err),
-        }
-    })
-    .await;
+    info!("Killing {} on windows", &port);
+    let process = Command::new("powershell")
+        .args(&[
+            "-Command",
+            "netstat",
+            "-ano",
+            "|",
+            "findStr",
+            &format!(":{}", port),
+            "|",
+            "findStr",
+            "LISTENING"
+        ])
+        .output()
+        .expect("Failed to execute powershell");
+    if process.status.success() {
+        let res = String::from_utf8(process.stdout).expect("Failed to convert string");
+        res.split("\r\n").filter(|s| !s.is_empty()).for_each(|s| {
+            let pid_str = s.split_whitespace().last();
+            info!("Pid? {:?} on windows", &pid_str);
+            if let Some(pid_str) = pid_str {
+                let pid = pid_str.parse::<u32>();
+                if let Ok(pid) = pid {
+                    info!("Killing PID: {}", &pid);
+                    let _ = Command::new("powershell")
+                        .args(&["-Command", "taskkill", "/PID", &pid.to_string(), "/F"])
+                        .output();
+                }
+            }
+        });
+    }
 }
 
 #[cfg(target_os = "linux")]
