@@ -6,7 +6,7 @@
 
 	export let task: ProxyEventMessage | undefined;
 	export let service: EcsService
-    $: port = task?.port ?? $userStore.service_proxy_port_map?.[service.name]?.[service.env] ?? '?';
+    $: port = $userStore.service_proxy_port_map?.[service.name]?.[service.env] ?? '?';
 </script>
 
 {#if task}
