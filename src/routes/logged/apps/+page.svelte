@@ -3,8 +3,6 @@
 	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import AppCard from '$lib/componets/app-card.svelte';
-	import TaskManager from '$lib/componets/task-manager.svelte';
-	import { taskStore } from '$lib/stores/task-store';
 
 	$: user = $userStore;
 
@@ -79,42 +77,33 @@
 		{/each}
 	</div>
 </div>
-<div class="flex gap-2 pb-2 px-2">
-	<div class="flex flex-col gap-2">
-		<div class="flex flex-wrap gap-2">
-			{#if discovered}
-				{#await discovered}
-					<span class="loading loading-dots loading-lg" />
-				{:then discoverValue}
-					{#each discoverValue as discoveredApp}
-						<AppCard
-							app={discoveredApp}
-							displayConfig={{
-								envs: selectedClusters,
-								favorite: false
-							}}
-						/>
-					{/each}
-				{/await}
-			{/if}
-		</div>
-		<div class="flex flex-wrap gap-2">
-			{#each user.tracked_names as app}
-				<AppCard
-					{app}
-					displayConfig={{
-						envs: selectedClusters,
-						favorite: true
-					}}
-				/>
-			{/each}
-		</div>
+<div class="flex flex-col gap-2 grow mx-2">
+	<div class="flex flex-wrap gap-2">
+		{#if discovered}
+			{#await discovered}
+				<span class="loading loading-dots loading-lg" />
+			{:then discoverValue}
+				{#each discoverValue as discoveredApp}
+					<AppCard
+						app={discoveredApp}
+						displayConfig={{
+							envs: selectedClusters,
+							favorite: false
+						}}
+					/>
+				{/each}
+			{/await}
+		{/if}
 	</div>
-	{#if $taskStore.length > 0}
-		<div class="min-w-[320px]">
-			<div class="px-2 border-l-2 w-[320px] fixed">
-				<TaskManager />
-			</div>
-		</div>
-	{/if}
+	<div class="flex flex-wrap gap-2">
+		{#each user.tracked_names as app}
+			<AppCard
+				{app}
+				displayConfig={{
+					envs: selectedClusters,
+					favorite: true
+				}}
+			/>
+		{/each}
+	</div>
 </div>

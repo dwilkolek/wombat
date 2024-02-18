@@ -7,11 +7,13 @@ export enum AwsEnv {
 	PROD = 'PROD'
 }
 
+
 export type Cluster = {
 	name: string;
 	arn: string;
 	env: AwsEnv;
 };
+type EnvPortMap = { [key: string]: number };
 export type UserConfig = {
 	id: string | undefined;
 	last_used_profile: string | undefined;
@@ -19,8 +21,9 @@ export type UserConfig = {
 	tracked_names: string[];
 	dbeaver_path: string | undefined;
 	preffered_environments: AwsEnv[];
-	logs_dir: string
-	last_selected_apps: string[]
+	logs_dir: string;
+	db_proxy_port_map: { [key: string]: EnvPortMap };
+	service_proxy_port_map: { [key: string]: EnvPortMap };
 };
 
 export type EcsService = {

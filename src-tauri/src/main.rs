@@ -342,23 +342,6 @@ async fn set_logs_dir_path(
     .await;
     user_config.set_logs_path(logs_dir)
 }
-#[tauri::command]
-async fn set_last_selected_apps(
-    apps: Vec<String>,
-    user_config: tauri::State<'_, UserConfigState>,
-    axiom: tauri::State<'_, AxiomClientState>,
-) -> Result<UserConfig, BError> {
-    let mut user_config = user_config.0.lock().await;
-    ingest_log(
-        &axiom.0,
-        &user_config.id,
-        Action::SetLastSelectedApps(apps.clone()),
-        None,
-        None,
-    )
-    .await;
-    user_config.set_last_selected_apps(apps)
-}
 
 #[tauri::command]
 async fn save_preffered_envs(
@@ -1012,7 +995,6 @@ async fn refresh_cache(
     {
         database_cache.0.lock().await.clear();
     }
-
     ingest_log(
         &axiom.0,
         &authorized_user.id,
@@ -1322,7 +1304,6 @@ async fn main() {
             set_dbeaver_path,
             set_logs_dir_path,
             save_preffered_envs,
-            set_last_selected_apps,
             login,
             logout,
             clusters,
@@ -1411,7 +1392,6 @@ enum Action {
     UpdateTrackedNames(String),
     SetDbeaverPath(String),
     SetLogsDirPath(String),
-    SetLastSelectedApps(Vec<String>),
     SetPrefferedEnvs(Vec<Env>),
     Discover(String),
     Logout(String),

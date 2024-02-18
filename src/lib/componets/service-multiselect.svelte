@@ -2,14 +2,12 @@
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { serviceStore } from '$lib/stores/service-store';
-	import { onMount } from 'svelte';
 	import type { EcsService } from '$lib/types';
 
 	let open = false;
 	$: activeCluser = clusterStore.activeCluser;
 	$: tracked_names = $userStore.tracked_names;
 	$: selectedServices = serviceStore.selectedServices;
-	$: selectedServicesState = $selectedServices;
 	$: services = serviceStore.getServices($activeCluser).then((services) => {
 		return services
 			.filter((a) => a.name.includes(inputValue))
@@ -35,20 +33,8 @@
 	}
 
 	$: select = (app: EcsService) => {
-		serviceStore.selectService(app)
-		setTimeout(() => {
-			userStore.setLastSelectedApps(selectedServicesState.map(s => s.name))
-		}, 100)
-		
-	}
-
-	onMount(() => {
-		$userStore.last_selected_apps.forEach((lastSelectedApps) => {
-			services.then((servicesList) => {
-				servicesList.filter((s) => lastSelectedApps.includes(s.name)).forEach((ecs) => select(ecs));
-			});
-		});
-	});
+		serviceStore.selectService(app);
+	};
 </script>
 
 <div class={`w-full flex flex-col items-center mx-auto`}>
