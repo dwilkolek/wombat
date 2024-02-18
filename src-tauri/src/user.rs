@@ -50,7 +50,6 @@ pub struct UserConfig {
     pub dbeaver_path: Option<String>,
     pub preffered_environments: Vec<Env>,
     pub logs_dir: Option<PathBuf>,
-    pub last_selected_apps: Option<Vec<String>>,
     pub ssm_role: Option<HashMap<TrackedName, String>>,
 }
 
@@ -104,7 +103,6 @@ impl UserConfig {
                 dbeaver_path: UserConfig::recheck_dbeaver_path(old.dbeaver_path),
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
                 logs_dir: Some(UserConfig::logs_path()),
-                last_selected_apps: Some(vec![]),
                 ssm_role: Some(HashMap::new()),
             };
             new_config.save();
@@ -126,7 +124,6 @@ impl UserConfig {
                 dbeaver_path: None,
                 preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
                 logs_dir: Some(UserConfig::logs_path()),
-                last_selected_apps: Some(vec![]),
                 ssm_role: Some(HashMap::new()),
             },
         };
@@ -137,9 +134,6 @@ impl UserConfig {
         }
         if user_config.logs_dir.is_none() {
             user_config.logs_dir = Some(UserConfig::logs_path());
-        }
-        if user_config.last_selected_apps.is_none() {
-            user_config.last_selected_apps = Some(vec![]);
         }
         if user_config.ssm_role.is_none() {
             user_config.ssm_role = Some(HashMap::new());
@@ -256,12 +250,6 @@ impl UserConfig {
                 Ok(self.clone())
             }
         }
-    }
-    pub fn set_last_selected_apps(&mut self, apps: Vec<String>) -> Result<UserConfig, BError> {
-        info!("Last selected app {:?} ", &apps);
-        self.last_selected_apps = Some(apps);
-        self.save();
-        Ok(self.clone())
     }
 
     pub fn use_profile(&mut self, profile: &str) {
