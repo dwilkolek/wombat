@@ -25,9 +25,9 @@ use user::UserConfig;
 use wait_timeout::ChildExt;
 
 mod aws;
+mod proxy;
 mod shared;
 mod user;
-mod proxy;
 
 #[derive(Clone, serde::Serialize)]
 struct ProxyEventMessage {
@@ -1253,7 +1253,6 @@ async fn open_dbeaver(
     return Ok(());
 }
 
-
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
@@ -1285,7 +1284,7 @@ async fn main() {
         .manage(axiom_client)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
-            user_id: user_id,
+            user_id,
             last_auth_check: 0,
             sdk_config: None,
             no_of_failed_logins: 0,
