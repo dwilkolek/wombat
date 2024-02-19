@@ -9,12 +9,6 @@
 	import { logStore } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 
-	type LogFilter = {
-		filter: string;
-		services: string[];
-		label: string;
-	};
-
 	$: activeCluser = clusterStore.activeCluser;
 
 	$: selectedServices = serviceStore.selectedServices;
@@ -41,7 +35,6 @@
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
 
-	$: filters = invoke<LogFilter[]>('log_filters');
 </script>
 
 <svelte:head>
@@ -112,20 +105,22 @@
 				>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				{#await filters}
-					<div>Loading filters...</div>
-				{:then filters}
-					{#each filters as filter}
-						{#if filter.services.some((ls) => $selectedServices.some((ecs) => ecs.name == ls))}
-							<button
-								class="btn btn-active btn-secondary btn-xs"
-								on:click={() => {
-									filterString.set(filter.filter);
-								}}>{filter.label}</button
-							>
-						{/if}
-					{/each}
-				{/await}
+				<div class="flex flex-wrap gap-2">
+					{#if $selectedServices.some((s) => ['rome', 'dvmb'].includes(s.name))}
+						<button
+							class="btn btn-active btn-secondary btn-xs"
+							on:click={() => {
+								filterString.set(`{ $.level = "ERROR" }`);
+							}}>Only Errors</button
+						>
+						<button
+							class="btn btn-active btn-secondary btn-xs"
+							on:click={() => {
+								filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
+							}}>By Trace</button
+						>
+					{/if}
+				</div>
 			</div>
 		</div>
 		<div class="flex gap-2">
