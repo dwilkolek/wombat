@@ -6,7 +6,7 @@
 	export let database: DbInstance;
 </script>
 
-<div class="tooltip" data-tip="Start proxy">
+<div class="tooltip tooltip-left" data-tip="Start proxy">
 	<button
 		class="flex flex-row gap-1"
 		on:click={async () => {

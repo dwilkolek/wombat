@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { execute } from '$lib/stores/error-store';
+	import { invoke } from '@tauri-apps/api';
 
 	export let service_arn: String;
 </script>
 
-<div class="tooltip flex" data-tip="Stop proxy to service">
+<div class="tooltip tooltip-left flex" data-tip="Stop proxy to service">
 	<button
 		on:click={async () => {
-			await execute('stop_job', { arn: service_arn });
+			await invoke('stop_job', { arn: service_arn });
 		}}
 	>
 		<div class="w-5 h-5 relative">

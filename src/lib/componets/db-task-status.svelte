@@ -11,7 +11,7 @@
 {#if task}
 	{#if task.status !== 'STARTING'}
 		<div
-			class="tooltip"
+			class="tooltip tooltip-left"
 			data-tip={$userStore.dbeaver_path
 				? 'Open connection in dbeaver'
 				: 'Install dbeaver to get instant conneciton'}

@@ -1,14 +1,12 @@
 <script lang="ts">
-	import { execute } from '$lib/stores/error-store';
-	import { taskStore } from '$lib/stores/task-store';
 	import { AwsEnv, type ServiceDetails } from '$lib/types';
+	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
-	import { open } from '@tauri-apps/api/shell';
 
 	export let service: ServiceDetails;
 </script>
 
-<div class="tooltip" data-tip="Start proxy">
+<div class="tooltip tooltip-left" data-tip="Start proxy">
 	<button
 		class="flex flex-row gap-1"
 		on:click={async () => {
@@ -26,7 +24,7 @@
 					return;
 				}
 			}
-			execute('start_service_proxy', { service });
+			invoke('start_service_proxy', { service });
 		}}
 	>
 		<div class="w-5 h-5 relative">

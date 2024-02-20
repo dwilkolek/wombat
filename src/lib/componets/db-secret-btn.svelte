@@ -33,7 +33,7 @@
 </script>
 
 {#if database}
-	<div class="tooltip" data-tip="Search for secret">
+	<div class="tooltip tooltip-left" data-tip="Search for secret">
 		<button>
 			<!-- svelte-ignore a11y-click-events-have-key-events -->
 			<!-- svelte-ignore a11y-no-static-element-interactions -->

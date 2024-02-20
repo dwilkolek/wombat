@@ -11,7 +11,7 @@
 
 {#if task}
 	<div
-		class={`tooltip flex items-center text-amber-300 hover:text-amber-500 gap-1`}
+		class={`tooltip tooltip-left flex items-center text-amber-300 hover:text-amber-500 gap-1`}
 		data-tip={`Open ${task.name} in browser`}
 	>
 		{#if task.status !== 'STARTING'}
