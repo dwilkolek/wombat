@@ -7,7 +7,6 @@ export enum AwsEnv {
 	PROD = 'PROD'
 }
 
-
 export type Cluster = {
 	name: string;
 	arn: string;
@@ -46,7 +45,7 @@ export type Endpoint = {
 	port: number;
 };
 
-export type DbInstance = {
+export type RdsInstance = {
 	name: string;
 	engine: string;
 	engine_version: string;

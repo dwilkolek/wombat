@@ -34,12 +34,12 @@ pub struct Endpoint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DbInstance {
+pub struct RdsInstance {
+    pub arn: String,
     pub name: String,
     pub engine: String,
     pub engine_version: String,
     pub endpoint: Endpoint,
-    pub arn: String,
     pub environment_tag: String,
     pub env: Env,
     pub appname_tag: String,
@@ -67,8 +67,8 @@ pub struct DbSecret {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EcsService {
-    pub name: String,
     pub arn: String,
+    pub name: String,
     pub cluster_arn: String,
     pub env: Env,
 }
@@ -252,15 +252,7 @@ pub async fn db_secret(
     return Err(BError::new("db_secret", "No secret found"));
 }
 
-pub async fn databases(
-    config: &aws_config::SdkConfig,
-    database_cache: Arc<Mutex<Vec<DbInstance>>>,
-) -> Vec<DbInstance> {
-    let mut database_cache = database_cache.lock().await;
-    if database_cache.len() > 0 {
-        return database_cache.clone();
-    }
-
+pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
     let mut there_is_more = true;
     let mut marker = None;
     let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
@@ -309,11 +301,11 @@ pub async fn databases(
                     }
                 }
 
-                let db = DbInstance {
+                let db = RdsInstance {
+                    arn: db_instance_arn,
                     name,
                     engine,
                     engine_version,
-                    arn: db_instance_arn,
                     endpoint,
                     appname_tag,
                     environment_tag,
@@ -324,7 +316,6 @@ pub async fn databases(
         });
     }
     databases.sort_by(|a, b| a.name.cmp(&b.name));
-    database_cache.extend(databases.clone().into_iter());
     return databases;
 }
 

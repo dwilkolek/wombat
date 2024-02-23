@@ -1,8 +1,8 @@
-use libsql::{params, Transaction};
+use libsql::{params, Connection, Transaction};
 use log::info;
 use serde::{Deserialize, Serialize};
 
-pub async fn migrate(conn: &libsql::Connection) {
+pub async fn migrate(conn: &Connection) {
     let mut current_version = get_db_version(conn).await;
     if current_version < 1 {
         let transaction = conn.transaction().await.unwrap();
@@ -33,15 +33,6 @@ pub async fn migrate(conn: &libsql::Connection) {
     }
 
     if current_version < 3 {
-        let transaction = conn.transaction().await.unwrap();
-        transaction
-            .execute("CREATE TABLE admins(uuid TEXT)", ())
-            .await
-            .unwrap();
-        current_version = fin(current_version, transaction, "add admins table").await;
-    }
-
-    if current_version < 4 {
         // { $.level = "ERROR" }
         // { $.mdc.traceId = "TRACE_ID_UUID" }
         let transaction = conn.transaction().await.unwrap();
@@ -72,7 +63,7 @@ async fn fin(version: u64, transaction: Transaction, message: &str) -> u64 {
     return version + 1;
 }
 
-async fn get_db_version(conn: &libsql::Connection) -> u64 {
+async fn get_db_version(conn: &Connection) -> u64 {
     log::info!("checking migration version");
     let result = conn
         .query(
@@ -98,7 +89,7 @@ async fn get_db_version(conn: &libsql::Connection) -> u64 {
     };
 }
 
-pub async fn is_feature_enabled(db: &libsql::Connection, feature: &str) -> bool {
+pub async fn is_feature_enabled(db: &Connection, feature: &str) -> bool {
     log::info!("checking feature {}", feature);
     let result = db
         .query(
@@ -128,7 +119,7 @@ pub struct LogFilter {
     services: Vec<String>,
     label: String,
 }
-pub async fn log_filters(conn: &libsql::Connection) -> Vec<LogFilter> {
+pub async fn log_filters(conn: &Connection) -> Vec<LogFilter> {
     log::info!("getting log filters");
     let result = conn
         .query("SELECT filter, services, label FROM logFilters;", ())

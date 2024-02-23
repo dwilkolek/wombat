@@ -1,11 +1,11 @@
 import { derived, get, writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
-import type { AwsEnv, DbInstance, ServiceDetails } from '$lib/types';
+import type { AwsEnv, RdsInstance, ServiceDetails } from '$lib/types';
 import { ENVIRONMENTS } from './env-store';
 type ServiceDetailsPayload = {
 	app: string;
-	dbs: DbInstance[];
+	dbs: RdsInstance[];
 	services: ServiceDetails[];
 };
 
@@ -61,7 +61,7 @@ export const serviceDetailStore = (app: string) =>
 		if (details) {
 			const result = {
 				app,
-				envs: new Map<AwsEnv, { services: ServiceDetails[]; dbs: DbInstance[] }>()
+				envs: new Map<AwsEnv, { services: ServiceDetails[]; dbs: RdsInstance[] }>()
 			};
 			for (const env of ENVIRONMENTS) {
 				const services = details.services.filter((s) => s.env === env);

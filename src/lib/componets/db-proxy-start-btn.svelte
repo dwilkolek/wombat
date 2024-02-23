@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { execute } from '$lib/stores/error-store';
-	import { AwsEnv, type DbInstance } from '$lib/types';
+	import { AwsEnv, type RdsInstance } from '$lib/types';
 	import { ask } from '@tauri-apps/api/dialog';
 
-	export let database: DbInstance;
+	export let database: RdsInstance;
 </script>
 
 <div class="tooltip tooltip-left" data-tip="Start proxy">
