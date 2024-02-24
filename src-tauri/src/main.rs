@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 use tauri::Window;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
@@ -183,7 +183,7 @@ async fn login(
 
     let _ = window.emit("message", "Fetching databases...");
     {
-        let mut rds_resolver_instance = rds_resolver_instance.0.lock().await;
+        let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
         rds_resolver_instance
             .databases(&authorized_user.sdk_config)
             .await;
@@ -192,7 +192,7 @@ async fn login(
     let _ = window.emit("message", "Fetching clusters...");
     let clusters;
     {
-        let mut cluster_resolver_instance = cluster_resolver_instance.0.lock().await;
+        let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
         clusters = cluster_resolver_instance
             .clusters(&authorized_user.sdk_config)
             .await;
@@ -244,7 +244,7 @@ async fn login(
             interval.tick().await;
             {
                 {
-                    let mut rds_resolver_instance = rds_resolver_instance.lock().await;
+                    let mut rds_resolver_instance = rds_resolver_instance.write().await;
                     rds_resolver_instance
                         .refresh(&authorized_user.sdk_config)
                         .await;
@@ -264,7 +264,7 @@ async fn login(
             let clusters;
             {
                 {
-                    let mut cluster_resolver_instance = cluster_resolver_instance.lock().await;
+                    let mut cluster_resolver_instance = cluster_resolver_instance.write().await;
 
                     clusters = cluster_resolver_instance
                         .refresh(&authorized_user.sdk_config)
@@ -796,21 +796,11 @@ async fn abort_find_logs(
 
 #[tauri::command]
 async fn clusters(
-    window: Window,
-    app_state: tauri::State<'_, AppContextState>,
     cache_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::Cluster>, BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("clusters", msg)),
-        Ok(authorized_user) => authorized_user,
-    };
+    let cache_resolver_instance = cache_resolver_instance.0.read().await;
 
-    let mut cache_resolver_instance = cache_resolver_instance.0.lock().await;
-
-    let clusters = cache_resolver_instance
-        .clusters(&authorized_user.sdk_config)
-        .await;
+    let clusters = cache_resolver_instance.read_clusters().await;
     Ok(clusters)
 }
 
@@ -832,20 +822,11 @@ async fn services(
 
 #[tauri::command]
 async fn databases(
-    window: Window,
     env: shared::Env,
-    app_state: tauri::State<'_, AppContextState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::RdsInstance>, BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("databases", msg)),
-        Ok(authorized_user) => authorized_user,
-    };
-    let mut rds_resolver_instance = rds_resolver_instance.0.lock().await;
-    let databases = rds_resolver_instance
-        .databases(&authorized_user.sdk_config)
-        .await;
+    let rds_resolver_instance = rds_resolver_instance.0.read().await;
+    let databases = rds_resolver_instance.read_databases().await;
     Ok(databases.into_iter().filter(|db| db.env == env).collect())
 }
 
@@ -884,9 +865,9 @@ async fn discover(
     }
 
     {
-        let mut rds_resolver_instance = rds_resolver_instance.0.lock().await;
+        let rds_resolver_instance = rds_resolver_instance.0.read().await;
         let found_dbs: Vec<RdsInstance> = rds_resolver_instance
-            .databases(&authorized_user.sdk_config)
+            .read_databases()
             .await
             .into_iter()
             .filter(|db| {
@@ -898,10 +879,8 @@ async fn discover(
     }
 
     {
-        let mut cluster_resolver_instance = cluster_resolver_instance.0.lock().await;
-        let clusters = cluster_resolver_instance
-            .clusters(&authorized_user.sdk_config)
-            .await;
+        let cluster_resolver_instance = cluster_resolver_instance.0.read().await;
+        let clusters = cluster_resolver_instance.read_clusters().await;
         let services = aws::services(
             &authorized_user.sdk_config,
             clusters,
@@ -1001,7 +980,7 @@ async fn refresh_cache(
         Ok(authorized_user) => authorized_user,
     };
     {
-        let mut cluster_resolver_instance = cluster_resolver_instance.0.lock().await;
+        let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
         cluster_resolver_instance
             .refresh(&authorized_user.sdk_config)
             .await;
@@ -1013,7 +992,7 @@ async fn refresh_cache(
         service_details_cache.0.lock().await.clear();
     }
     {
-        let mut rds_resolver_instance = rds_resolver_instance.0.lock().await;
+        let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
         rds_resolver_instance
             .refresh(&authorized_user.sdk_config)
             .await;
@@ -1079,10 +1058,8 @@ async fn service_details(
     tokio::task::spawn(async move {
         let mut dbs_list: Vec<aws::RdsInstance> = Vec::new();
         {
-            let mut rds_resolver_instance = rds_resolver_instance.lock().await;
-            let all_databases = rds_resolver_instance
-                .databases(&authorized_user.sdk_config)
-                .await;
+            let rds_resolver_instance = rds_resolver_instance.read().await;
+            let all_databases = rds_resolver_instance.read_databases().await;
             dbs_list.extend(
                 all_databases
                     .into_iter()
@@ -1092,10 +1069,8 @@ async fn service_details(
 
         let clusters: Vec<Cluster>;
         {
-            let mut cluster_resolver_instance = cluster_resolver_instance.lock().await;
-            clusters = cluster_resolver_instance
-                .clusters(&authorized_user.sdk_config)
-                .await;
+            let cluster_resolver_instance = cluster_resolver_instance.read().await;
+            clusters = cluster_resolver_instance.read_clusters().await;
         }
 
         let service_arns: Vec<String>;
@@ -1394,7 +1369,7 @@ async fn main() {
         }
     }
     let db = Arc::new(Mutex::new(initialize_database_connection().await));
-    let cache_db = Arc::new(Mutex::new(initialize_cache_db().await));
+    let cache_db = Arc::new(RwLock::new(initialize_cache_db().await));
 
     let user = UserConfig::default();
     tauri::Builder::default()
@@ -1413,10 +1388,10 @@ async fn main() {
             search_log_handler: None,
         }))))
         .manage(DatabaseInstance(db.clone()))
-        .manage(RdsResolverInstance(Arc::new(Mutex::new(
+        .manage(RdsResolverInstance(Arc::new(RwLock::new(
             RdsResolver::new(cache_db.clone()).await,
         ))))
-        .manage(ClusterResolverInstance(Arc::new(Mutex::new(
+        .manage(ClusterResolverInstance(Arc::new(RwLock::new(
             ClusterResolver::new(cache_db.clone()).await,
         ))))
         .manage(EcsServiceCache(Arc::new(Mutex::new(HashMap::new()))))
@@ -1469,8 +1444,8 @@ struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 struct ServiceDetailsCache(Arc<Mutex<HashMap<String, ServiceDetails>>>);
 struct EcsServiceCache(Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>);
 
-struct RdsResolverInstance(Arc<Mutex<RdsResolver>>);
-struct ClusterResolverInstance(Arc<Mutex<ClusterResolver>>);
+struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
+struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 
 struct DatabaseInstance(Arc<Mutex<Database>>);
 

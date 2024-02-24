@@ -1,18 +1,18 @@
 use crate::{aws, cache_db};
 use log::info;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "rds";
 
 pub struct RdsResolver {
-    db: Arc<Mutex<libsql::Database>>,
+    db: Arc<RwLock<libsql::Database>>,
 }
 
 impl RdsResolver {
-    pub async fn new(db: Arc<Mutex<libsql::Database>>) -> Self {
+    pub async fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
         {
-            let db = db.lock().await;
+            let db = db.read().await;
             let conn = db.connect().unwrap();
             RdsResolver::migrate(&conn).await;
         }
@@ -45,7 +45,7 @@ impl RdsResolver {
 
     pub async fn refresh(&mut self, config: &aws_config::SdkConfig) {
         {
-            let db = self.db.lock().await;
+            let db = self.db.read().await;
             clear_databases(&db.connect().unwrap()).await;
         }
         self.databases(config).await;
@@ -53,7 +53,7 @@ impl RdsResolver {
 
     pub async fn databases(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::RdsInstance> {
         info!("Resolving databases");
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let rdses = fetch_databases(&conn).await;
         if rdses.len() > 0 {
@@ -66,6 +66,12 @@ impl RdsResolver {
 
         info!("Returning databases from aws and persisting");
         return fresh_databases;
+    }
+
+    pub async fn read_databases(&self) -> Vec<aws::RdsInstance> {
+        let db = self.db.read().await;
+        let conn = db.connect().unwrap();
+        return fetch_databases(&conn).await;
     }
 }
 

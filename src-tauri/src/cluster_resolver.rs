@@ -1,18 +1,18 @@
 use crate::{aws, cache_db};
 use log::info;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "cluster";
 
 pub struct ClusterResolver {
-    db: Arc<Mutex<libsql::Database>>,
+    db: Arc<RwLock<libsql::Database>>,
 }
 
 impl ClusterResolver {
-    pub async fn new(db: Arc<Mutex<libsql::Database>>) -> Self {
+    pub async fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
         {
-            let db = db.lock().await;
+            let db = db.read().await;
             let conn = db.connect().unwrap();
             ClusterResolver::migrate(&conn).await;
         }
@@ -40,7 +40,7 @@ impl ClusterResolver {
 
     pub async fn refresh(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::Cluster> {
         {
-            let db = self.db.lock().await;
+            let db = self.db.read().await;
             clear_clusters(&db.connect().unwrap()).await;
         }
         return self.clusters(config).await.clone();
@@ -48,7 +48,7 @@ impl ClusterResolver {
 
     pub async fn clusters(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::Cluster> {
         info!("Resolving clusters");
-        let db = self.db.lock().await;
+        let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let rdses = fetch_clusters(&conn).await;
         if rdses.len() > 0 {
@@ -61,6 +61,13 @@ impl ClusterResolver {
 
         info!("Returning clusters from aws and persisting");
         return fresh_clusters;
+    }
+
+    pub async fn read_clusters(&self) -> Vec<aws::Cluster> {
+        info!("Resolving clusters");
+        let db = self.db.read().await;
+        let conn = db.connect().unwrap();
+        return fetch_clusters(&conn).await;
     }
 }
 
