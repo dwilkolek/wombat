@@ -3,6 +3,7 @@
 use aws::{Cluster, DbSecret, EcsService, LogEntry, RdsInstance, ServiceDetails};
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
+use cluster_resolver::ClusterResolver;
 use dotenvy::dotenv;
 use libsql::Database;
 use log::{error, info, warn};
@@ -28,6 +29,7 @@ use wait_timeout::ChildExt;
 
 mod aws;
 mod cache_db;
+mod cluster_resolver;
 mod global_db;
 mod proxy;
 mod rds_resolver;
@@ -146,7 +148,7 @@ async fn login(
     axiom: tauri::State<'_, AxiomClientState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-    cluster_cache: tauri::State<'_, ClusterCache>,
+    cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<UserConfig, BError> {
@@ -190,7 +192,10 @@ async fn login(
     let _ = window.emit("message", "Fetching clusters...");
     let clusters;
     {
-        clusters = aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache.0)).await;
+        let mut cluster_resolver_instance = cluster_resolver_instance.0.lock().await;
+        clusters = cluster_resolver_instance
+            .clusters(&authorized_user.sdk_config)
+            .await;
         ingest_log(
             &axiom.0,
             &authorized_user.id,
@@ -226,7 +231,7 @@ async fn login(
     let authorized_user = authorized_user.clone();
 
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
-    let cluster_cache = Arc::clone(&cluster_cache.0);
+    let cluster_resolver_instance = Arc::clone(&cluster_resolver_instance.0);
     let service_cache = Arc::clone(&service_cache.0);
     let service_details_cache = Arc::clone(&service_details_cache.0);
 
@@ -259,10 +264,12 @@ async fn login(
             let clusters;
             {
                 {
-                    cluster_cache.lock().await.clear();
+                    let mut cluster_resolver_instance = cluster_resolver_instance.lock().await;
+
+                    clusters = cluster_resolver_instance
+                        .refresh(&authorized_user.sdk_config)
+                        .await;
                 }
-                clusters =
-                    aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache)).await;
                 if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                     ingest_log_with_client(
                         axiom,
@@ -516,7 +523,6 @@ async fn stop_job(
 #[tauri::command]
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
-    cluster_cache: tauri::State<'_, ClusterCache>,
     service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
@@ -548,9 +554,9 @@ async fn logout(
     // {
     //     database_cache.0.lock().await.clear()
     // }
-    {
-        cluster_cache.0.lock().await.clear();
-    }
+    // {
+    //     cluster_cache.0.lock().await.clear();
+    // }
     {
         service_cache.0.lock().await.clear();
     }
@@ -792,7 +798,7 @@ async fn abort_find_logs(
 async fn clusters(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
-    cache: tauri::State<'_, ClusterCache>,
+    cache_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::Cluster>, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
@@ -800,7 +806,11 @@ async fn clusters(
         Ok(authorized_user) => authorized_user,
     };
 
-    let clusters = aws::clusters(&authorized_user.sdk_config, Arc::clone(&cache.0)).await;
+    let mut cache_resolver_instance = cache_resolver_instance.0.lock().await;
+
+    let clusters = cache_resolver_instance
+        .clusters(&authorized_user.sdk_config)
+        .await;
     Ok(clusters)
 }
 
@@ -847,8 +857,8 @@ async fn discover(
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
+    cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     service_cache: tauri::State<'_, EcsServiceCache>,
-    cluster_cache: tauri::State<'_, ClusterCache>,
 ) -> Result<Vec<String>, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("discover", msg)),
@@ -888,8 +898,10 @@ async fn discover(
     }
 
     {
-        let clusters =
-            aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache.0)).await;
+        let mut cluster_resolver_instance = cluster_resolver_instance.0.lock().await;
+        let clusters = cluster_resolver_instance
+            .clusters(&authorized_user.sdk_config)
+            .await;
         let services = aws::services(
             &authorized_user.sdk_config,
             clusters,
@@ -978,7 +990,7 @@ async fn refresh_cache(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-    cluster_cache: tauri::State<'_, ClusterCache>,
+    cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 
@@ -989,7 +1001,10 @@ async fn refresh_cache(
         Ok(authorized_user) => authorized_user,
     };
     {
-        cluster_cache.0.lock().await.clear();
+        let mut cluster_resolver_instance = cluster_resolver_instance.0.lock().await;
+        cluster_resolver_instance
+            .refresh(&authorized_user.sdk_config)
+            .await;
     }
     {
         service_cache.0.lock().await.clear();
@@ -1014,7 +1029,7 @@ async fn refresh_cache(
 
     let clusters: Vec<Cluster>;
     {
-        clusters = aws::clusters(&authorized_user.sdk_config, Arc::clone(&cluster_cache.0)).await;
+        clusters = aws::clusters(&authorized_user.sdk_config).await;
     }
 
     {
@@ -1039,7 +1054,7 @@ async fn service_details(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-    cluster_cache: tauri::State<'_, ClusterCache>,
+    cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
 ) -> Result<(), BError> {
@@ -1057,7 +1072,7 @@ async fn service_details(
     )
     .await;
     info!("Called for service_details: {}", &app);
-    let cluster_cache = Arc::clone(&cluster_cache.0);
+    let cluster_resolver_instance = Arc::clone(&cluster_resolver_instance.0);
     let service_cache = Arc::clone(&service_cache.0);
     let service_details_cache = Arc::clone(&service_details_cache.0);
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
@@ -1077,7 +1092,10 @@ async fn service_details(
 
         let clusters: Vec<Cluster>;
         {
-            clusters = aws::clusters(&authorized_user.sdk_config, cluster_cache).await;
+            let mut cluster_resolver_instance = cluster_resolver_instance.lock().await;
+            clusters = cluster_resolver_instance
+                .clusters(&authorized_user.sdk_config)
+                .await;
         }
 
         let service_arns: Vec<String>;
@@ -1398,7 +1416,9 @@ async fn main() {
         .manage(RdsResolverInstance(Arc::new(Mutex::new(
             RdsResolver::new(cache_db.clone()).await,
         ))))
-        .manage(ClusterCache(Arc::new(Mutex::new(Vec::new()))))
+        .manage(ClusterResolverInstance(Arc::new(Mutex::new(
+            ClusterResolver::new(cache_db.clone()).await,
+        ))))
         .manage(EcsServiceCache(Arc::new(Mutex::new(HashMap::new()))))
         .manage(ServiceDetailsCache(Arc::new(Mutex::new(HashMap::new()))))
         .invoke_handler(tauri::generate_handler![
@@ -1448,9 +1468,9 @@ struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct ServiceDetailsCache(Arc<Mutex<HashMap<String, ServiceDetails>>>);
 struct EcsServiceCache(Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>);
-struct ClusterCache(Arc<Mutex<Vec<Cluster>>>);
 
 struct RdsResolverInstance(Arc<Mutex<RdsResolver>>);
+struct ClusterResolverInstance(Arc<Mutex<ClusterResolver>>);
 
 struct DatabaseInstance(Arc<Mutex<Database>>);
 

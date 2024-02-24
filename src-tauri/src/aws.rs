@@ -319,16 +319,7 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
     return databases;
 }
 
-pub async fn clusters(
-    config: &aws_config::SdkConfig,
-    cluster_cache: Arc<Mutex<Vec<Cluster>>>,
-) -> Vec<Cluster> {
-    {
-        let cluster_cache = cluster_cache.lock().await;
-        if cluster_cache.len() > 0 {
-            return cluster_cache.clone();
-        }
-    }
+pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
     let ecs_client = ecs::Client::new(&config);
 
     info!("Fetching clusters!");
@@ -346,15 +337,8 @@ pub async fn clusters(
         clusters.push(Cluster {
             name: shared::cluster_arn_to_name(cluster_arn),
             arn: cluster_arn.clone(),
-            env: env,
+            env,
         });
-    }
-
-    {
-        let mut cluster_cache = cluster_cache.lock().await;
-        for cluster in clusters.iter() {
-            cluster_cache.push(cluster.clone());
-        }
     }
 
     return clusters;
