@@ -344,45 +344,26 @@ pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
     return clusters;
 }
 
-pub async fn services(
-    config: &aws_config::SdkConfig,
-    clusters: Vec<Cluster>,
-    service_cache: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
-) -> HashMap<Cluster, Vec<EcsService>> {
+pub async fn services(config: &aws_config::SdkConfig, clusters: Vec<Cluster>) -> Vec<EcsService> {
     let mut handles = vec![];
-    let mut results = HashMap::new();
+    let mut results = vec![];
     for cluster in clusters.into_iter() {
-        results.insert(cluster.clone(), Vec::new());
-        let cache = Arc::clone(&service_cache);
         let config = config.clone();
         let cluster = cluster.clone();
         handles.push(tokio::spawn(async move {
-            (
-                cluster.clone(),
-                service(&config, cluster.clone(), cache).await,
-            )
+            service(&config, cluster.clone()).await
         }));
     }
 
     for handle in handles {
         let res = handle.await.unwrap_or_log();
-        results.insert(res.0, res.1);
+        results.extend(res);
     }
 
     return results;
 }
 
-pub async fn service(
-    config: &aws_config::SdkConfig,
-    cluster: Cluster,
-    service_cache: Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>,
-) -> Vec<EcsService> {
-    {
-        if let Some(services) = service_cache.lock().await.get(&cluster) {
-            return services.clone();
-        }
-    }
-
+pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<EcsService> {
     let ecs_client = ecs::Client::new(config);
     info!("Fetching services for {}", &cluster.arn);
     let mut values = vec![];
@@ -412,12 +393,7 @@ pub async fn service(
     }
     values.sort_by(|a, b| a.name.cmp(&b.name));
 
-    {
-        let mut service_cache = service_cache.lock().await;
-        service_cache.insert(cluster.clone(), values.clone());
-    }
-
-    values
+    return values;
 }
 
 pub async fn service_details(

@@ -43,12 +43,12 @@ impl RdsResolver {
         }
     }
 
-    pub async fn refresh(&mut self, config: &aws_config::SdkConfig) {
+    pub async fn refresh(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::RdsInstance> {
         {
             let db = self.db.read().await;
             clear_databases(&db.connect().unwrap()).await;
         }
-        self.databases(config).await;
+        return self.databases(config).await;
     }
 
     pub async fn databases(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::RdsInstance> {
