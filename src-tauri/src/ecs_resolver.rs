@@ -1,7 +1,4 @@
-use crate::{
-    aws::{self, Cluster, EcsService},
-    cache_db,
-};
+use crate::{aws, cache_db};
 use log::info;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -45,7 +42,7 @@ impl EcsResolver {
     pub async fn refresh(
         &mut self,
         config: &aws_config::SdkConfig,
-        clusters: Vec<Cluster>,
+        clusters: Vec<aws::Cluster>,
     ) -> Vec<aws::EcsService> {
         {
             let db = self.db.read().await;
@@ -57,7 +54,7 @@ impl EcsResolver {
     pub async fn services(
         &mut self,
         config: &aws_config::SdkConfig,
-        clusters: Vec<Cluster>,
+        clusters: Vec<aws::Cluster>,
     ) -> Vec<aws::EcsService> {
         info!("Resolving services");
         let db = self.db.read().await;

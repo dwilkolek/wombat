@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, EcsService, LogEntry, RdsInstance, ServiceDetails};
+use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use cluster_resolver::ClusterResolver;
@@ -16,7 +16,7 @@ use shared::{
 };
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -244,8 +244,6 @@ async fn login(
 
     let _ = window.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
-        let initial_wait = tokio::time::sleep(Duration::from_secs(3600));
-        initial_wait.await;
         let mut interval = tokio::time::interval(Duration::from_secs(3600));
         loop {
             interval.tick().await;
@@ -522,7 +520,6 @@ async fn stop_job(
 #[tauri::command]
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
-    service_cache: tauri::State<'_, EcsServiceCache>,
     service_details_cache: tauri::State<'_, ServiceDetailsCache>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
@@ -548,16 +545,6 @@ async fn logout(
     for job in jobs.drain() {
         let _ = job.1.kill();
         let _ = job.1.wait();
-    }
-
-    // {
-    //     database_cache.0.lock().await.clear()
-    // }
-    // {
-    //     cluster_cache.0.lock().await.clear();
-    // }
-    {
-        service_cache.0.lock().await.clear();
     }
     {
         service_details_cache.0.lock().await.clear();
@@ -805,16 +792,9 @@ async fn clusters(
 
 #[tauri::command]
 async fn services(
-    window: Window,
     cluster: Cluster,
-    app_state: tauri::State<'_, AppContextState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<Vec<aws::EcsService>, BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("services", msg)),
-        Ok(authorized_user) => authorized_user,
-    };
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     let services = ecs_resolver_instance.read_services().await;
     Ok(services
@@ -841,7 +821,6 @@ async fn discover(
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-    cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
 ) -> Result<Vec<String>, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
@@ -882,9 +861,6 @@ async fn discover(
     }
 
     {
-        let cluster_resolver_instance = cluster_resolver_instance.0.read().await;
-        let clusters = cluster_resolver_instance.read_clusters().await;
-
         let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
         let services = ecs_resolver_instance.read_services().await;
 
@@ -1384,7 +1360,6 @@ async fn main() {
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
             EcsResolver::new(cache_db.clone()).await,
         ))))
-        .manage(EcsServiceCache(Arc::new(Mutex::new(HashMap::new()))))
         .manage(ServiceDetailsCache(Arc::new(Mutex::new(HashMap::new()))))
         .invoke_handler(tauri::generate_handler![
             user_config,
@@ -1432,7 +1407,6 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct ServiceDetailsCache(Arc<Mutex<HashMap<String, ServiceDetails>>>);
-struct EcsServiceCache(Arc<Mutex<HashMap<Cluster, Vec<EcsService>>>>);
 
 struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
