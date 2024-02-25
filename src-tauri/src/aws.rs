@@ -12,7 +12,7 @@ use ec2::types::Filter;
 use log::{info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -399,40 +399,27 @@ pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<Ec
 pub async fn service_details(
     config: aws_config::SdkConfig,
     service_arns: Vec<String>,
-    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>,
 ) -> Vec<ServiceDetails> {
     let mut result = Vec::new();
-    let mut tokio_tasks = vec![];
+    let mut tokio_tasks = Vec::new();
     for service_arn in service_arns {
-        let service_details_cache = Arc::clone(&service_details_cache);
         let config = config.clone();
         tokio_tasks.push(tokio::spawn(async move {
-            service_detail(config, service_arn, service_details_cache)
+            service_detail(&config, service_arn).await
         }))
     }
     for handle in tokio_tasks {
-        let sd = handle.await.unwrap_or_log().await;
+        let sd = handle.await.unwrap_or_log();
         result.push(sd);
     }
 
     result
 }
 
-pub async fn service_detail(
-    config: aws_config::SdkConfig,
-    service_arn: String,
-    service_details_cache: Arc<Mutex<HashMap<String, ServiceDetails>>>,
-) -> ServiceDetails {
-    {
-        let cache = service_details_cache.lock().await;
-        if let Some(details) = cache.get(&service_arn) {
-            return details.clone();
-        }
-    }
-
+pub async fn service_detail(config: &aws_config::SdkConfig, service_arn: String) -> ServiceDetails {
     info!("Fetching service details for {}", service_arn);
 
-    let ecs_client = ecs::Client::new(&config);
+    let ecs_client = ecs::Client::new(config);
     let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
     let service = ecs_client
         .describe_services()
@@ -460,7 +447,7 @@ pub async fn service_detail(
         .last()
         .unwrap_or_log()
         .to_owned();
-    let details = ServiceDetails {
+    return ServiceDetails {
         name: shared::ecs_arn_to_name(&service_arn),
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
@@ -468,12 +455,6 @@ pub async fn service_detail(
         version: version,
         env: Env::from_any(&service_arn),
     };
-    {
-        let mut cache = service_details_cache.lock().await;
-        cache.insert(service_arn.to_owned(), details.clone());
-
-        return details;
-    }
 }
 
 pub trait OnLogFound: Send {
