@@ -2,7 +2,7 @@ use crate::aws;
 use crate::proxy::ProxyInterceptor;
 use async_trait::async_trait;
 use log::warn;
-use reqwest::header::{HeaderName, HeaderValue};
+use reqwest::header::HeaderValue;
 use warp_reverse_proxy::Headers;
 
 #[derive(serde::Serialize)]

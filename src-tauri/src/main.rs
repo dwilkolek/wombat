@@ -123,6 +123,12 @@ async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<U
 }
 
 #[tauri::command]
+async fn ping() -> Result<(), ()> {
+    info!("Ping");
+    Ok(())
+}
+
+#[tauri::command]
 async fn favorite(
     name: &str,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1126,6 +1132,8 @@ async fn start_service_proxy(
     )
     .await;
 
+    info!("Started proxy to {}", &service.name);
+
     Ok(())
 }
 
@@ -1297,6 +1305,7 @@ async fn initialize_cache_db() -> libsql::Database {
 
 #[tokio::main]
 async fn main() {
+    fix_path_env::fix().unwrap_or_log();
     dotenv().expect(".env file not found");
     let logger = env::var("LOGGER").unwrap_or_else(|_| "file".to_string());
 
@@ -1368,6 +1377,7 @@ async fn main() {
             find_logs,
             abort_find_logs,
             log_filters,
+            ping
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
