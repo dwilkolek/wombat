@@ -3,6 +3,7 @@
 use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
+use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
@@ -66,6 +67,7 @@ struct ServiceDetailsPayload {
     app: String,
     services: Vec<aws::ServiceDetails>,
     dbs: Vec<aws::RdsInstance>,
+    timestamp: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug)]
@@ -250,6 +252,8 @@ async fn login(
     let _ = window.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        let initial_wait = tokio::time::sleep(Duration::from_secs(10));
+        initial_wait.await;
         loop {
             interval.tick().await;
             {
@@ -1045,6 +1049,7 @@ async fn service_details(
                     app,
                     services,
                     dbs: dbs_list,
+                    timestamp: Utc::now(),
                 },
             )
             .unwrap_or_log();

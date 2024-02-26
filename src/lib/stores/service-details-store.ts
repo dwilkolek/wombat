@@ -3,10 +3,14 @@ import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
 import type { AwsEnv, RdsInstance, ServiceDetails } from '$lib/types';
 import { ENVIRONMENTS } from './env-store';
+
+import { format } from 'date-fns';
+
 type ServiceDetailsPayload = {
 	app: string;
 	dbs: RdsInstance[];
 	services: ServiceDetails[];
+	timestamp: number;
 };
 
 const createServiceDetailsStore = () => {
@@ -61,7 +65,8 @@ export const serviceDetailStore = (app: string) =>
 		if (details) {
 			const result = {
 				app,
-				envs: new Map<AwsEnv, { services: ServiceDetails[]; dbs: RdsInstance[] }>()
+				envs: new Map<AwsEnv, { services: ServiceDetails[]; dbs: RdsInstance[] }>(),
+				timestamp: format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')
 			};
 			for (const env of ENVIRONMENTS) {
 				const services = details.services.filter((s) => s.env === env);

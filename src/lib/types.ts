@@ -38,6 +38,7 @@ export type ServiceDetails = {
 	version: string;
 	cluster_arn: string;
 	env: AwsEnv;
+	timestamp: number;
 };
 
 export type Endpoint = {
