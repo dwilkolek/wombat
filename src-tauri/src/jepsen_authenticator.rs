@@ -41,10 +41,11 @@ pub struct JepsenAutheticator {
 }
 impl JepsenAutheticator {
     pub async fn get_jepsen_token(&self) -> Result<String, String> {
-        log::info!("Getting token");
+        log::info!("Getting token {}", &self.secret_arn);
         let client_secret = aws::get_secret(&self.aws_config, &self.secret_arn)
             .await
             .unwrap();
+        dbg!(&client_secret);
         let client = reqwest::Client::new();
         let response = client
             .post(&self.jepsen_url)
@@ -55,6 +56,7 @@ impl JepsenAutheticator {
             ))
             .send()
             .await;
+        dbg!(&response);
         match response {
             Ok(response) => {
                 let response_body = response.json::<JepsenResponse>().await;

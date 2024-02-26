@@ -73,3 +73,14 @@ export type BError = {
 	message: string;
 	command: string;
 };
+
+
+export type JepsenConfig = {
+	from_app: string;
+	to_app: string;
+	env: string;
+	auth_api: string;
+	api_path: string;
+	client_id: string;
+	secret_name: string;
+};

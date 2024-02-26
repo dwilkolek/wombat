@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
+use global_db::JepsenConfig;
 use libsql::Database;
 use log::{error, info, warn};
 use rds_resolver::RdsResolver;
@@ -48,9 +49,10 @@ struct ProxyEventMessage {
     name: String,
     env: Env,
     proxy_type: ResourceType,
+    jepsen_config: Option<JepsenConfig>,
 }
 impl ProxyEventMessage {
-    fn new(arn: String, status: String, port: u16) -> Self {
+    fn new(arn: String, status: String, port: u16, jepsen_config: Option<global_db::JepsenConfig>) -> Self {
         Self {
             arn: arn.clone(),
             status,
@@ -58,6 +60,7 @@ impl ProxyEventMessage {
             name: arn_to_name(&arn),
             env: Env::from_any(&arn),
             proxy_type: arn_resource_type(&arn).unwrap_or_log(),
+            jepsen_config
         }
     }
 }
@@ -906,7 +909,7 @@ async fn start_db_proxy(
     window
         .emit(
             "proxy-starting",
-            ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone()),
+            ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone(), None),
         )
         .unwrap_or_log();
     let bastions = aws::bastions(&authorized_user.sdk_config).await;
@@ -935,6 +938,7 @@ async fn start_db_proxy(
         None,
         local_port,
         async_task_tracker,
+        None,
     )
     .await;
 
@@ -1061,6 +1065,7 @@ async fn service_details(
 async fn start_service_proxy(
     window: Window,
     service: aws::EcsService,
+    jepsen_config: Option<global_db::JepsenConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
@@ -1072,7 +1077,7 @@ async fn start_service_proxy(
     window
         .emit(
             "proxy-starting",
-            ProxyEventMessage::new(service.arn.clone(), "STARTING".into(), aws_local_port),
+            ProxyEventMessage::new(service.arn.clone(), "STARTING".into(), aws_local_port, jepsen_config.clone()),
         )
         .unwrap_or_log();
 
@@ -1096,30 +1101,30 @@ async fn start_service_proxy(
     )
     .await;
 
+    let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
+        vec![Box::new(proxy::StaticHeadersInterceptor {
+            path_prefix: String::from(""),
+            headers: HashMap::from([
+                (String::from("Host"), host.clone()),
+                // (String::from("Origin"), host.clone()),
+            ]),
+        })];
+
+    if let Some(jepsen_config) = jepsen_config.as_ref() {
+        interceptors.push(Box::new(jepsen_authenticator::JepsenAutheticator {
+            aws_config: authorized_user.sdk_config.clone(),
+            api_name: jepsen_config.api_name.clone(),
+            jepsen_url: jepsen_config.auth_api.clone(),
+            path_prefix: jepsen_config.api_path.clone(),
+            client_id: jepsen_config.client_id.clone(),
+            secret_arn: jepsen_config.secret_name.clone(),
+        }));
+    }
+
     let handle = proxy::start_proxy_to_aws_proxy(
         local_port,
         aws_local_port,
-        Arc::new(Mutex::new(proxy::RequestHandler {
-            interceptors: vec![
-                Box::new(jepsen_authenticator::JepsenAutheticator {
-                    aws_config: authorized_user.sdk_config.clone(),
-                    api_name: String::from("crush"),
-                    jepsen_url: String::from(
-                        "https://api-login.dev.services.technipfmc.com/accesstoken",
-                    ),
-                    path_prefix: String::from("/api"),
-                    client_id: String::from("nemo"),
-                    secret_arn: String::from("/config/nemo_dev/jepsen-client-secret"),
-                }),
-                Box::new(proxy::StaticHeadersInterceptor {
-                    path_prefix: String::from(""),
-                    headers: HashMap::from([
-                        (String::from("Host"), host.clone()),
-                        // (String::from("Origin"), host.clone()),
-                    ]),
-                }),
-            ],
-        })),
+        Arc::new(Mutex::new(proxy::RequestHandler { interceptors })),
     )
     .await;
 
@@ -1134,6 +1139,7 @@ async fn start_service_proxy(
         Some(handle),
         local_port,
         async_task_tracker,
+        jepsen_config.clone()
     )
     .await;
 
@@ -1151,6 +1157,16 @@ async fn log_filters(
     let filters = global_db::log_filters(&conn).await;
 
     return Ok(filters);
+}
+#[tauri::command]
+async fn jepsen_configs(
+    database: tauri::State<'_, DatabaseInstance>,
+) -> Result<Vec<global_db::JepsenConfig>, BError> {
+    let db = database.0.lock().await;
+    let conn = db.connect().unwrap_or_log();
+    let configs = global_db::jepsen_configs(&conn).await;
+
+    return Ok(configs);
 }
 
 #[tauri::command]
@@ -1382,6 +1398,7 @@ async fn main() {
             find_logs,
             abort_find_logs,
             log_filters,
+            jepsen_configs,
             ping
         ])
         .run(tauri::generate_context!())

@@ -1,4 +1,4 @@
-use crate::{AsyncTaskManager, ProxyEventMessage};
+use crate::{global_db, AsyncTaskManager, ProxyEventMessage};
 use async_trait::async_trait;
 use filepath::FilePath;
 use log::{error, info, warn};
@@ -31,6 +31,8 @@ pub async fn start_aws_ssm_proxy(
     abort_on_exit: Option<tokio::task::JoinHandle<()>>,
     access_port: u16,
     async_task_manager: tauri::State<'_, AsyncTaskManager>,
+
+    jepsen_config: Option<global_db::JepsenConfig>,
 ) {
     let mut command = Command::new("aws");
     command.args([
@@ -104,7 +106,7 @@ pub async fn start_aws_ssm_proxy(
             window
                 .emit(
                     "proxy-end",
-                    ProxyEventMessage::new(arn.clone(), "ERROR".into(), access_port),
+                    ProxyEventMessage::new(arn.clone(), "ERROR".into(), access_port, None),
                 )
                 .unwrap_or_log();
 
@@ -123,7 +125,7 @@ pub async fn start_aws_ssm_proxy(
         window
             .emit(
                 "proxy-start",
-                ProxyEventMessage::new(arn.clone(), "STARTED".into(), access_port),
+                ProxyEventMessage::new(arn.clone(), "STARTED".into(), access_port, jepsen_config.clone()),
             )
             .unwrap_or_log();
         let _ = child_arc_clone.wait();
@@ -135,7 +137,7 @@ pub async fn start_aws_ssm_proxy(
         window
             .emit(
                 "proxy-end",
-                ProxyEventMessage::new(arn.clone(), "END".into(), access_port),
+                ProxyEventMessage::new(arn.clone(), "END".into(), access_port, None),
             )
             .unwrap_or_log();
         kill_pid_on_port(local_port).await;
@@ -193,7 +195,6 @@ pub async fn start_proxy_to_aws_proxy(
     aws_local_port: u16,
     request_handler: Arc<tokio::sync::Mutex<RequestHandler>>,
 ) -> tokio::task::JoinHandle<()> {
-    info!("Kill {}", local_port);
     kill_pid_on_port(local_port).await;
     let handle = tokio::task::spawn(async move {
         let request_filter = extract_request_data_filter();
@@ -204,9 +205,7 @@ pub async fn start_proxy_to_aws_proxy(
                   mut headers: Headers,
                   body: Bytes| {
                 let request_handler = request_handler.clone();
-                info!("And then!");
                 async move {
-                    info!("In async move");
                     handle(uri.as_str(), &mut headers, request_handler).await;
                     let result = proxy_to_and_forward_response(
                         format!("http://localhost:{}/", aws_local_port).to_owned(),

@@ -5,8 +5,8 @@
 	import { open } from '@tauri-apps/api/shell';
 
 	export let task: ProxyEventMessage | undefined;
-	export let service: EcsService
-    $: port = $userStore.service_proxy_port_map?.[service.name]?.[service.env] ?? '?';
+	export let service: EcsService;
+	$: port = $userStore.service_proxy_port_map?.[service.name]?.[service.env] ?? '?';
 </script>
 
 {#if task}

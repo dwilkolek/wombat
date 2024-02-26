@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
-import type { AwsEnv } from '$lib/types';
+import type { AwsEnv, JepsenConfig } from '$lib/types';
 
 export type ProxyEventMessage = {
 	arn: string;
@@ -8,7 +8,8 @@ export type ProxyEventMessage = {
 	status: string,
 	name: string;
 	env: AwsEnv;
-	proxy_type: 'ECS' | 'RDS'
+	proxy_type: 'ECS' | 'RDS';
+	jepsen_config: JepsenConfig | null | undefined;
 };
 const createTaskStore = () => {
 	const runningTasks = writable<ProxyEventMessage[]>([]);

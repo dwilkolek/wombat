@@ -52,10 +52,12 @@
 				  </svg>
 			</div> -->
 			{#if details}
-				<span class="self-end place-content-end text-xs text-slate-500 font-italic">Synchronized at: {details.timestamp}</span>
+				<span class="place-content-end text-xs text-slate-500 font-italic"
+					>Synchronized at: {details.timestamp}</span
+				>
 			{/if}
 		</div>
-		
+
 		{#if !details}
 			<span class="loading loading-dots loading-lg" />
 		{/if}

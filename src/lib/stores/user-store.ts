@@ -57,7 +57,6 @@ const createUserStore = () => {
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
-
 	const login = async (profile: string) => {
 		const config = await execute<UserConfig>('login', { profile });
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });

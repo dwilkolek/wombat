@@ -266,9 +266,9 @@
 			class={`progress w-full ${$storeState.searchError ? 'progress-error' : ''}`}
 		></progress>{/if}
 	{#if !$storeState.isLookingForLogs}<progress
-			class={`progress w-full 
-				${$storeState.searchStatus == 'aborted' ? 'progress-warning' : ''} 
-				${$storeState.searchStatus == 'success' ? 'progress-success' : ''} 
+			class={`progress w-full
+				${$storeState.searchStatus == 'aborted' ? 'progress-warning' : ''}
+				${$storeState.searchStatus == 'success' ? 'progress-success' : ''}
 				${$storeState.searchStatus == 'error' ? 'progress-error' : ''}`}
 			value="100"
 			max="100"
