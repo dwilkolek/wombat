@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use crate::shared::{self, BError, Env};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
@@ -12,7 +12,6 @@ use ec2::types::Filter;
 use log::{info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,6 +249,27 @@ pub async fn db_secret(
     }
 
     return Err(BError::new("db_secret", "No secret found"));
+}
+
+pub async fn get_secret(
+    config: &aws_config::SdkConfig,
+    secret_name: &str,
+) -> Result<String, BError> {
+    let ssm_client = ssm::Client::new(&config);
+    let param = ssm_client
+        .get_parameter()
+        .name(secret_name.to_owned())
+        .with_decryption(true)
+        .send()
+        .await;
+
+    if let Ok(param) = param {
+        if let Some(param) = param.parameter() {
+            return Ok(param.value().unwrap_or_log().to_owned());
+        }
+    }
+
+    return Err(BError::new("secret", "Secret not found"));
 }
 
 pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {

@@ -1,7 +1,7 @@
 use crate::{AsyncTaskManager, ProxyEventMessage};
-
+use async_trait::async_trait;
 use filepath::FilePath;
-use log::{error, info};
+use log::{error, info, warn};
 use shared_child::SharedChild;
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -13,8 +13,7 @@ use tauri::Window;
 use tempdir::TempDir;
 use tokio::time::sleep;
 use tracing_unwrap::ResultExt;
-use warp::http::HeaderName;
-use warp::http::HeaderValue;
+use warp::http::{HeaderName, HeaderValue};
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;
 use warp::Filter as WarpFilter;
@@ -143,17 +142,24 @@ pub async fn start_aws_ssm_proxy(
     });
 }
 
+#[async_trait]
+pub trait ProxyInterceptor: Send + Sync {
+    fn applies(&self, uri: &str) -> bool;
+    async fn modify_headers(&self, headers: &mut Headers);
+}
+
 #[derive(Clone)]
-pub struct ProxyInterceptor {
+pub struct StaticHeadersInterceptor {
     pub path_prefix: String,
     pub headers: HashMap<String, String>,
 }
 
-impl ProxyInterceptor {
+#[async_trait]
+impl ProxyInterceptor for StaticHeadersInterceptor {
     fn applies(&self, uri: &str) -> bool {
         return uri.starts_with(&self.path_prefix);
     }
-    fn modify_headers(&self, headers: &mut Headers) {
+    async fn modify_headers(&self, headers: &mut Headers) {
         let h = self.headers.clone();
         for (name, value) in h.iter() {
             let header_value = value.parse::<HeaderValue>().unwrap_or_log();
@@ -163,37 +169,63 @@ impl ProxyInterceptor {
     }
 }
 
+pub struct RequestHandler {
+    pub interceptors: Vec<Box<dyn ProxyInterceptor>>,
+}
+
+async fn handle(
+    uri: &str,
+    headers: &mut Headers,
+    handler: Arc<tokio::sync::Mutex<RequestHandler>>,
+) {
+    info!("Handling request, {}", &uri);
+    let handler = handler.lock().await;
+    let interceptors_ref = &handler.interceptors;
+    for interceptor in interceptors_ref.into_iter() {
+        if interceptor.applies(uri) {
+            interceptor.modify_headers(headers).await;
+        }
+    }
+}
+
 pub async fn start_proxy_to_aws_proxy(
     local_port: u16,
     aws_local_port: u16,
-    proxy_intercepter: ProxyInterceptor,
+    request_handler: Arc<tokio::sync::Mutex<RequestHandler>>,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::task::spawn(async move {
+    info!("Kill {}", local_port);
+    kill_pid_on_port(local_port).await;
+    let handle = tokio::task::spawn(async move {
         let request_filter = extract_request_data_filter();
-
         let app = warp::any().and(request_filter).and_then(
             move |uri: warp::path::FullPath,
                   params: Option<String>,
                   method: Method,
                   mut headers: Headers,
                   body: Bytes| {
-                if proxy_intercepter.applies(uri.as_str()) {
-                    proxy_intercepter.modify_headers(&mut headers);
+                let request_handler = request_handler.clone();
+                info!("And then!");
+                async move {
+                    info!("In async move");
+                    handle(uri.as_str(), &mut headers, request_handler).await;
+                    let result = proxy_to_and_forward_response(
+                        format!("http://localhost:{}/", aws_local_port).to_owned(),
+                        "".to_owned(),
+                        uri,
+                        params,
+                        method,
+                        headers,
+                        body,
+                    )
+                    .await;
+                    return result;
                 }
-
-                proxy_to_and_forward_response(
-                    format!("http://localhost:{}/", aws_local_port).to_owned(),
-                    "".to_owned(),
-                    uri,
-                    params,
-                    method,
-                    headers,
-                    body,
-                )
             },
         );
         warp::serve(app).run(([0, 0, 0, 0], local_port)).await;
-    })
+    });
+
+    return handle;
 }
 
 #[cfg(target_os = "windows")]
@@ -268,20 +300,34 @@ async fn kill_pid_on_port(port: u16) {
         .unwrap_or_log();
     let grep_by_port = Command::new("grep")
         .arg(format!(":{}", port))
-        .stdin(Stdio::from(lsof.stdout.unwrap())) // Pipe through.
+        .stdin(Stdio::from(lsof.stdout.unwrap()))
         .stdout(Stdio::piped())
         .spawn()
-        .unwrap();
-    let cut = Command::new("cut")
-        .args(["-d", " ", "-f", "2"])
+        .unwrap_or_log();
+    let grep_by_listen = Command::new("grep")
+        .arg("(LISTEN)")
         .stdin(Stdio::from(grep_by_port.stdout.unwrap()))
-        .stdout(Stdio::piped())
-        .spawn()
+        .output()
         .unwrap();
-    let _ = Command::new("xargs")
-        .arg("kill")
-        .stdin(Stdio::from(cut.stdout.unwrap()))
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
+    let res = String::from_utf8(grep_by_listen.stdout).expect("Failed to convert string");
+    for line in res.lines() {
+        info!("lsof line: {}", &line);
+        if let Some(pid_str) = trim_whitespace_v2(line).split_whitespace().nth(1) {
+            if let Ok(pid) = pid_str.parse::<u32>() {
+                warn!("Killing pid {}", pid);
+                let _ = Command::new("kill").arg(pid_str).spawn().unwrap();
+            }
+        }
+    }
+}
+
+pub fn trim_whitespace_v2(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    s.split_whitespace().for_each(|w| {
+        if !result.is_empty() {
+            result.push(' ');
+        }
+        result.push_str(w);
+    });
+    result
 }

@@ -19,7 +19,15 @@ regex = "1"
 rand = "0.8.5"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.6.0", features = [ "shell-open", "process-exit", "clipboard-write-text", "dialog-ask", "dialog-message", "http-request", "updater"] }
+tauri = { version = "1.6.0", features = [
+    "shell-open",
+    "process-exit",
+    "clipboard-write-text",
+    "dialog-ask",
+    "dialog-message",
+    "http-request",
+    "updater",
+] }
 aws-config = "1.1.5"
 aws-sdk-ecs = "1.14.1"
 aws-sdk-rds = "1.16.1"
@@ -44,13 +52,16 @@ dotenvy = "0.15.7"
 tracing-unwrap = "0.10.0"
 tracing-subscriber = "0.3"
 tracing-appender = "0.2.3"
+reqwest = { version = "0.11.24", features = ["native-tls-vendored", "json"] }
+futures = "0.3.30"
+async-trait = "0.1.77"
 
 [dependencies.uuid]
 version = "1.7.0"
 features = [
-    "v4",                # Lets you generate random UUIDs
-    "fast-rng",          # Use a faster (but still sufficiently random) RNG
-    "serde"
+    "v4",       # Lets you generate random UUIDs
+    "fast-rng", # Use a faster (but still sufficiently random) RNG
+    "serde",
 ]
 [dependencies.fix-path-env]
 git = "https://github.com/tauri-apps/fix-path-env-rs"

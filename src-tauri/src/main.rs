@@ -33,6 +33,7 @@ mod cache_db;
 mod cluster_resolver;
 mod ecs_resolver;
 mod global_db;
+mod jepsen_authenticator;
 mod proxy;
 mod rds_resolver;
 mod shared;
@@ -1057,7 +1058,6 @@ async fn start_service_proxy(
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
 
     let aws_local_port = local_port + 10000;
-
     window
         .emit(
             "proxy-starting",
@@ -1088,13 +1088,27 @@ async fn start_service_proxy(
     let handle = proxy::start_proxy_to_aws_proxy(
         local_port,
         aws_local_port,
-        proxy::ProxyInterceptor {
-            path_prefix: String::from(""),
-            headers: HashMap::from([
-                (String::from("Host"), host.clone()),
-                (String::from("Origin"), host.clone()),
-            ]),
-        },
+        Arc::new(Mutex::new(proxy::RequestHandler {
+            interceptors: vec![
+                Box::new(jepsen_authenticator::JepsenAutheticator {
+                    aws_config: authorized_user.sdk_config.clone(),
+                    api_name: String::from("crush"),
+                    jepsen_url: String::from(
+                        "https://api-login.dev.services.technipfmc.com/accesstoken",
+                    ),
+                    path_prefix: String::from("/api"),
+                    client_id: String::from("nemo"),
+                    secret_arn: String::from("/config/nemo_dev/jepsen-client-secret"),
+                }),
+                Box::new(proxy::StaticHeadersInterceptor {
+                    path_prefix: String::from(""),
+                    headers: HashMap::from([
+                        (String::from("Host"), host.clone()),
+                        // (String::from("Origin"), host.clone()),
+                    ]),
+                }),
+            ],
+        })),
     )
     .await;
 
