@@ -65,10 +65,7 @@ pub async fn migrate(conn: &Connection) {
     if current_version < 5 {
         let transaction = conn.transaction().await.unwrap();
         transaction
-            .execute(
-                "ALTER TABLE features ADD COLUMN user_uuid TEXT",
-                (),
-            )
+            .execute("ALTER TABLE features ADD COLUMN user_uuid TEXT", ())
             .await
             .unwrap();
         current_version = fin(current_version, transaction, "add features table").await;
@@ -142,14 +139,22 @@ pub async fn is_feature_enabled(db: &Connection, feature: &str) -> bool {
 }
 
 pub async fn is_user_feature_enabled(db: &Connection, feature: &str, user_uuid: &str) -> bool {
-    log::info!("checking user feature, user: {}, feature: {}", user_uuid, feature);
+    log::info!(
+        "checking user feature, user: {}, feature: {}",
+        user_uuid,
+        feature
+    );
     let result = db
         .query(
             "SELECT enabled FROM features WHERE name = ? AND user_uuid = ?",
             params![feature, user_uuid],
         )
         .await;
-    log::info!("SQL: SELECT enabled FROM features WHERE name = {} AND user_uuid = {}", feature, user_uuid);
+    log::info!(
+        "SQL: SELECT enabled FROM features WHERE name = {} AND user_uuid = {}",
+        feature,
+        user_uuid
+    );
     match result {
         Ok(mut rows) => {
             let first_row = rows.next().await.unwrap();

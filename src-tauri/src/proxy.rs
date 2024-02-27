@@ -28,7 +28,7 @@ pub async fn start_aws_ssm_proxy(
     target_port: u16,
     local_port: u16,
 
-    abort_on_exit: Option<tokio::task::JoinHandle<()>>,
+    abort_on_exit: Option<tokio::sync::oneshot::Sender<()>>,
     access_port: u16,
     async_task_manager: tauri::State<'_, AsyncTaskManager>,
 
@@ -125,14 +125,18 @@ pub async fn start_aws_ssm_proxy(
         window
             .emit(
                 "proxy-start",
-                ProxyEventMessage::new(arn.clone(), "STARTED".into(), access_port, jepsen_config.clone()),
+                ProxyEventMessage::new(
+                    arn.clone(),
+                    "STARTED".into(),
+                    access_port,
+                    jepsen_config.clone(),
+                ),
             )
             .unwrap_or_log();
         let _ = child_arc_clone.wait();
-
         if let Some(handle) = abort_on_exit {
-            info!("Killing dependant job");
-            handle.abort();
+            let kill_result = handle.send(());
+            info!("Killing dependant job, success: {}", kill_result.is_ok());
         }
         window
             .emit(
@@ -194,37 +198,42 @@ pub async fn start_proxy_to_aws_proxy(
     local_port: u16,
     aws_local_port: u16,
     request_handler: Arc<tokio::sync::Mutex<RequestHandler>>,
-) -> tokio::task::JoinHandle<()> {
+) -> tokio::sync::oneshot::Sender<()> {
     kill_pid_on_port(local_port).await;
-    let handle = tokio::task::spawn(async move {
-        let request_filter = extract_request_data_filter();
-        let app = warp::any().and(request_filter).and_then(
-            move |uri: warp::path::FullPath,
-                  params: Option<String>,
-                  method: Method,
-                  mut headers: Headers,
-                  body: Bytes| {
-                let request_handler = request_handler.clone();
-                async move {
-                    handle(uri.as_str(), &mut headers, request_handler).await;
-                    let result = proxy_to_and_forward_response(
-                        format!("http://localhost:{}/", aws_local_port).to_owned(),
-                        "".to_owned(),
-                        uri,
-                        params,
-                        method,
-                        headers,
-                        body,
-                    )
-                    .await;
-                    return result;
-                }
-            },
-        );
-        warp::serve(app).run(([0, 0, 0, 0], local_port)).await;
-    });
 
-    return handle;
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let request_filter = extract_request_data_filter();
+    let app = warp::any().and(request_filter).and_then(
+        move |uri: warp::path::FullPath,
+              params: Option<String>,
+              method: Method,
+              mut headers: Headers,
+              body: Bytes| {
+            let request_handler = request_handler.clone();
+            async move {
+                handle(uri.as_str(), &mut headers, request_handler).await;
+                let result = proxy_to_and_forward_response(
+                    format!("http://localhost:{}/", aws_local_port).to_owned(),
+                    "".to_owned(),
+                    uri,
+                    params,
+                    method,
+                    headers,
+                    body,
+                )
+                .await;
+                return result;
+            }
+        },
+    );
+
+    let (_addr, server) =
+        warp::serve(app).bind_with_graceful_shutdown(([0, 0, 0, 0], local_port), async {
+            rx.await.ok();
+        });
+    tokio::task::spawn(server);
+
+    return tx;
 }
 
 #[cfg(target_os = "windows")]

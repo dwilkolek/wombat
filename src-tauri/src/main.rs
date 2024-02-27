@@ -52,7 +52,12 @@ struct ProxyEventMessage {
     jepsen_config: Option<JepsenConfig>,
 }
 impl ProxyEventMessage {
-    fn new(arn: String, status: String, port: u16, jepsen_config: Option<global_db::JepsenConfig>) -> Self {
+    fn new(
+        arn: String,
+        status: String,
+        port: u16,
+        jepsen_config: Option<global_db::JepsenConfig>,
+    ) -> Self {
         Self {
             arn: arn.clone(),
             status,
@@ -60,7 +65,7 @@ impl ProxyEventMessage {
             name: arn_to_name(&arn),
             env: Env::from_any(&arn),
             proxy_type: arn_resource_type(&arn).unwrap_or_log(),
-            jepsen_config
+            jepsen_config,
         }
     }
 }
@@ -1077,7 +1082,12 @@ async fn start_service_proxy(
     window
         .emit(
             "proxy-starting",
-            ProxyEventMessage::new(service.arn.clone(), "STARTING".into(), aws_local_port, jepsen_config.clone()),
+            ProxyEventMessage::new(
+                service.arn.clone(),
+                "STARTING".into(),
+                aws_local_port,
+                jepsen_config.clone(),
+            ),
         )
         .unwrap_or_log();
 
@@ -1104,16 +1114,16 @@ async fn start_service_proxy(
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
             path_prefix: String::from(""),
-            headers: HashMap::from([
-                (String::from("Host"), host.clone()),
-                // (String::from("Origin"), host.clone()),
-            ]),
+            headers: HashMap::from([(String::from("Host"), host.clone())]),
         })];
 
     if let Some(jepsen_config) = jepsen_config.as_ref() {
-        interceptors.push(Box::new(jepsen_authenticator::JepsenAutheticator::from_jepsen_config(
-            &authorized_user.sdk_config, &jepsen_config
-        )));
+        interceptors.push(Box::new(
+            jepsen_authenticator::JepsenAutheticator::from_jepsen_config(
+                &authorized_user.sdk_config,
+                &jepsen_config,
+            ),
+        ));
     }
 
     let handle = proxy::start_proxy_to_aws_proxy(
@@ -1134,7 +1144,7 @@ async fn start_service_proxy(
         Some(handle),
         local_port,
         async_task_tracker,
-        jepsen_config.clone()
+        jepsen_config.clone(),
     )
     .await;
 
@@ -1164,7 +1174,6 @@ async fn jepsen_configs(
     return Ok(configs);
 }
 
-
 #[tauri::command]
 async fn is_user_feature_enabled(
     feature: &str,
@@ -1178,7 +1187,6 @@ async fn is_user_feature_enabled(
 
     return Ok(is_enabled);
 }
-
 
 #[tauri::command]
 async fn open_dbeaver(
