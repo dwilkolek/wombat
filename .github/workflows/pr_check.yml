@@ -9,7 +9,7 @@ jobs:
         platform: [macos-latest, windows-latest, ubuntu-20.04]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: bluwy/substitute-string-action@v1
         id: sub
         with:
@@ -19,6 +19,8 @@ jobs:
           PROFILE: 'release'
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_ORG: ${{ secrets.AXIOM_ORG }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_SYNC_URL: ${{ secrets.TURSO_SYNC_URL }}
       - name: setup node
         uses: actions/setup-node@v3
         with:
