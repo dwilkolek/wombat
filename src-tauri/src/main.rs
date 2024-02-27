@@ -34,8 +34,8 @@ mod cache_db;
 mod cluster_resolver;
 mod ecs_resolver;
 mod global_db;
-mod proxy_authenticators;
 mod proxy;
+mod proxy_authenticators;
 mod rds_resolver;
 mod shared;
 mod user;
@@ -1126,20 +1126,20 @@ async fn start_service_proxy(
                         proxy_auth_config.clone(),
                     ),
                 ));
-            },
+            }
             "basic" => {
                 info!("Adding basic auth interceptor, {:?}", &proxy_auth_config);
                 interceptors.push(Box::new(
                     proxy_authenticators::BasicAutheticator::from_proxy_auth_config(
                         &authorized_user.sdk_config,
                         proxy_auth_config.clone(),
-                    ).await,
+                    )
+                    .await,
                 ));
             }
-            _ =>  {
+            _ => {
                 warn!("Unknown proxy auth type: {}", proxy_auth_config.auth_type);
             }
-            
         }
     }
 
@@ -1369,7 +1369,7 @@ async fn main() {
     let _guard = match logger.as_str() {
         "console" => {
             tracing_subscriber::fmt().init();
-             None
+            None
         }
         "file" => {
             let file_appender = tracing_appender::rolling::daily(

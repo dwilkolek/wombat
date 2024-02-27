@@ -238,7 +238,8 @@ pub struct ProxyAuthConfig {
 pub async fn get_proxy_auth_configs(conn: &Connection) -> Vec<ProxyAuthConfig> {
     log::info!("getting proxy auth configs");
     let result = conn
-        .query("SELECT to_app, env,
+        .query(
+            "SELECT to_app, env,
             auth_type, api_path,
 
             jepsen_auth_api,
@@ -249,19 +250,19 @@ pub async fn get_proxy_auth_configs(conn: &Connection) -> Vec<ProxyAuthConfig> {
 
             secret_name
         
-         FROM proxy_auth_configs", ())
+         FROM proxy_auth_configs",
+            (),
+        )
         .await;
     match result {
         Ok(mut rows) => {
             let mut configs = Vec::new();
             while let Ok(row) = rows.next().await {
                 match row {
-                    Some(row) => {
-                        match libsql::de::from_row::<ProxyAuthConfig>(&row) {
-                            Ok(auth) => configs.push(auth),
-                            Err(e) => log::error!("failed to parse proxy auth config: {}", e),
-                        }
-                    }
+                    Some(row) => match libsql::de::from_row::<ProxyAuthConfig>(&row) {
+                        Ok(auth) => configs.push(auth),
+                        Err(e) => log::error!("failed to parse proxy auth config: {}", e),
+                    },
                     None => {
                         break;
                     }

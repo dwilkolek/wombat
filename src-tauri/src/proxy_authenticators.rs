@@ -2,11 +2,11 @@ use crate::proxy::ProxyInterceptor;
 use crate::{aws, global_db};
 use async_trait::async_trait;
 use headers::authorization::Credentials;
+use headers::Authorization;
 use log::{info, warn};
 use reqwest::header::HeaderValue;
 use tracing_unwrap::ResultExt;
 use warp_reverse_proxy::Headers;
-use headers::Authorization;
 
 #[derive(serde::Serialize)]
 struct JepsenBody {
@@ -108,8 +108,6 @@ impl ProxyInterceptor for JepsenAutheticator {
     }
 }
 
-
-
 pub struct BasicAutheticator {
     path_prefix: String,
     user: String,
@@ -123,7 +121,9 @@ impl BasicAutheticator {
         BasicAutheticator {
             user: basic_config.basic_user.unwrap(),
             path_prefix: basic_config.api_path,
-            password: aws::get_secret(aws_config, basic_config.secret_name.as_str()).await.ok()
+            password: aws::get_secret(aws_config, basic_config.secret_name.as_str())
+                .await
+                .ok(),
         }
     }
 }
@@ -134,7 +134,6 @@ impl ProxyInterceptor for BasicAutheticator {
         uri.starts_with(&self.path_prefix)
     }
     async fn modify_headers(&self, headers: &mut Headers) {
-        
         if let Some(password) = self.password.clone() {
             let credentials = Authorization::basic(&self.user, &password).0.encode();
             let credentials_value = credentials.to_str().unwrap();
