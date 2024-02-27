@@ -1346,26 +1346,27 @@ async fn initialize_cache_db() -> libsql::Database {
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
-    dotenv().expect(".env file not found");
+    let _ = dotenv();
     let logger = env::var("LOGGER").unwrap_or_else(|_| "file".to_string());
 
-    match logger.as_str() {
+    let _guard = match logger.as_str() {
         "console" => {
             tracing_subscriber::fmt().init();
+             None
         }
         "file" => {
             let file_appender = tracing_appender::rolling::daily(
                 user::wombat_dir().join("logs").as_path(),
                 "wombat",
             );
-            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+            let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
             tracing_subscriber::fmt().with_writer(non_blocking).init();
-            fix_path_env::fix().unwrap_or_log();
+            Some(guard)
         }
         _ => {
             panic!("Unknown logger: {}", logger);
         }
-    }
+    };
     let db = Arc::new(Mutex::new(initialize_database_connection().await));
     let cache_db = Arc::new(RwLock::new(initialize_cache_db().await));
 
