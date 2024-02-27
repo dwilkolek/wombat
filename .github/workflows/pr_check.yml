@@ -41,4 +41,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform }}-${{ github.sha }}
-          path: src-tauri/target/release
+          path: |
+            src-tauri/target/release/bundle
+            src-tauri/target/release/bundle/Wombat*
