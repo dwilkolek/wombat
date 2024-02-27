@@ -1,10 +1,12 @@
 use crate::proxy::ProxyInterceptor;
 use crate::{aws, global_db};
 use async_trait::async_trait;
+use headers::authorization::Credentials;
 use log::{info, warn};
 use reqwest::header::HeaderValue;
 use tracing_unwrap::ResultExt;
 use warp_reverse_proxy::Headers;
+use headers::Authorization;
 
 #[derive(serde::Serialize)]
 struct JepsenBody {
@@ -42,17 +44,17 @@ pub struct JepsenAutheticator {
     secret_arn: String,
 }
 impl JepsenAutheticator {
-    pub fn from_jepsen_config(
+    pub fn from_proxy_auth_config(
         aws_config: &aws_config::SdkConfig,
-        jepsen_config: &global_db::JepsenConfig,
+        jepsen_config: global_db::ProxyAuthConfig,
     ) -> Self {
         JepsenAutheticator {
             aws_config: aws_config.clone(),
-            api_name: jepsen_config.api_name.clone(),
-            jepsen_url: jepsen_config.auth_api.clone(),
-            path_prefix: jepsen_config.api_path.clone(),
-            client_id: jepsen_config.client_id.clone(),
-            secret_arn: jepsen_config.secret_name.clone(),
+            api_name: jepsen_config.jepsen_api_name.unwrap(),
+            jepsen_url: jepsen_config.jepsen_auth_api.unwrap(),
+            path_prefix: jepsen_config.api_path,
+            client_id: jepsen_config.jepsen_client_id.unwrap(),
+            secret_arn: jepsen_config.secret_name,
         }
     }
 
@@ -101,6 +103,44 @@ impl ProxyInterceptor for JepsenAutheticator {
             headers.insert(
                 "Authorization",
                 HeaderValue::from_str(format!("Bearer {}", &token).as_str()).unwrap(),
+            );
+        }
+    }
+}
+
+
+
+pub struct BasicAutheticator {
+    path_prefix: String,
+    user: String,
+    password: Option<String>,
+}
+impl BasicAutheticator {
+    pub async fn from_proxy_auth_config(
+        aws_config: &aws_config::SdkConfig,
+        basic_config: global_db::ProxyAuthConfig,
+    ) -> Self {
+        BasicAutheticator {
+            user: basic_config.basic_user.unwrap(),
+            path_prefix: basic_config.api_path,
+            password: aws::get_secret(aws_config, basic_config.secret_name.as_str()).await.ok()
+        }
+    }
+}
+
+#[async_trait]
+impl ProxyInterceptor for BasicAutheticator {
+    fn applies(&self, uri: &str) -> bool {
+        uri.starts_with(&self.path_prefix)
+    }
+    async fn modify_headers(&self, headers: &mut Headers) {
+        
+        if let Some(password) = self.password.clone() {
+            let credentials = Authorization::basic(&self.user, &password).0.encode();
+            let credentials_value = credentials.to_str().unwrap();
+            headers.insert(
+                "Authorization",
+                HeaderValue::from_str(credentials_value).unwrap(),
             );
         }
     }

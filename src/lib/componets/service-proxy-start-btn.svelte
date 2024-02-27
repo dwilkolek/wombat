@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { AwsEnv, type JepsenConfig, type ServiceDetails } from '$lib/types';
+	import { AwsEnv, type ProxyAuthConfig, type ServiceDetails } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let service: ServiceDetails;
 
-	$: configs = invoke<JepsenConfig[]>('jepsen_configs');
-	$: enabled_feature = invoke<boolean>('is_user_feature_enabled', { feature: 'jepsen_proxy' });
+	$: configs = invoke<ProxyAuthConfig[]>('proxy_auth_configs');
+	$: enabled_feature = invoke<boolean>('is_user_feature_enabled', { feature: 'beta' });
 
-	const start_proxy = async (jepsenConfig: JepsenConfig | null) => {
+	const start_proxy = async (proxyAuthConfig: ProxyAuthConfig | null) => {
 		if (service?.env == AwsEnv.PROD) {
 			let response = await ask(
 				'Understand the risks before connecting to production service.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
@@ -23,7 +23,7 @@
 				return;
 			}
 		}
-		invoke('start_service_proxy', { service, jepsenConfig });
+		invoke('start_service_proxy', { service, proxyAuthConfig });
 	};
 </script>
 
@@ -67,7 +67,7 @@
 								<button 
 								class={`${enabled_feature ? '': 'opacity-50'}`}
 								on:click|preventDefault={() => start_proxy(config)} disabled={!enabled_feature}
-									>As {config.client_id}</button
+									>{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
 								>
 							</li>
 						{/if}

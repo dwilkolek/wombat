@@ -7,9 +7,8 @@ use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
-use global_db::JepsenConfig;
 use libsql::Database;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rds_resolver::RdsResolver;
 use regex::Regex;
 use serde_json::json;
@@ -35,7 +34,7 @@ mod cache_db;
 mod cluster_resolver;
 mod ecs_resolver;
 mod global_db;
-mod jepsen_authenticator;
+mod proxy_authenticators;
 mod proxy;
 mod rds_resolver;
 mod shared;
@@ -49,14 +48,14 @@ struct ProxyEventMessage {
     name: String,
     env: Env,
     proxy_type: ResourceType,
-    jepsen_config: Option<JepsenConfig>,
+    proxy_auth_config: Option<global_db::ProxyAuthConfig>,
 }
 impl ProxyEventMessage {
     fn new(
         arn: String,
         status: String,
         port: u16,
-        jepsen_config: Option<global_db::JepsenConfig>,
+        proxy_auth_config: Option<global_db::ProxyAuthConfig>,
     ) -> Self {
         Self {
             arn: arn.clone(),
@@ -65,7 +64,7 @@ impl ProxyEventMessage {
             name: arn_to_name(&arn),
             env: Env::from_any(&arn),
             proxy_type: arn_resource_type(&arn).unwrap_or_log(),
-            jepsen_config,
+            proxy_auth_config,
         }
     }
 }
@@ -389,7 +388,7 @@ async fn db_credentials(
     let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
     let infra_default_role = &db.name;
     let profile_name = ssm_role.get(&db.name).unwrap_or(&infra_default_role);
-    println!("Using infra profile: {}", &profile_name);
+    info!("Using infra profile: {}", &profile_name);
     let db_infra_sdk = aws_config::defaults(BehaviorVersion::latest())
         .profile_name(profile_name)
         .load()
@@ -398,7 +397,7 @@ async fn db_credentials(
     let secret = aws::db_secret(&db_infra_sdk, &db.name, &db.env).await;
 
     if secret.is_err() {
-        println!("Falling back to user profile: {}", &authorized_user.profile);
+        warn!("Falling back to user profile: {}", &authorized_user.profile);
         return aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
     }
     return secret;
@@ -1070,7 +1069,7 @@ async fn service_details(
 async fn start_service_proxy(
     window: Window,
     service: aws::EcsService,
-    jepsen_config: Option<global_db::JepsenConfig>,
+    proxy_auth_config: Option<global_db::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
@@ -1086,7 +1085,7 @@ async fn start_service_proxy(
                 service.arn.clone(),
                 "STARTING".into(),
                 aws_local_port,
-                jepsen_config.clone(),
+                proxy_auth_config.clone(),
             ),
         )
         .unwrap_or_log();
@@ -1117,13 +1116,31 @@ async fn start_service_proxy(
             headers: HashMap::from([(String::from("Host"), host.clone())]),
         })];
 
-    if let Some(jepsen_config) = jepsen_config.as_ref() {
-        interceptors.push(Box::new(
-            jepsen_authenticator::JepsenAutheticator::from_jepsen_config(
-                &authorized_user.sdk_config,
-                &jepsen_config,
-            ),
-        ));
+    if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
+        match proxy_auth_config.auth_type.as_str() {
+            "jepsen" => {
+                info!("Adding jepsen auth interceptor, {:?}", &proxy_auth_config);
+                interceptors.push(Box::new(
+                    proxy_authenticators::JepsenAutheticator::from_proxy_auth_config(
+                        &authorized_user.sdk_config,
+                        proxy_auth_config.clone(),
+                    ),
+                ));
+            },
+            "basic" => {
+                info!("Adding basic auth interceptor, {:?}", &proxy_auth_config);
+                interceptors.push(Box::new(
+                    proxy_authenticators::BasicAutheticator::from_proxy_auth_config(
+                        &authorized_user.sdk_config,
+                        proxy_auth_config.clone(),
+                    ).await,
+                ));
+            }
+            _ =>  {
+                warn!("Unknown proxy auth type: {}", proxy_auth_config.auth_type);
+            }
+            
+        }
     }
 
     let handle = proxy::start_proxy_to_aws_proxy(
@@ -1144,7 +1161,7 @@ async fn start_service_proxy(
         Some(handle),
         local_port,
         async_task_tracker,
-        jepsen_config.clone(),
+        proxy_auth_config.clone(),
     )
     .await;
 
@@ -1164,12 +1181,12 @@ async fn log_filters(
     return Ok(filters);
 }
 #[tauri::command]
-async fn jepsen_configs(
+async fn proxy_auth_configs(
     database: tauri::State<'_, DatabaseInstance>,
-) -> Result<Vec<global_db::JepsenConfig>, BError> {
+) -> Result<Vec<global_db::ProxyAuthConfig>, BError> {
     let db = database.0.lock().await;
     let conn = db.connect().unwrap_or_log();
-    let configs = global_db::jepsen_configs(&conn).await;
+    let configs = global_db::get_proxy_auth_configs(&conn).await;
 
     return Ok(configs);
 }
@@ -1266,7 +1283,7 @@ async fn open_dbeaver(
 
 async fn initialize_database_connection() -> Database {
     let db_file = env::var("DB_PATH").unwrap_or_else(|_| {
-        println!("Using default db path since DB_PATH was not set");
+        debug!("Using default db path since DB_PATH was not set");
         user::wombat_dir()
             .join("wombat.db")
             .to_str()
@@ -1277,13 +1294,13 @@ async fn initialize_database_connection() -> Database {
     info!("Database {}", db_file);
 
     let auth_token = env::var("TURSO_AUTH_TOKEN").unwrap_or_else(|_| {
-        println!("Using empty token since TURSO_AUTH_TOKEN was not set");
+        debug!("Using default token since TURSO_AUTH_TOKEN was not set");
         "%%TURSO_AUTH_TOKEN%%".to_string()
     });
 
     let url = env::var("TURSO_SYNC_URL")
         .unwrap_or_else(|_| {
-            println!("Using empty token since TURSO_SYNC_URL was not set");
+            debug!("Using default sync url since TURSO_SYNC_URL was not set");
             "%%TURSO_SYNC_URL%%".to_string()
         })
         .replace("libsql", "https");
@@ -1418,7 +1435,7 @@ async fn main() {
             find_logs,
             abort_find_logs,
             log_filters,
-            jepsen_configs,
+            proxy_auth_configs,
             is_user_feature_enabled,
             ping
         ])

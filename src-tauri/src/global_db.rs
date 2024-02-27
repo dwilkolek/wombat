@@ -54,12 +54,18 @@ pub async fn migrate(conn: &Connection) {
         let transaction = conn.transaction().await.unwrap();
         transaction
             .execute(
-                "CREATE TABLE IF NOT EXISTS jepsen_configs(from_app TEXT, to_app TEXT, env TEXT, auth_api TEXT, api_path TEXT, api_name TEXT, client_id TEXT, secret_name TEXT)",
+                "CREATE TABLE IF NOT EXISTS proxy_auth_configs(to_app TEXT, env TEXT, 
+                    auth_type TEXT, 
+                    api_path TEXT, 
+                    jepsen_auth_api TEXT, jepsen_api_name TEXT, jepsen_client_id TEXT, 
+                    basic_user TEXT,
+                    secret_name TEXT
+                )",
                 (),
             )
             .await
             .unwrap();
-        current_version = fin(current_version, transaction, "add proxy auth table").await;
+        current_version = fin(current_version, transaction, "add proxy_auth_configs").await;
     }
 
     if current_version < 5 {
@@ -150,11 +156,6 @@ pub async fn is_user_feature_enabled(db: &Connection, feature: &str, user_uuid: 
             params![feature, user_uuid],
         )
         .await;
-    log::info!(
-        "SQL: SELECT enabled FROM features WHERE name = {} AND user_uuid = {}",
-        feature,
-        user_uuid
-    );
     match result {
         Ok(mut rows) => {
             let first_row = rows.next().await.unwrap();
@@ -218,21 +219,37 @@ pub async fn log_filters(conn: &Connection) -> Vec<LogFilter> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JepsenConfig {
-    pub from_app: String,
+pub struct ProxyAuthConfig {
     pub to_app: String,
     pub env: String,
-    pub auth_api: String,
+
+    pub auth_type: String,
     pub api_path: String,
-    pub api_name: String,
-    pub client_id: String,
+
+    pub jepsen_auth_api: Option<String>,
+    pub jepsen_api_name: Option<String>,
+    pub jepsen_client_id: Option<String>,
+
+    pub basic_user: Option<String>,
+
     pub secret_name: String,
 }
 
-pub async fn jepsen_configs(conn: &Connection) -> Vec<JepsenConfig> {
-    log::info!("getting jepsen configs ");
+pub async fn get_proxy_auth_configs(conn: &Connection) -> Vec<ProxyAuthConfig> {
+    log::info!("getting proxy auth configs");
     let result = conn
-        .query("SELECT from_app, to_app, env, auth_api, api_path, api_name, client_id, secret_name FROM jepsen_configs", ())
+        .query("SELECT to_app, env,
+            auth_type, api_path,
+
+            jepsen_auth_api,
+            jepsen_api_name,
+            jepsen_client_id,
+
+            basic_user,
+
+            secret_name
+        
+         FROM proxy_auth_configs", ())
         .await;
     match result {
         Ok(mut rows) => {
@@ -240,24 +257,10 @@ pub async fn jepsen_configs(conn: &Connection) -> Vec<JepsenConfig> {
             while let Ok(row) = rows.next().await {
                 match row {
                     Some(row) => {
-                        let from_app = row.get::<String>(0).unwrap();
-                        let to_app = row.get::<String>(1).unwrap();
-                        let env = row.get::<String>(2).unwrap();
-                        let auth_api = row.get::<String>(3).unwrap();
-                        let api_path = row.get::<String>(4).unwrap();
-                        let api_name = row.get::<String>(5).unwrap();
-                        let client_id = row.get::<String>(6).unwrap();
-                        let secret_name = row.get::<String>(7).unwrap();
-                        configs.push(JepsenConfig {
-                            from_app,
-                            to_app,
-                            env,
-                            auth_api,
-                            api_path,
-                            api_name,
-                            client_id,
-                            secret_name,
-                        })
+                        match libsql::de::from_row::<ProxyAuthConfig>(&row) {
+                            Ok(auth) => configs.push(auth),
+                            Err(e) => log::error!("failed to parse proxy auth config: {}", e),
+                        }
                     }
                     None => {
                         break;

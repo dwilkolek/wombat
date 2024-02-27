@@ -32,7 +32,7 @@ pub async fn start_aws_ssm_proxy(
     access_port: u16,
     async_task_manager: tauri::State<'_, AsyncTaskManager>,
 
-    jepsen_config: Option<global_db::JepsenConfig>,
+    proxy_auth_config: Option<global_db::ProxyAuthConfig>,
 ) {
     let mut command = Command::new("aws");
     command.args([
@@ -51,7 +51,7 @@ pub async fn start_aws_ssm_proxy(
         ),
     ]);
 
-    println!(
+    info!(
         "Local: {}, target: {}, access: {}",
         &local_port, &target_port, &access_port
     );
@@ -129,7 +129,7 @@ pub async fn start_aws_ssm_proxy(
                     arn.clone(),
                     "STARTED".into(),
                     access_port,
-                    jepsen_config.clone(),
+                    proxy_auth_config.clone(),
                 ),
             )
             .unwrap_or_log();

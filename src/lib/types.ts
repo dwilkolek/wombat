@@ -75,12 +75,18 @@ export type BError = {
 };
 
 
-export type JepsenConfig = {
-	from_app: string;
-	to_app: string;
-	env: string;
-	auth_api: string;
-	api_path: string;
-	client_id: string;
-	secret_name: string;
+export type ProxyAuthConfig = {
+     to_app: string,
+     env: string,
+
+     auth_type: string,
+     api_path: string,
+
+     jepsen_auth_api: string | null | undefined,
+     jepsen_api_name: string | null | undefined,
+     jepsen_client_id: string | null | undefined,
+
+     basic_user: string | null | undefined,
+
+     secret_name: string,
 };
