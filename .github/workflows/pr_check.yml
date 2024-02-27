@@ -37,3 +37,8 @@ jobs:
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Archive executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-${{ github.sha }}
+          path: src-tauri/target/release
