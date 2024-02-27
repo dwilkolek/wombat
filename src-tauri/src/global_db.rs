@@ -208,11 +208,11 @@ pub async fn log_filters(conn: &Connection) -> Vec<LogFilter> {
                     }
                 }
             }
-            log::info!("log filters {:?}", filters);
+            log::info!("log filters total: {}", filters.len());
             filters
         }
-        Err(_) => {
-            log::error!("getting log filters failed");
+        Err(e) => {
+            log::error!("getting log filters failed, {}", e);
             Vec::new()
         }
     }
@@ -267,11 +267,11 @@ pub async fn get_proxy_auth_configs(conn: &Connection) -> Vec<ProxyAuthConfig> {
                     }
                 }
             }
-            log::info!("log filters {:?}", &configs);
+            log::info!("proxy auth configs, total: {}", configs.len());
             configs
         }
-        Err(_) => {
-            log::error!("getting log filters failed");
+        Err(e) => {
+            log::error!("getting proxy auth configs failed, {}", e);
             Vec::new()
         }
     }
