@@ -1111,14 +1111,9 @@ async fn start_service_proxy(
         })];
 
     if let Some(jepsen_config) = jepsen_config.as_ref() {
-        interceptors.push(Box::new(jepsen_authenticator::JepsenAutheticator {
-            aws_config: authorized_user.sdk_config.clone(),
-            api_name: jepsen_config.api_name.clone(),
-            jepsen_url: jepsen_config.auth_api.clone(),
-            path_prefix: jepsen_config.api_path.clone(),
-            client_id: jepsen_config.client_id.clone(),
-            secret_arn: jepsen_config.secret_name.clone(),
-        }));
+        interceptors.push(Box::new(jepsen_authenticator::JepsenAutheticator::from_jepsen_config(
+            &authorized_user.sdk_config, &jepsen_config
+        )));
     }
 
     let handle = proxy::start_proxy_to_aws_proxy(
@@ -1168,6 +1163,22 @@ async fn jepsen_configs(
 
     return Ok(configs);
 }
+
+
+#[tauri::command]
+async fn is_user_feature_enabled(
+    feature: &str,
+    database: tauri::State<'_, DatabaseInstance>,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<bool, BError> {
+    let user_id = format!("{}", &user_config.0.lock().await.id);
+    let db = database.0.lock().await;
+    let conn = db.connect().unwrap_or_log();
+    let is_enabled = global_db::is_user_feature_enabled(&conn, feature, user_id.as_str()).await;
+
+    return Ok(is_enabled);
+}
+
 
 #[tauri::command]
 async fn open_dbeaver(
@@ -1399,6 +1410,7 @@ async fn main() {
             abort_find_logs,
             log_filters,
             jepsen_configs,
+            is_user_feature_enabled,
             ping
         ])
         .run(tauri::generate_context!())

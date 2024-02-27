@@ -1,8 +1,9 @@
-use crate::aws;
 use crate::proxy::ProxyInterceptor;
+use crate::{aws, global_db};
 use async_trait::async_trait;
-use log::warn;
+use log::{info, warn};
 use reqwest::header::HeaderValue;
+use tracing_unwrap::ResultExt;
 use warp_reverse_proxy::Headers;
 
 #[derive(serde::Serialize)]
@@ -24,6 +25,7 @@ impl JepsenBody {
     }
 }
 
+#[allow(dead_code)]
 #[derive(serde::Deserialize, Clone, Debug)]
 struct JepsenResponse {
     issued_at: String,
@@ -32,20 +34,33 @@ struct JepsenResponse {
 }
 
 pub struct JepsenAutheticator {
-    pub aws_config: aws_config::SdkConfig,
-    pub path_prefix: String,
-    pub jepsen_url: String,
-    pub api_name: String,
-    pub client_id: String,
-    pub secret_arn: String,
+    aws_config: aws_config::SdkConfig,
+    path_prefix: String,
+    jepsen_url: String,
+    api_name: String,
+    client_id: String,
+    secret_arn: String,
 }
 impl JepsenAutheticator {
+    pub fn from_jepsen_config(
+        aws_config: &aws_config::SdkConfig,
+        jepsen_config: &global_db::JepsenConfig,
+    ) -> Self {
+        JepsenAutheticator {
+            aws_config: aws_config.clone(),
+            api_name: jepsen_config.api_name.clone(),
+            jepsen_url: jepsen_config.auth_api.clone(),
+            path_prefix: jepsen_config.api_path.clone(),
+            client_id: jepsen_config.client_id.clone(),
+            secret_arn: jepsen_config.secret_name.clone(),
+        }
+    }
+
     pub async fn get_jepsen_token(&self) -> Result<String, String> {
-        log::info!("Getting token {}", &self.secret_arn);
+        info!("Getting token {}", &self.secret_arn);
         let client_secret = aws::get_secret(&self.aws_config, &self.secret_arn)
             .await
-            .unwrap();
-        dbg!(&client_secret);
+            .unwrap_or_log();
         let client = reqwest::Client::new();
         let response = client
             .post(&self.jepsen_url)
@@ -56,7 +71,6 @@ impl JepsenAutheticator {
             ))
             .send()
             .await;
-        dbg!(&response);
         match response {
             Ok(response) => {
                 let response_body = response.json::<JepsenResponse>().await;
@@ -82,7 +96,7 @@ impl ProxyInterceptor for JepsenAutheticator {
         uri.starts_with(&self.path_prefix)
     }
     async fn modify_headers(&self, headers: &mut Headers) {
-        log::info!("Jepsen applies");
+        info!("Jepsen applies");
         if let Ok(token) = self.get_jepsen_token().await {
             headers.insert(
                 "Authorization",

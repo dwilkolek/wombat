@@ -62,6 +62,18 @@ pub async fn migrate(conn: &Connection) {
         current_version = fin(current_version, transaction, "add proxy auth table").await;
     }
 
+    if current_version < 5 {
+        let transaction = conn.transaction().await.unwrap();
+        transaction
+            .execute(
+                "ALTER TABLE features ADD COLUMN user_uuid TEXT",
+                (),
+            )
+            .await
+            .unwrap();
+        current_version = fin(current_version, transaction, "add features table").await;
+    }
+
     info!("database migration complete. version: {}", current_version);
 }
 
@@ -113,6 +125,31 @@ pub async fn is_feature_enabled(db: &Connection, feature: &str) -> bool {
             params![feature],
         )
         .await;
+    match result {
+        Ok(mut rows) => {
+            let first_row = rows.next().await.unwrap();
+            let enabled = first_row
+                .map(|row| row.get::<u64>(0).unwrap())
+                .unwrap_or_default();
+            log::info!("feature {} is enabled: {}", feature, enabled);
+            enabled == 1
+        }
+        Err(_) => {
+            log::info!("checking feature {} failed", feature);
+            false
+        }
+    }
+}
+
+pub async fn is_user_feature_enabled(db: &Connection, feature: &str, user_uuid: &str) -> bool {
+    log::info!("checking user feature, user: {}, feature: {}", user_uuid, feature);
+    let result = db
+        .query(
+            "SELECT enabled FROM features WHERE name = ? AND user_uuid = ?",
+            params![feature, user_uuid],
+        )
+        .await;
+    log::info!("SQL: SELECT enabled FROM features WHERE name = {} AND user_uuid = {}", feature, user_uuid);
     match result {
         Ok(mut rows) => {
             let first_row = rows.next().await.unwrap();

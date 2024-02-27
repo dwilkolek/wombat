@@ -6,6 +6,7 @@
 	export let service: ServiceDetails;
 
 	$: configs = invoke<JepsenConfig[]>('jepsen_configs');
+	$: enabled_feature = invoke<boolean>('is_user_feature_enabled', { feature: 'jepsen_proxy' });
 
 	const start_proxy = async (jepsenConfig: JepsenConfig | null) => {
 		if (service?.env == AwsEnv.PROD) {
@@ -58,16 +59,20 @@
 		</summary>
 		<ul class="shadow menu dropdown-content z-[1] bg-base-100 rounded-box w-52">
 			<li><button on:click|preventDefault={() => start_proxy(null)}>No auth proxy</button></li>
-			{#await configs then configs}
-				{#each configs as config}
-					{#if config.to_app == service.name && config.env == service.env}
-						<li>
-							<button on:click|preventDefault={() => start_proxy(config)}
-								>As {config.client_id}</button
-							>
-						</li>
-					{/if}
-				{/each}
+			{#await enabled_feature then enabled_feature}
+				{#await configs then configs}
+					{#each configs as config}
+						{#if config.to_app == service.name && config.env == service.env}
+							<li>
+								<button 
+								class={`${enabled_feature ? '': 'opacity-50'}`}
+								on:click|preventDefault={() => start_proxy(config)} disabled={!enabled_feature}
+									>As {config.client_id}</button
+								>
+							</li>
+						{/if}
+					{/each}
+				{/await}
 			{/await}
 		</ul>
 	</details>
