@@ -57,7 +57,7 @@
 								goto(`/logged/apps`, { replaceState: true });
 							} catch (e) {
 								console.error(e);
-								buttonText = "Start Again"
+								buttonText = 'Start Again';
 								loading = false;
 							}
 						}}

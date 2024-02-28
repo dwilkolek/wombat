@@ -3,6 +3,7 @@ import { execute } from './error-store';
 import type { AwsEnv, UserConfig } from '../types';
 import { emit, listen } from '@tauri-apps/api/event';
 import type { ProxyEventMessage } from './task-store';
+import { invoke } from '@tauri-apps/api';
 
 const createUserStore = () => {
 	const loggedIn = writable(false);
@@ -42,6 +43,8 @@ const createUserStore = () => {
 				return clone;
 			});
 		}
+		// DO NOT FUCKING REMOVE. PREVENTS FROM PROXY HANGING
+		invoke('ping');
 	});
 
 	const setDbeaverPath = async (path: string) => {
@@ -53,7 +56,6 @@ const createUserStore = () => {
 		const config = await execute<UserConfig>('set_logs_dir_path', { logsDir: path }, true);
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
-
 
 	const login = async (profile: string) => {
 		const config = await execute<UserConfig>('login', { profile });

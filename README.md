@@ -12,6 +12,7 @@
 - All proxies have permanently assigned port
 - Tracking of favorite services
 - Each service is tracked separately - it requires you to manually favorite the same service per environment
+- Jepsen proxy
 
 ## Quirks
 

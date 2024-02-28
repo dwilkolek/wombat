@@ -2,16 +2,16 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { execute } from '$lib/stores/error-store';
 	import type { ProxyEventMessage } from '$lib/stores/task-store';
-	import type { DbInstance } from '$lib/types';
+	import type { RdsInstance } from '$lib/types';
 	export let task: ProxyEventMessage | undefined;
-	export let db: DbInstance;
-    $: port = task?.port ?? $userStore.db_proxy_port_map?.[db.name]?.[db.env] ?? '?';
+	export let db: RdsInstance;
+	$: port = task?.port ?? $userStore.db_proxy_port_map?.[db.name]?.[db.env] ?? '?';
 </script>
 
 {#if task}
 	{#if task.status !== 'STARTING'}
 		<div
-			class="tooltip"
+			class="tooltip tooltip-left"
 			data-tip={$userStore.dbeaver_path
 				? 'Open connection in dbeaver'
 				: 'Install dbeaver to get instant conneciton'}
@@ -22,14 +22,15 @@
 					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
 				}`}
 				on:click={() => {
-					task && execute(
-						'open_dbeaver',
-						{
-							db,
-							port: port
-						},
-						false
-					);
+					task &&
+						execute(
+							'open_dbeaver',
+							{
+								db,
+								port: port
+							},
+							false
+						);
 				}}
 			>
 				{port}

@@ -10,6 +10,6 @@
 	<div class="flex gap-2 items-center">
 		<span class="italic text-sm">Database {task.env}:</span>
 
-		{#if db}<DbTaskStatus task={task} db={db}/>{/if}
+		{#if db}<DbTaskStatus {task} {db} />{/if}
 	</div>
 {/await}
