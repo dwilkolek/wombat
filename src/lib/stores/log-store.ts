@@ -40,9 +40,9 @@ function transformLog(newLog: LogEntry) {
 		isString = true;
 	}
 	let app = '-';
-	const streamParts = newLog.log_stream_name.split('/')
+	const streamParts = newLog.log_stream_name.split('/');
 	if (streamParts.length > 0) {
-		app  = streamParts[1]
+		app = streamParts[1];
 	}
 	if (isString) {
 		const level = (newLog.message.match(/(INFO|WARN|ERROR|DEBUG|TRACE)/)?.[0] ??
@@ -199,7 +199,7 @@ const createLogStore = () => {
 			};
 		});
 	};
-	
+
 	const abort = (reason: string) => {
 		invoke('abort_find_logs', { reason });
 		storeState.update((state) => {

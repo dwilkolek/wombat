@@ -7,7 +7,6 @@ export enum AwsEnv {
 	PROD = 'PROD'
 }
 
-
 export type Cluster = {
 	name: string;
 	arn: string;
@@ -39,6 +38,7 @@ export type ServiceDetails = {
 	version: string;
 	cluster_arn: string;
 	env: AwsEnv;
+	timestamp: number;
 };
 
 export type Endpoint = {
@@ -46,7 +46,7 @@ export type Endpoint = {
 	port: number;
 };
 
-export type DbInstance = {
+export type RdsInstance = {
 	name: string;
 	engine: string;
 	engine_version: string;
@@ -72,4 +72,21 @@ export type MonitoringConfig = {
 export type BError = {
 	message: string;
 	command: string;
+};
+
+
+export type ProxyAuthConfig = {
+     to_app: string,
+     env: string,
+
+     auth_type: string,
+     api_path: string,
+
+     jepsen_auth_api: string | null | undefined,
+     jepsen_api_name: string | null | undefined,
+     jepsen_client_id: string | null | undefined,
+
+     basic_user: string | null | undefined,
+
+     secret_name: string,
 };

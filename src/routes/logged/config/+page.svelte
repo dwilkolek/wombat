@@ -78,11 +78,8 @@
 					</div>
 				</div>
 
-				<div class="flex flex-col pl-2">
-					<h4 class="text-lg">Wombat logs</h4>
-					<div class="pl-1 flex">Windows: <pre class="pl-1">%userprofile%\AppData\Roaming\eu.wilkolek.wombat\logs</pre></div>
-					<div class="pl-1 flex">MacOS: <pre class="pl-1">~/Library/Logs/eu.wilkolek.wombat</pre></div>
-					<div class="pl-1 flex">Linux: <pre class="pl-1">~/.config/eu.wilkolek.wombat\logs</pre></div>
+				<div class="flex pl-2">
+					<h4 class="text-lg">Wombat logs: </h4><pre class="pl-1">~/.wombat/logs</pre>
 				</div>
 			</div>
 		</div>

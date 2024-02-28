@@ -34,7 +34,12 @@
 	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
-
+	type LogFilter = {
+		filter: string;
+		services: string[];
+		label: string;
+	};
+	$: filters = invoke<LogFilter[]>('log_filters');
 </script>
 
 <svelte:head>
@@ -105,22 +110,20 @@
 				>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				<div class="flex flex-wrap gap-2">
-					{#if $selectedServices.some((s) => ['rome', 'dvmb'].includes(s.name))}
-						<button
-							class="btn btn-active btn-secondary btn-xs"
-							on:click={() => {
-								filterString.set(`{ $.level = "ERROR" }`);
-							}}>Only Errors</button
-						>
-						<button
-							class="btn btn-active btn-secondary btn-xs"
-							on:click={() => {
-								filterString.set(`{ $.mdc.traceId = "TRACE_ID_UUID" }`);
-							}}>By Trace</button
-						>
-					{/if}
-				</div>
+				{#await filters}
+					<div>Loading filters...</div>
+				{:then filters}
+					{#each filters as filter}
+						{#if filter.services.some((ls) => $selectedServices.some((ecs) => ecs.name == ls))}
+							<button
+								class="btn btn-active btn-secondary btn-xs"
+								on:click={() => {
+									filterString.set(filter.filter);
+								}}>{filter.label}</button
+							>
+						{/if}
+					{/each}
+				{/await}
 			</div>
 		</div>
 		<div class="flex gap-2">
@@ -263,9 +266,9 @@
 			class={`progress w-full ${$storeState.searchError ? 'progress-error' : ''}`}
 		></progress>{/if}
 	{#if !$storeState.isLookingForLogs}<progress
-			class={`progress w-full 
-				${$storeState.searchStatus == 'aborted' ? 'progress-warning' : ''} 
-				${$storeState.searchStatus == 'success' ? 'progress-success' : ''} 
+			class={`progress w-full
+				${$storeState.searchStatus == 'aborted' ? 'progress-warning' : ''}
+				${$storeState.searchStatus == 'success' ? 'progress-success' : ''}
 				${$storeState.searchStatus == 'error' ? 'progress-error' : ''}`}
 			value="100"
 			max="100"

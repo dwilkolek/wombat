@@ -4,7 +4,7 @@
 	export let database_arn: String;
 </script>
 
-<div class="tooltip flex" data-tip="Stop proxy to database">
+<div class="tooltip tooltip-left flex" data-tip="Stop proxy to database">
 	<button
 		on:click={async () => {
 			console.log('stopping ', database_arn);

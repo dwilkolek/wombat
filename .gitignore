@@ -12,3 +12,8 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 NOTES.md
+
+local.db
+local.db-shm
+local.db-wal
+client_wal_index

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import dbeaver from '$lib/images/dbeaver-head.png';
-	import { AwsEnv, type DbInstance } from '$lib/types';
+	import { AwsEnv, type RdsInstance } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';
 	import { envStore } from '$lib/stores/env-store';
 	import { taskStore } from '$lib/stores/task-store';
@@ -18,7 +18,7 @@
 
 	$: databases = dbStore.getDatabases($envStore);
 
-	$: matchesFilter = (databse: DbInstance): boolean => {
+	$: matchesFilter = (databse: RdsInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
 	let envs = Object.keys(AwsEnv);

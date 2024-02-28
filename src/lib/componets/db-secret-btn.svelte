@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { writeText } from '@tauri-apps/api/clipboard';
-	import type { DatabaseCredentials, DbInstance } from '$lib/types';
+	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
 	import { ask, message } from '@tauri-apps/api/dialog';
 	import { invoke } from '@tauri-apps/api/tauri';
-	export let database: DbInstance | undefined;
+	export let database: RdsInstance | undefined;
 
 	const credentialsHandler = async () => {
 		let answer = await ask(
@@ -26,14 +26,17 @@
 					await writeText(credentials.password);
 				}
 			} catch (e) {
-				message(`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?\n\nhttps://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store`, { title: 'Ooops!', type: 'error' });
+				message(
+					`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?\n\nhttps://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store`,
+					{ title: 'Ooops!', type: 'error' }
+				);
 			}
 		}
 	};
 </script>
 
 {#if database}
-	<div class="tooltip" data-tip="Search for secret">
+	<div class="tooltip tooltip-left" data-tip="Search for secret">
 		<button>
 			<!-- svelte-ignore a11y-click-events-have-key-events -->
 			<!-- svelte-ignore a11y-no-static-element-interactions -->
