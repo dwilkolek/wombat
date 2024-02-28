@@ -60,11 +60,14 @@ impl RdsResolver {
             info!("Returning databases from cache");
             return rdses.clone();
         }
-
+        info!("Fetching rds from aws");
         let fresh_databases = aws::databases(config).await;
         store_databases(&conn, &fresh_databases).await;
 
-        info!("Returning databases from aws and persisting");
+        info!(
+            "Returning databases from aws and persisting, count: {}",
+            fresh_databases.len()
+        );
         return fresh_databases;
     }
 

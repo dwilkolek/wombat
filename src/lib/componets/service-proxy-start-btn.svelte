@@ -1,12 +1,10 @@
 <script lang="ts">
+	import { proxyAuthConfigsStore } from '$lib/stores/proxy-auth-configs-store';
 	import { AwsEnv, type ProxyAuthConfig, type ServiceDetails } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let service: ServiceDetails;
-
-	$: configs = invoke<ProxyAuthConfig[]>('proxy_auth_configs');
-	$: enabled_feature = invoke<boolean>('is_user_feature_enabled', { feature: 'beta' });
 
 	const start_proxy = async (proxyAuthConfig: ProxyAuthConfig | null) => {
 		if (service?.env == AwsEnv.PROD) {
@@ -28,8 +26,8 @@
 </script>
 
 <div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
-	<details class="dropdown">
-		<summary class="flex flex-row gap-1 items-center cursor-pointer">
+	<div class="dropdown">
+		<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">
 			<div class="w-5 h-5 relative">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
@@ -56,24 +54,18 @@
 					/>
 				</svg>
 			</div>
-		</summary>
-		<ul class="shadow menu dropdown-content z-[1] bg-base-100 rounded-box w-52">
+		</div>
+		<ul class="shadow menu dropdown-content z-[1] menu bg-base-100 rounded-box w-52">
 			<li><button on:click|preventDefault={() => start_proxy(null)}>No auth proxy</button></li>
-			{#await enabled_feature then enabled_feature}
-				{#await configs then configs}
-					{#each configs as config}
-						{#if config.to_app == service.name && config.env == service.env}
-							<li>
-								<button 
-								class={`${enabled_feature ? '': 'opacity-50'}`}
-								on:click|preventDefault={() => start_proxy(config)} disabled={!enabled_feature}
-									>{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
-								>
-							</li>
-						{/if}
-					{/each}
-				{/await}
-			{/await}
+			{#each $proxyAuthConfigsStore as config}
+				{#if config.to_app == service.name && config.env == service.env}
+					<li>
+						<button on:click|preventDefault={() => start_proxy(config)}
+							>{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
+						>
+					</li>
+				{/if}
+			{/each}
 		</ul>
-	</details>
+	</div>
 </div>

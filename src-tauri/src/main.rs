@@ -168,6 +168,8 @@ async fn login(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+
+    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<UserConfig, BError> {
     {
         let mut app_state = app_state.0.lock().await;
@@ -178,6 +180,13 @@ async fn login(
                 .load()
                 .await,
         );
+    }
+
+    let db = database.0.lock().await;
+    let _ = db.sync().await;
+    let conn = db.connect().unwrap();
+    if !global_db::is_feature_enabled(&conn, "wombat").await {
+        return Err(BError::new("login", "Not allowed to start."));
     }
 
     let _ = window.emit("message", "Authenticating...");
@@ -1291,8 +1300,6 @@ async fn initialize_database_connection() -> Database {
             .to_string()
     });
 
-    info!("Database {}", db_file);
-
     let auth_token = env::var("TURSO_AUTH_TOKEN").unwrap_or_else(|_| {
         debug!("Using default token since TURSO_AUTH_TOKEN was not set");
         "%%TURSO_AUTH_TOKEN%%".to_string()
@@ -1304,6 +1311,8 @@ async fn initialize_database_connection() -> Database {
             "%%TURSO_SYNC_URL%%".to_string()
         })
         .replace("libsql", "https");
+
+    //  info!("Database file={}, remote={}", &db_file, &url);
 
     let db = libsql::Builder::new_remote_replica(db_file, url, auth_token)
         .periodic_sync(Duration::from_secs(3600))
@@ -1322,10 +1331,6 @@ async fn initialize_database_connection() -> Database {
     info!("Database synced");
     global_db::migrate(&conn).await;
     let _ = db.sync().await.unwrap();
-
-    if !global_db::is_feature_enabled(&conn, "wombat").await {
-        panic!("Wombat is disabled")
-    }
 
     return db;
 }

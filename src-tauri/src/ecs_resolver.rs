@@ -64,11 +64,14 @@ impl EcsResolver {
             info!("Returning services from cache");
             return ecses.clone();
         }
-
+        info!("Fetching services from aws");
         let fresh_services = aws::services(config, clusters).await;
         store_services(&conn, &fresh_services).await;
 
-        info!("Returning services from aws and persisting");
+        info!(
+            "Returning services from aws and persisting, count: {}",
+            fresh_services.len()
+        );
         return fresh_services;
     }
 

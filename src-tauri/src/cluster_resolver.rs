@@ -55,11 +55,14 @@ impl ClusterResolver {
             info!("Returning clusters from cache");
             return rdses.clone();
         }
-
+        info!("Resolving clusters from aws");
         let fresh_clusters = aws::clusters(config).await;
         store_clusters(&conn, &fresh_clusters).await;
 
-        info!("Returning clusters from aws and persisting");
+        info!(
+            "Returning clusters from aws and persisting, count: {}",
+            fresh_clusters.len()
+        );
         return fresh_clusters;
     }
 

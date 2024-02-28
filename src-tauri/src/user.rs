@@ -31,7 +31,7 @@ pub struct UserConfig {
 impl UserConfig {
     pub fn default() -> UserConfig {
         let config_file = UserConfig::config_path();
-
+        let mut restored = false;
         if !config_file.exists() {
             let _ = fs::create_dir_all(wombat_dir());
             let old_config = home::home_dir()
@@ -41,6 +41,7 @@ impl UserConfig {
 
             if old_config.exists() {
                 info!("Migrating old config");
+                restored = true;
                 let _ = fs::copy(&old_config, &config_file);
                 let _ = fs::remove_file(&old_config);
             }
@@ -67,7 +68,7 @@ impl UserConfig {
             user_config.dbeaver_path =
                 UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
         }
-        if user_config.logs_dir.is_none() {
+        if user_config.logs_dir.is_none() || restored {
             user_config.logs_dir = Some(UserConfig::logs_path());
         }
         if user_config.ssm_role.is_none() {

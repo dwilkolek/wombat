@@ -15,32 +15,36 @@ type ServiceDetailsPayload = {
 
 const createServiceDetailsStore = () => {
 	const innerStore = writable<ServiceDetailsPayload[]>([]);
-
-	return { ...innerStore };
+	const refreshOne = (app: string) => {
+		innerStore.update((old) => {
+			return old.filter((o) => o.app !== app);
+		});
+	}
+	return { ...innerStore, refreshOne };
 };
 
 listen<ServiceDetailsPayload>('new-service-details', (data) => {
 	setTimeout(() => {
 		delete to[data.payload.app];
 	}, 200);
-	serviceDetailsStore.update((old) => {
+	allServiceDetailsStore.update((old) => {
 		return [...old.filter((o) => o.app !== data.payload['app']), { ...data.payload }];
 	});
 });
 listen('cache-refreshed', () => {
-	serviceDetailsStore.set([]);
+	allServiceDetailsStore.set([]);
 });
 listen('logged-out', () => {
-	serviceDetailsStore.set([]);
+	allServiceDetailsStore.set([]);
 });
-const serviceDetailsStore = createServiceDetailsStore();
+export const allServiceDetailsStore = createServiceDetailsStore();
 let refreshTimeout: number | undefined;
 const refresh = () => {
 	console.log('refresh');
 	clearTimeout(refreshTimeout);
 	refreshTimeout = setTimeout(
 		() => {
-			const apps = get(serviceDetailsStore);
+			const apps = get(allServiceDetailsStore);
 			apps.forEach((app) => {
 				invoke('service_details', { app: app.app });
 			});
@@ -53,7 +57,7 @@ refresh();
 
 const to: { [key: string]: Promise<void> } = {};
 export const serviceDetailStore = (app: string) =>
-	derived([serviceDetailsStore], (stores) => {
+	derived([allServiceDetailsStore], (stores) => {
 		const apps = stores[0];
 		const details = apps.find((a) => a.app === app);
 		if (!details) {
