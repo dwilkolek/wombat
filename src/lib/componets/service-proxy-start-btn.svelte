@@ -55,13 +55,17 @@
 				</svg>
 			</div>
 		</div>
-		<ul class="shadow menu dropdown-content z-[1] menu bg-base-100 rounded-box w-52">
+
+		<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+		<ul tabindex="0" class="shadow menu dropdown-content z-[1] menu bg-base-100 rounded-box w-52">
 			<li><button on:click|preventDefault={() => start_proxy(null)}>No auth proxy</button></li>
 			{#each $proxyAuthConfigsStore as config}
 				{#if config.to_app == service.name && config.env == service.env}
 					<li>
-						<button on:click|preventDefault={() => start_proxy(config)}
-							>{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
+						<button on:click|preventDefault={() => {
+							console.log('click')
+							start_proxy(config)
+						}}>{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
 						>
 					</li>
 				{/if}
