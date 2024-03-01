@@ -10,16 +10,18 @@ pub struct ClusterResolver {
 }
 
 impl ClusterResolver {
-    pub async fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
+    pub fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
+        ClusterResolver { db }
+    }
+    pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
         {
             let db = db.read().await;
             let conn = db.connect().unwrap();
             ClusterResolver::migrate(&conn).await;
         }
 
-        ClusterResolver { db }
+        self.db = db;
     }
-
     async fn migrate(conn: &libsql::Connection) {
         let version = cache_db::get_cache_version(conn, CACHE_NAME).await;
 
