@@ -10,22 +10,27 @@ pub struct RdsResolver {
 }
 
 impl RdsResolver {
-    pub async fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
+    pub fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
+        RdsResolver { db }
+    }
+    pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
         {
+            info!("initializing rds resolver, migratiob");
             let db = db.read().await;
             let conn = db.connect().unwrap();
             RdsResolver::migrate(&conn).await;
         }
 
-        RdsResolver { db }
+        self.db = db;
     }
 
     async fn migrate(conn: &libsql::Connection) {
         let version = cache_db::get_cache_version(conn, CACHE_NAME).await;
-
+        info!("Version {}", &version);
         if version < 1 {
-            conn.execute(
-                "CREATE TABLE IF NOT EXISTS databases(
+            let result = conn
+                .execute(
+                    "CREATE TABLE IF NOT EXISTS databases(
                             arn TEXT PRIMARY KEY NOT NULL,
                             name TEXT NOT NULL,
                             engine TEXT NOT NULL,
@@ -35,10 +40,10 @@ impl RdsResolver {
                             env TEXT NOT NULL,
                             appname_tag TEXT NOT NULL
                         )",
-                (),
-            )
-            .await
-            .unwrap();
+                    (),
+                )
+                .await;
+            info!("Result {:?}", &result);
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
     }

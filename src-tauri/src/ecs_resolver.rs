@@ -10,14 +10,17 @@ pub struct EcsResolver {
 }
 
 impl EcsResolver {
-    pub async fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
+    pub fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
+        EcsResolver { db }
+    }
+    pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
         {
             let db = db.read().await;
             let conn = db.connect().unwrap();
             EcsResolver::migrate(&conn).await;
         }
 
-        EcsResolver { db }
+        self.db = db;
     }
 
     async fn migrate(conn: &libsql::Connection) {

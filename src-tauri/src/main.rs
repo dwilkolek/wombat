@@ -138,8 +138,7 @@ async fn ping() -> Result<(), ()> {
 }
 
 #[tauri::command]
-async fn is_db_synchronized(
-    database: tauri::State<'_, DatabaseInstance>,) -> Result<bool, ()> {
+async fn is_db_synchronized(database: tauri::State<'_, DatabaseInstance>) -> Result<bool, ()> {
     Ok(database.0.read().await.synchronized)
 }
 
@@ -215,9 +214,12 @@ async fn login(
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
 
+    let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
+
     let _ = window.emit("message", "Fetching databases...");
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
+        rds_resolver_instance.init(cache_db.clone()).await;
         let databases = rds_resolver_instance
             .databases(&authorized_user.sdk_config)
             .await;
@@ -235,6 +237,7 @@ async fn login(
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
+        cluster_resolver_instance.init(cache_db.clone()).await;
         clusters = cluster_resolver_instance
             .clusters(&authorized_user.sdk_config)
             .await;
@@ -251,6 +254,7 @@ async fn login(
     let _ = window.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
+        ecs_resolver_instance.init(cache_db.clone()).await;
         let services = ecs_resolver_instance
             .services(&authorized_user.sdk_config, clusters)
             .await;
@@ -360,6 +364,7 @@ async fn set_dbeaver_path(
     .await;
     user_config.set_dbeaver_path(dbeaver_path)
 }
+
 #[tauri::command]
 async fn set_logs_dir_path(
     logs_dir: &str,
@@ -1343,10 +1348,10 @@ async fn initialize_axiom(user: &UserConfig) -> AxiomClientState {
     };
 }
 
-async fn initialize_cache_db() -> libsql::Database {
+async fn initialize_cache_db(profile: &str) -> libsql::Database {
     return libsql::Builder::new_local(
         user::wombat_dir()
-            .join("cache.db")
+            .join(format!("cache-{}.db", profile))
             .to_str()
             .unwrap_or_log()
             .to_string(),
@@ -1381,7 +1386,7 @@ async fn main() {
         }
     };
 
-    let cache_db = Arc::new(RwLock::new(initialize_cache_db().await));
+    let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
 
     let user = UserConfig::default();
     tauri::Builder::default()
@@ -1399,15 +1404,17 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(DatabaseInstance(Arc::new(RwLock::new(global_db::GlobDatabase::new(initialize_database_connection().await)))))
+        .manage(DatabaseInstance(Arc::new(RwLock::new(
+            global_db::GlobDatabase::new(initialize_database_connection().await),
+        ))))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
-            RdsResolver::new(cache_db.clone()).await,
+            RdsResolver::new(cache_db.clone()),
         ))))
         .manage(ClusterResolverInstance(Arc::new(RwLock::new(
-            ClusterResolver::new(cache_db.clone()).await,
+            ClusterResolver::new(cache_db.clone()),
         ))))
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
-            EcsResolver::new(cache_db.clone()).await,
+            EcsResolver::new(cache_db.clone()),
         ))))
         .invoke_handler(tauri::generate_handler![
             user_config,
@@ -1463,8 +1470,6 @@ struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 
 struct DatabaseInstance(Arc<RwLock<global_db::GlobDatabase>>);
-
-
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,

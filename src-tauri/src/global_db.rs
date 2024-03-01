@@ -3,7 +3,6 @@ use std::time::Duration;
 use libsql::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-
 pub struct GlobDatabase {
     db: std::sync::Arc<tokio::sync::RwLock<libsql::Database>>,
     pub synchronized: bool,
@@ -21,11 +20,11 @@ impl GlobDatabase {
         self.synchronized = true;
         let (tx, rx) = tokio::sync::oneshot::channel();
         let db = self.db.clone();
-        let handler = tokio::task::spawn(async move{
+        let handler = tokio::task::spawn(async move {
             let db = db.read().await;
             let sync_result = db.sync().await;
             log::info!("sync result: {:?}", sync_result);
-            
+
             tx.send(()).unwrap();
         });
         if let Err(_) = tokio::time::timeout(Duration::from_millis(10000), rx).await {
@@ -36,12 +35,10 @@ impl GlobDatabase {
     }
 
     pub async fn get_connection(&self) -> Connection {
-        let db =self.db.read().await;
+        let db = self.db.read().await;
         db.connect().unwrap()
     }
 }
-
-
 
 pub async fn is_feature_enabled(db: &GlobDatabase, feature: &str) -> bool {
     log::info!("checking feature {}", feature);
