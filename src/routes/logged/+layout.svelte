@@ -54,9 +54,18 @@
 		</ul>
 	</div>
 
-	<div class="flex gap-4">
+	<div class="flex items-center gap-4">
 		{#await userConfig then { last_used_profile, id }}
-			<h6>{last_used_profile}</h6>
+			<div class="flex items-center gap-2">
+				<span>{last_used_profile}</span>
+			</div>
+		{/await}
+		{#await invoke('is_db_synchronized') then db_sync}
+			{#if db_sync}
+				<div class="bg-lime-500 min-w-3.5 min-h-3.5 rounded rounded-full" />
+			{:else}
+				<div class="bg-rose-500 min-w-3.5 min-h-3.5 rounded rounded-full" />
+			{/if}
 		{/await}
 		<button
 			on:click={async () => {
