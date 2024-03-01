@@ -7,7 +7,7 @@
 	import { execute } from '$lib/stores/error-store';
 	import StarIcon from '$lib/componets/star-icon.svelte';
 	import DbSecretBtn from '$lib/componets/db-secret-btn.svelte';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { ask } from '@tauri-apps/plugin-dialog';
 	import { dbStore } from '$lib/stores/db-store';
 
 	let arnFilter = '';
@@ -125,7 +125,7 @@
 														title: 'Access to PRODUCTION database.',
 														okLabel: 'Proceed',
 														cancelLabel: 'Abort',
-														type: 'warning'
+														kind: 'warning'
 													}
 												);
 												if (!response) {

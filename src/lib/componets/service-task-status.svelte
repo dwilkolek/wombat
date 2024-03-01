@@ -2,7 +2,7 @@
 	import type { ProxyEventMessage } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { EcsService } from '$lib/types';
-	import { open } from '@tauri-apps/api/shell';
+	import { open } from '@tauri-apps/plugin-shell';
 
 	export let task: ProxyEventMessage | undefined;
 	export let service: EcsService;

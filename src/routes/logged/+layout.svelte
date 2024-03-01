@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/images/128x128.png';
 	import { page } from '$app/stores';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';
@@ -54,18 +54,9 @@
 		</ul>
 	</div>
 
-	<div class="flex items-center gap-4">
+	<div class="flex gap-4">
 		{#await userConfig then { last_used_profile, id }}
-			<div class="flex items-center gap-2">
-				<span>{last_used_profile}</span>
-			</div>
-		{/await}
-		{#await invoke('is_db_synchronized') then db_sync}
-			{#if db_sync}
-				<div class="bg-lime-500 min-w-3.5 min-h-3.5 rounded rounded-full" />
-			{:else}
-				<div class="bg-rose-500 min-w-3.5 min-h-3.5 rounded rounded-full" />
-			{/if}
+			<h6>{last_used_profile}</h6>
 		{/await}
 		<button
 			on:click={async () => {

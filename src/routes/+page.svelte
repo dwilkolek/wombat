@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
-	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
-	import { fetch } from '@tauri-apps/api/http';
 	import { listen } from '@tauri-apps/api/event';
-	import { exit } from '@tauri-apps/api/process';
+	import { exit } from '@tauri-apps/plugin-process';
+	import { fetch } from '@tauri-apps/plugin-http';
+	import { open } from '@tauri-apps/plugin-shell';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});

@@ -14,7 +14,12 @@
         "bump-version": "node bump-version.js"
     },
     "dependencies": {
-        "@tauri-apps/api": "1.5.3",
+        "@tauri-apps/api": "^2.0.0-beta.1",
+        "@tauri-apps/plugin-clipboard-manager": "^2.0.0-beta.1",
+        "@tauri-apps/plugin-dialog": "^2.0.0-beta.1",
+        "@tauri-apps/plugin-http": "^2.0.0-beta.1",
+        "@tauri-apps/plugin-process": "^2.0.0-beta.1",
+        "@tauri-apps/plugin-shell": "^2.0.0-beta.1",
         "@zerodevx/svelte-json-view": "1.0.9",
         "daisyui": "4.7.2",
         "date-fns": "3.3.1"
@@ -25,7 +30,7 @@
         "@sveltejs/adapter-auto": "3.1.1",
         "@sveltejs/adapter-static": "3.0.1",
         "@sveltejs/kit": "2.5.0",
-        "@tauri-apps/cli": "1.5.10",
+        "@tauri-apps/cli": "^2.0.0-beta.6",
         "@types/cookie": "0.6.0",
         "@types/gtag.js": "0.0.19",
         "@typescript-eslint/eslint-plugin": "7.0.2",

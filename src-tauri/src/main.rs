@@ -22,13 +22,12 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
-use tauri::Window;
+use tauri::{AppHandle, Manager};
 use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 use wait_timeout::ChildExt;
-
 mod aws;
 mod cache_db;
 mod cluster_resolver;
@@ -87,7 +86,7 @@ struct AuthorizedUser {
 const CHECK_AUTH_AFTER: i64 = 45 * 60 * 1000; // every 45 minutes.
 
 async fn get_authorized(
-    window: &Window,
+    app_handle: &AppHandle,
     app_state: &Arc<Mutex<AppContext>>,
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<AuthorizedUser, String> {
@@ -105,7 +104,7 @@ async fn get_authorized(
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
                 if app_ctx.no_of_failed_logins == 2 {
-                    let _ = window.emit("KILL_ME", "".to_owned());
+                    let _ = app_handle.emit("KILL_ME", "".to_owned());
                 }
                 return Err("Authentication failed".to_owned());
             }
@@ -165,7 +164,7 @@ async fn favorite(
 #[tauri::command]
 async fn login(
     profile: &str,
-    window: Window,
+    app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
@@ -187,8 +186,8 @@ async fn login(
         );
     }
 
-    let _ = window.emit("message", "Authenticating...");
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let _ = app_handle.emit("message", "Authenticating...");
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("login", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -202,7 +201,7 @@ async fn login(
     )
     .await;
 
-    let _ = window.emit("message", "Syncing global state...");
+    let _ = app_handle.emit("message", "Syncing global state...");
 
     let mut db = database.0.write().await;
     db.sync().await;
@@ -210,13 +209,13 @@ async fn login(
         return Err(BError::new("login", "Not allowed to start."));
     }
 
-    let _ = window.emit("message", "Updating profile...");
+    let _ = app_handle.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
 
-    let _ = window.emit("message", "Fetching databases...");
+    let _ = app_handle.emit("message", "Fetching databases...");
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
         rds_resolver_instance.init(cache_db.clone()).await;
@@ -233,7 +232,7 @@ async fn login(
         .await;
     }
 
-    let _ = window.emit("message", "Fetching clusters...");
+    let _ = app_handle.emit("message", "Fetching clusters...");
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
@@ -251,7 +250,7 @@ async fn login(
         .await;
     }
 
-    let _ = window.emit("message", "Fetching services...");
+    let _ = app_handle.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
         ecs_resolver_instance.init(cache_db.clone()).await;
@@ -277,7 +276,7 @@ async fn login(
     let cluster_resolver_instance = Arc::clone(&cluster_resolver_instance.0);
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
 
-    let _ = window.emit("message", "Setting refresh jobs...");
+    let _ = app_handle.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(3600));
         let initial_wait = tokio::time::sleep(Duration::from_secs(10));
@@ -342,7 +341,7 @@ async fn login(
         }
     }));
 
-    let _ = window.emit("message", "Success!");
+    let _ = app_handle.emit("message", "Success!");
 
     Ok(user_config.clone())
 }
@@ -427,13 +426,13 @@ async fn db_credentials(
 
 #[tauri::command]
 async fn credentials(
-    window: Window,
+    app_handle: AppHandle,
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<DbSecret, BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -466,13 +465,13 @@ async fn credentials(
 
 #[tauri::command]
 async fn stop_job(
-    window: Window,
+    app_handle: AppHandle,
     arn: &str,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("stop_job", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -589,23 +588,23 @@ async fn logout(
 }
 
 struct WindowNotifier {
-    window: Window,
+    app_handle: AppHandle,
 }
 
 impl aws::OnLogFound for WindowNotifier {
     fn notify(&mut self, logs: Vec<aws::LogEntry>) {
-        let _ = self.window.emit("new-log-found", logs);
+        let _ = self.app_handle.emit("new-log-found", logs);
     }
     fn success(&mut self) {
-        let _ = self.window.emit("find-logs-success", ());
+        let _ = self.app_handle.emit("find-logs-success", ());
     }
     fn error(&mut self, msg: String) {
-        let _ = self.window.emit("find-logs-error", msg);
+        let _ = self.app_handle.emit("find-logs-error", msg);
     }
 }
 
 struct FileNotifier {
-    window: Window,
+    app_handle: AppHandle,
     writer: BufWriter<fs::File>,
     filename_location: String,
 }
@@ -623,7 +622,7 @@ impl aws::OnLogFound for FileNotifier {
         if let Some(log) = logs.first() {
             let now = SystemTime::now();
             let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-            let _ = self.window.emit(
+            let _ = self.app_handle.emit(
                 "new-log-found",
                 vec![LogEntry {
                     log_stream_name: log.log_stream_name.to_owned(),
@@ -637,7 +636,7 @@ impl aws::OnLogFound for FileNotifier {
     fn success(&mut self) {
         let now = SystemTime::now();
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-        let _ = self.window.emit(
+        let _ = self.app_handle.emit(
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
@@ -646,13 +645,13 @@ impl aws::OnLogFound for FileNotifier {
                 message: format!("TRACE File: {}", self.filename_location),
             }],
         );
-        let _ = self.window.emit("find-logs-success", ());
+        let _ = self.app_handle.emit("find-logs-success", ());
         let _ = self.writer.flush();
     }
     fn error(&mut self, msg: String) {
         let now = SystemTime::now();
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-        let _ = self.window.emit(
+        let _ = self.app_handle.emit(
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
@@ -661,14 +660,14 @@ impl aws::OnLogFound for FileNotifier {
                 message: format!("ERROR {}", msg),
             }],
         );
-        let _ = self.window.emit("find-logs-error", msg);
+        let _ = self.app_handle.emit("find-logs-error", msg);
         let _ = self.writer.flush();
     }
 }
 
 #[tauri::command]
 async fn find_logs(
-    window: Window,
+    app_handle: AppHandle,
     apps: Vec<String>,
     env: Env,
     start: i64,
@@ -680,7 +679,7 @@ async fn find_logs(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("find_logs", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -739,7 +738,7 @@ async fn find_logs(
                 false => Some(filter),
             },
             match &filename {
-                None => Arc::new(Mutex::new(WindowNotifier { window })),
+                None => Arc::new(Mutex::new(WindowNotifier { app_handle })),
                 Some(filename) => {
                     let now = SystemTime::now();
                     let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
@@ -752,7 +751,7 @@ async fn find_logs(
                     let file = fs::File::create(pathbuf.clone()).unwrap_or_log();
 
                     Arc::new(Mutex::new(FileNotifier {
-                        window,
+                        app_handle,
                         writer: BufWriter::new(file),
                         filename_location: format!(
                             "{}",
@@ -846,7 +845,7 @@ async fn databases(
 
 #[tauri::command]
 async fn discover(
-    window: Window,
+    app_handle: AppHandle,
     name: &str,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -854,7 +853,7 @@ async fn discover(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
 ) -> Result<Vec<String>, BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("discover", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -919,21 +918,20 @@ async fn discover(
 
 #[tauri::command]
 async fn start_db_proxy(
-    window: Window,
+    app_handle: AppHandle,
     db: aws::RdsInstance,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_db_proxy", msg)),
         Ok(authorized_user) => authorized_user,
     };
 
     let local_port = user_config.0.lock().await.get_db_port(&db.arn);
-    window
-        .emit(
+    app_handle.emit(
             "proxy-starting",
             ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone(), None),
         )
@@ -955,7 +953,7 @@ async fn start_db_proxy(
 
     proxy::start_aws_ssm_proxy(
         db.arn,
-        window,
+        app_handle,
         bastion.instance_id,
         authorized_user.profile.to_owned(),
         db.endpoint.address,
@@ -973,7 +971,7 @@ async fn start_db_proxy(
 
 #[tauri::command]
 async fn refresh_cache(
-    window: Window,
+    app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
@@ -982,7 +980,7 @@ async fn refresh_cache(
 
     database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("refresh_cache", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -1018,20 +1016,20 @@ async fn refresh_cache(
     let mut db = database.0.write().await;
     db.sync().await;
 
-    window.emit("cache-refreshed", ()).unwrap_or_log();
+    app_handle.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
 }
 
 #[tauri::command]
 async fn service_details(
-    window: Window,
+    app_handle: AppHandle,
     app: String,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("service_details", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -1073,8 +1071,7 @@ async fn service_details(
         let services: Vec<ServiceDetails> =
             aws::service_details(authorized_user.sdk_config, service_arns).await;
 
-        window
-            .emit(
+            app_handle.emit(
                 "new-service-details",
                 ServiceDetailsPayload {
                     app,
@@ -1090,7 +1087,7 @@ async fn service_details(
 
 #[tauri::command]
 async fn start_service_proxy(
-    window: Window,
+    app_handle: AppHandle,
     service: aws::EcsService,
     proxy_auth_config: Option<global_db::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1101,8 +1098,7 @@ async fn start_service_proxy(
     let local_port = user_config.0.lock().await.get_service_port(&service.arn);
 
     let aws_local_port = local_port + 10000;
-    window
-        .emit(
+    app_handle.emit(
             "proxy-starting",
             ProxyEventMessage::new(
                 service.arn.clone(),
@@ -1113,7 +1109,7 @@ async fn start_service_proxy(
         )
         .unwrap_or_log();
 
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_service_proxy", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -1175,7 +1171,7 @@ async fn start_service_proxy(
 
     proxy::start_aws_ssm_proxy(
         service.arn,
-        window,
+        app_handle,
         bastion.instance_id,
         authorized_user.profile.clone(),
         host,
@@ -1227,7 +1223,7 @@ async fn is_user_feature_enabled(
 
 #[tauri::command]
 async fn open_dbeaver(
-    window: Window,
+    app_handle: AppHandle,
     db: aws::RdsInstance,
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1248,7 +1244,7 @@ async fn open_dbeaver(
         }
     }
 
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("open_dbeaver", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -1390,6 +1386,11 @@ async fn main() {
 
     let user = UserConfig::default();
     tauri::Builder::default()
+        .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(initialize_axiom(&user).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
