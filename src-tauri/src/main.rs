@@ -1464,7 +1464,7 @@ struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);
 
 struct UserConfigState(Arc<Mutex<UserConfig>>);
 
-struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
+pub struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
 struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
