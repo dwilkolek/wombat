@@ -1,128 +1,52 @@
-use libsql::{params, Connection, Transaction};
-use log::info;
+use std::time::Duration;
+
+use libsql::{params, Connection};
 use serde::{Deserialize, Serialize};
 
-pub async fn migrate(conn: &Connection) {
-    let mut current_version = get_db_version(conn).await;
-    if current_version < 1 {
-        let transaction = conn.transaction().await.unwrap();
-        transaction.execute(
-            "CREATE TABLE IF NOT EXISTS migrations(version INTEGER PRIMARY KEY, changeset TEXT)",
-            (),
-        )
-        .await
-        .unwrap();
 
-        current_version = fin(current_version, transaction, "init").await;
-    }
-
-    if current_version < 2 {
-        let transaction = conn.transaction().await.unwrap();
-        transaction
-            .execute(
-                "CREATE TABLE IF NOT EXISTS features(name TEXT, enabled BOOLEAN)",
-                (),
-            )
-            .await
-            .unwrap();
-        transaction
-            .execute(
-                "INSERT INTO features(name, enabled) VALUES ('wombat', true)",
-                (),
-            )
-            .await
-            .unwrap();
-        current_version = fin(current_version, transaction, "add features table").await;
-    }
-
-    if current_version < 3 {
-        // { $.level = "ERROR" }
-        // { $.mdc.traceId = "TRACE_ID_UUID" }
-        let transaction = conn.transaction().await.unwrap();
-        transaction
-            .execute(
-                "CREATE TABLE IF NOT EXISTS log_filters(filter TEXT, label TEXT, services TEXT)",
-                (),
-            )
-            .await
-            .unwrap();
-        current_version = fin(current_version, transaction, "add logs filter table").await;
-    }
-
-    if current_version < 4 {
-        // from app, to app, env, jepsen url, api prefix, client id, secret arn
-        let transaction = conn.transaction().await.unwrap();
-        transaction
-            .execute(
-                "CREATE TABLE IF NOT EXISTS proxy_auth_configs(to_app TEXT, env TEXT, 
-                    auth_type TEXT, 
-                    api_path TEXT, 
-                    jepsen_auth_api TEXT, jepsen_api_name TEXT, jepsen_client_id TEXT, 
-                    basic_user TEXT,
-                    secret_name TEXT
-                )",
-                (),
-            )
-            .await
-            .unwrap();
-        current_version = fin(current_version, transaction, "add proxy_auth_configs").await;
-    }
-
-    if current_version < 5 {
-        let transaction = conn.transaction().await.unwrap();
-        transaction
-            .execute("ALTER TABLE features ADD COLUMN user_uuid TEXT", ())
-            .await
-            .unwrap();
-        current_version = fin(current_version, transaction, "add features table").await;
-    }
-
-    info!("database migration complete. version: {}", current_version);
+pub struct GlobDatabase {
+    db: std::sync::Arc<tokio::sync::RwLock<libsql::Database>>,
+    pub synchronized: bool,
 }
 
-async fn fin(version: u64, transaction: Transaction, message: &str) -> u64 {
-    transaction
-        .execute(
-            "INSERT INTO migrations(changeset) VALUES (?)",
-            params![message],
-        )
-        .await
-        .unwrap();
-    transaction.commit().await.unwrap();
-    info!("completed migration {}: {}", version, message);
-
-    return version + 1;
-}
-
-async fn get_db_version(conn: &Connection) -> u64 {
-    log::info!("checking migration version");
-    let result = conn
-        .query(
-            "SELECT version FROM migrations order by version desc limit 1",
-            (),
-        )
-        .await;
-
-    return match result {
-        Ok(mut rows) => {
-            let first_row = rows.next().await.unwrap();
-            let version = first_row
-                .map(|row| row.get::<u64>(0).unwrap())
-                .unwrap_or_default();
-
-            log::info!("migration version is {}", version);
-            version
+impl GlobDatabase {
+    pub fn new(db: libsql::Database) -> Self {
+        GlobDatabase {
+            db: std::sync::Arc::new(tokio::sync::RwLock::new(db)),
+            synchronized: false,
         }
-        Err(_) => {
-            log::info!("check failed");
-            0
+    }
+
+    pub async fn sync(&mut self) {
+        self.synchronized = true;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let db = self.db.clone();
+        let handler = tokio::task::spawn(async move{
+            let db = db.read().await;
+            let sync_result = db.sync().await;
+            log::info!("sync result: {:?}", sync_result);
+            
+            tx.send(()).unwrap();
+        });
+        if let Err(_) = tokio::time::timeout(Duration::from_millis(10000), rx).await {
+            println!("did not receive value within 10s");
+            self.synchronized = false;
+            handler.abort();
         }
-    };
+    }
+
+    pub async fn get_connection(&self) -> Connection {
+        let db =self.db.read().await;
+        db.connect().unwrap()
+    }
 }
 
-pub async fn is_feature_enabled(db: &Connection, feature: &str) -> bool {
+
+
+pub async fn is_feature_enabled(db: &GlobDatabase, feature: &str) -> bool {
     log::info!("checking feature {}", feature);
-    let result = db
+    let conn = db.get_connection().await;
+    let result = conn
         .query(
             "SELECT enabled FROM features WHERE name = ?",
             params![feature],
@@ -144,13 +68,17 @@ pub async fn is_feature_enabled(db: &Connection, feature: &str) -> bool {
     }
 }
 
-pub async fn is_user_feature_enabled(db: &Connection, feature: &str, user_uuid: &str) -> bool {
+pub async fn is_user_feature_enabled(db: &GlobDatabase, feature: &str, user_uuid: &str) -> bool {
+    if db.synchronized == false {
+        return false;
+    }
+    let conn = db.get_connection().await;
     log::info!(
         "checking user feature, user: {}, feature: {}",
         user_uuid,
         feature
     );
-    let result = db
+    let result = conn
         .query(
             "SELECT enabled FROM features WHERE name = ? AND user_uuid = ?",
             params![feature, user_uuid],
@@ -178,8 +106,14 @@ pub struct LogFilter {
     services: Vec<String>,
     label: String,
 }
-pub async fn log_filters(conn: &Connection) -> Vec<LogFilter> {
+pub async fn log_filters(db: &GlobDatabase) -> Vec<LogFilter> {
     log::info!("getting log filters");
+
+    if db.synchronized == false {
+        return vec![];
+    }
+    let conn = db.get_connection().await;
+
     let result = conn
         .query("SELECT filter, services, label FROM log_filters;", ())
         .await;
@@ -235,8 +169,12 @@ pub struct ProxyAuthConfig {
     pub secret_name: String,
 }
 
-pub async fn get_proxy_auth_configs(conn: &Connection) -> Vec<ProxyAuthConfig> {
+pub async fn get_proxy_auth_configs(db: &GlobDatabase) -> Vec<ProxyAuthConfig> {
     log::info!("getting proxy auth configs");
+    if db.synchronized == false {
+        return vec![];
+    }
+    let conn = db.get_connection().await;
     let result = conn
         .query(
             "SELECT to_app, env,
