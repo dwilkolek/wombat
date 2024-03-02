@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { proxyAuthConfigsStore } from '$lib/stores/proxy-auth-configs-store';
 	import { AwsEnv, type ProxyAuthConfig, type ServiceDetails } from '$lib/types';
-	import { invoke } from '@tauri-apps/api';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { invoke } from '@tauri-apps/api/core';
+	import { ask } from '@tauri-apps/plugin-dialog';
 
 	export let service: ServiceDetails;
 
@@ -14,7 +14,7 @@
 					title: 'Access to PRODUCTION service.',
 					okLabel: 'Proceed',
 					cancelLabel: 'Abort',
-					type: 'warning'
+					kind: 'warning'
 				}
 			);
 			if (!response) {

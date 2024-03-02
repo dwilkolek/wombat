@@ -9,7 +9,7 @@ use std::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tauri::Window;
+use tauri::AppHandle;
 use tempdir::TempDir;
 use tokio::time::sleep;
 use tracing_unwrap::ResultExt;
@@ -18,10 +18,11 @@ use warp::hyper::body::Bytes;
 use warp::hyper::Method;
 use warp::Filter as WarpFilter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
+use tauri::Manager;
 
 pub async fn start_aws_ssm_proxy(
     arn: String,
-    window: Window,
+    app_handle: AppHandle,
     bastion: String,
     profile: String,
     target: String,
@@ -103,8 +104,7 @@ pub async fn start_aws_ssm_proxy(
         {
             let contents = fs::read_to_string(err_log_path.clone()).unwrap_or_default();
             error!("Failed to start proxy: {}", contents);
-            window
-                .emit(
+            app_handle.emit(
                     "proxy-end",
                     ProxyEventMessage::new(arn.clone(), "ERROR".into(), access_port, None),
                 )
@@ -122,8 +122,7 @@ pub async fn start_aws_ssm_proxy(
         //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
         //  --parameters "$parameters"
 
-        window
-            .emit(
+        app_handle .emit(
                 "proxy-start",
                 ProxyEventMessage::new(
                     arn.clone(),
@@ -138,8 +137,7 @@ pub async fn start_aws_ssm_proxy(
             let kill_result = handle.send(());
             info!("Killing dependant job, success: {}", kill_result.is_ok());
         }
-        window
-            .emit(
+        app_handle.emit(
                 "proxy-end",
                 ProxyEventMessage::new(arn.clone(), "END".into(), access_port, None),
             )

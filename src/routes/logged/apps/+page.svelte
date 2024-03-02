@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { userStore } from '$lib/stores/user-store';
 	import { AwsEnv } from '$lib/types';
-	import { invoke } from '@tauri-apps/api';
+	import { invoke } from '@tauri-apps/api/core';
 	import AppCard from '$lib/componets/app-card.svelte';
 
 	$: user = $userStore;

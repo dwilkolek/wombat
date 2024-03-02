@@ -11,7 +11,7 @@ rust-version = "1.73"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.5.1", features = [] }
+tauri-build = { version = "2.0.0-beta", features = [] }
 
 [dependencies]
 log = "^0.4"
@@ -19,14 +19,7 @@ regex = "1"
 rand = "0.8.5"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "1.6.0", features = [
-    "shell-open",
-    "process-exit",
-    "clipboard-write-text",
-    "dialog-ask",
-    "dialog-message",
-    "http-request",
-    "updater",
+tauri = { version = "2.0.0-beta", features = [
 ] }
 aws-config = "1.1.5"
 aws-sdk-ecs = "1.14.1"
@@ -56,6 +49,11 @@ reqwest = { version = "0.11.24", features = ["native-tls-vendored", "json"] }
 futures = "0.3.30"
 async-trait = "0.1.77"
 headers = "0.4.0"
+tauri-plugin-dialog = "2.0.0-beta.1"
+tauri-plugin-clipboard-manager = "2.0.0-beta.1"
+tauri-plugin-process = "2.0.0-beta.1"
+tauri-plugin-shell = "2.0.0-beta.1"
+tauri-plugin-http = "2.0.0-beta.1"
 
 [dependencies.uuid]
 version = "1.7.0"

@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { writeText } from '@tauri-apps/api/clipboard';
+	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
-	import { ask, message } from '@tauri-apps/api/dialog';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { ask, message } from '@tauri-apps/plugin-dialog';
+	import { invoke } from '@tauri-apps/api/core';
 	export let database: RdsInstance | undefined;
 
 	const credentialsHandler = async () => {
@@ -12,7 +12,7 @@
 				title: 'Are you alone?',
 				okLabel: "It's safe!",
 				cancelLabel: 'No',
-				type: 'warning'
+				kind: 'warning'
 			}
 		);
 		if (answer) {
@@ -28,7 +28,7 @@
 			} catch (e) {
 				message(
 					`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?\n\nhttps://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store`,
-					{ title: 'Ooops!', type: 'error' }
+					{ title: 'Ooops!', kind: 'error' }
 				);
 			}
 		}

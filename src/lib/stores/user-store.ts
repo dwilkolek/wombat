@@ -3,7 +3,7 @@ import { execute } from './error-store';
 import type { AwsEnv, UserConfig } from '../types';
 import { emit, listen } from '@tauri-apps/api/event';
 import type { ProxyEventMessage } from './task-store';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 
 const createUserStore = () => {
 	const loggedIn = writable(false);

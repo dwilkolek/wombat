@@ -3,8 +3,8 @@
 	import { endOfDay, format, startOfDay, sub } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
-	import { invoke } from '@tauri-apps/api';
-	import { writeText } from '@tauri-apps/api/clipboard';
+	import { invoke } from '@tauri-apps/api/core';
+	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import { beforeNavigate } from '$app/navigation';
 	import { logStore } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';

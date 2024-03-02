@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 	import { AwsEnv, type EcsService } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';
 	import { taskStore } from '$lib/stores/task-store';
-	import { open } from '@tauri-apps/api/shell';
+	import { open } from '@tauri-apps/plugin-shell';
 	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { ask } from '@tauri-apps/plugin-dialog';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -92,7 +92,7 @@
 															title: 'Access to PRODUCTION service.',
 															okLabel: 'Proceed',
 															cancelLabel: 'Abort',
-															type: 'warning'
+															kind: 'warning'
 														}
 													);
 													if (!response) {

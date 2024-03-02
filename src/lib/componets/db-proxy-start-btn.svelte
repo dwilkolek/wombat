@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { execute } from '$lib/stores/error-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { ask } from '@tauri-apps/plugin-dialog';
 
 	export let database: RdsInstance;
 </script>
@@ -17,7 +17,7 @@
 						title: 'Access to PRODUCTION database.',
 						okLabel: 'Proceed',
 						cancelLabel: 'Abort',
-						type: 'warning'
+						kind: 'warning'
 					}
 				);
 				if (!response) {
