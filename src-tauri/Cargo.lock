@@ -114,9 +114,9 @@ checksum = "7d5a26814d8dcb93b0e5a0ff3c6d80a8843bafb21b39e8e18a6f05471870e110"
 
 [[package]]
 name = "arboard"
-version = "3.3.1"
+version = "3.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1faa3c733d9a3dd6fbaf85da5d162a2e03b2e0033a90dceb0e2a90fdd1e5380a"
+checksum = "a2041f1943049c7978768d84e6d0fd95de98b76d6c4727b09e78ec253d29fa58"
 dependencies = [
  "clipboard-win",
  "core-graphics 0.23.1",
@@ -304,9 +304,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ec2"
-version = "1.22.0"
+version = "1.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1b745d257f136a9135af0d384933f86ff5427115714fa7bc3a54571e530189b"
+checksum = "76a040eb81d6ee97ece43256f6846fe85cc054b3d9ee737e8f82fe43143208fb"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -814,11 +814,10 @@ checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 
 [[package]]
 name = "bitflags_serde_shim"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e678d043c18557c001a9f81be1c04e09339f9c990b8d5e20801e7ca4a1c6f244"
+checksum = "df031780c32b0f93cecaf883fa9e351e74679e24380c534aeef94556cfd80ac9"
 dependencies = [
- "bitflags 1.3.2",
  "serde",
 ]
 
@@ -2968,12 +2967,12 @@ checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
 
 [[package]]
 name = "libloading"
-version = "0.8.1"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c571b676ddfc9a8c12f1f3d3085a7b163966a8fd8098a90640953ce5f6170161"
+checksum = "2caa5afb8bf9f3a2652760ce7d4f62d21c4d5a423e68466fca30df82f2330164"
 dependencies = [
  "cfg-if",
- "windows-sys 0.48.0",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -2990,7 +2989,7 @@ dependencies = [
 [[package]]
 name = "libsql"
 version = "0.2.0"
-source = "git+https://github.com/tursodatabase/libsql#adf36104adacf383b881abe017b5505df4129b44"
+source = "git+https://github.com/tursodatabase/libsql#7f9e289681188328074f5fce5aa4322c4c248b1f"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3026,7 +3025,7 @@ dependencies = [
 [[package]]
 name = "libsql-ffi"
 version = "0.1.0"
-source = "git+https://github.com/tursodatabase/libsql#adf36104adacf383b881abe017b5505df4129b44"
+source = "git+https://github.com/tursodatabase/libsql#7f9e289681188328074f5fce5aa4322c4c248b1f"
 dependencies = [
  "bindgen",
  "cc",
@@ -3036,7 +3035,7 @@ dependencies = [
 [[package]]
 name = "libsql-rusqlite"
 version = "0.29.0"
-source = "git+https://github.com/tursodatabase/libsql#adf36104adacf383b881abe017b5505df4129b44"
+source = "git+https://github.com/tursodatabase/libsql#7f9e289681188328074f5fce5aa4322c4c248b1f"
 dependencies = [
  "bitflags 2.4.2",
  "fallible-iterator 0.2.0",
@@ -3049,7 +3048,7 @@ dependencies = [
 [[package]]
 name = "libsql-sqlite3-parser"
 version = "0.11.1"
-source = "git+https://github.com/tursodatabase/libsql#adf36104adacf383b881abe017b5505df4129b44"
+source = "git+https://github.com/tursodatabase/libsql#7f9e289681188328074f5fce5aa4322c4c248b1f"
 dependencies = [
  "bitflags 2.4.2",
  "cc",
@@ -3067,7 +3066,7 @@ dependencies = [
 [[package]]
 name = "libsql-sys"
 version = "0.3.0"
-source = "git+https://github.com/tursodatabase/libsql#adf36104adacf383b881abe017b5505df4129b44"
+source = "git+https://github.com/tursodatabase/libsql#7f9e289681188328074f5fce5aa4322c4c248b1f"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -3093,7 +3092,7 @@ dependencies = [
 [[package]]
 name = "libsql_replication"
 version = "0.2.0"
-source = "git+https://github.com/tursodatabase/libsql#adf36104adacf383b881abe017b5505df4129b44"
+source = "git+https://github.com/tursodatabase/libsql#7f9e289681188328074f5fce5aa4322c4c248b1f"
 dependencies = [
  "aes",
  "async-stream",
@@ -3314,9 +3313,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3d0b296e374a4e6f3c7b0a1f5a51d748a0d34c85e7dc48fc3fa9a87657fe09"
+checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
 dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
@@ -6027,9 +6026,9 @@ dependencies = [
 
 [[package]]
 name = "walkdir"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d71d857dc86794ca4c280d616f7da00d2dbfd8cd788846559a6813e6aa4b54ee"
+checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
 dependencies = [
  "same-file",
  "winapi-util",
@@ -7267,7 +7266,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "async-trait",
  "aws-config",
