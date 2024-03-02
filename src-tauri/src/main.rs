@@ -138,6 +138,11 @@ async fn ping() -> Result<(), ()> {
 }
 
 #[tauri::command]
+async fn is_db_synchronized(database: tauri::State<'_, DatabaseInstance>) -> Result<bool, ()> {
+    Ok(database.0.read().await.synchronized)
+}
+
+#[tauri::command]
 async fn favorite(
     name: &str,
     user_config: tauri::State<'_, UserConfigState>,
@@ -182,13 +187,6 @@ async fn login(
         );
     }
 
-    let db = database.0.lock().await;
-    let _ = db.sync().await;
-    let conn = db.connect().unwrap();
-    if !global_db::is_feature_enabled(&conn, "wombat").await {
-        return Err(BError::new("login", "Not allowed to start."));
-    }
-
     let _ = window.emit("message", "Authenticating...");
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("login", msg)),
@@ -203,13 +201,25 @@ async fn login(
         None,
     )
     .await;
+
+    let _ = window.emit("message", "Syncing global state...");
+
+    let mut db = database.0.write().await;
+    db.sync().await;
+    if !global_db::is_feature_enabled(&db, "wombat").await {
+        return Err(BError::new("login", "Not allowed to start."));
+    }
+
     let _ = window.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile);
 
+    let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
+
     let _ = window.emit("message", "Fetching databases...");
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
+        rds_resolver_instance.init(cache_db.clone()).await;
         let databases = rds_resolver_instance
             .databases(&authorized_user.sdk_config)
             .await;
@@ -227,6 +237,7 @@ async fn login(
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
+        cluster_resolver_instance.init(cache_db.clone()).await;
         clusters = cluster_resolver_instance
             .clusters(&authorized_user.sdk_config)
             .await;
@@ -243,6 +254,7 @@ async fn login(
     let _ = window.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
+        ecs_resolver_instance.init(cache_db.clone()).await;
         let services = ecs_resolver_instance
             .services(&authorized_user.sdk_config, clusters)
             .await;
@@ -352,6 +364,7 @@ async fn set_dbeaver_path(
     .await;
     user_config.set_dbeaver_path(dbeaver_path)
 }
+
 #[tauri::command]
 async fn set_logs_dir_path(
     logs_dir: &str,
@@ -1002,8 +1015,9 @@ async fn refresh_cache(
     )
     .await;
 
-    let db = database.0.lock().await;
-    let _ = db.sync().await;
+    let mut db = database.0.write().await;
+    db.sync().await;
+
     window.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
 }
@@ -1183,9 +1197,8 @@ async fn start_service_proxy(
 async fn log_filters(
     database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<Vec<global_db::LogFilter>, BError> {
-    let db = database.0.lock().await;
-    let conn = db.connect().unwrap_or_log();
-    let filters = global_db::log_filters(&conn).await;
+    let db = database.0.read().await;
+    let filters = global_db::log_filters(&db).await;
 
     return Ok(filters);
 }
@@ -1193,9 +1206,8 @@ async fn log_filters(
 async fn proxy_auth_configs(
     database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<Vec<global_db::ProxyAuthConfig>, BError> {
-    let db = database.0.lock().await;
-    let conn = db.connect().unwrap_or_log();
-    let configs = global_db::get_proxy_auth_configs(&conn).await;
+    let db = database.0.read().await;
+    let configs = global_db::get_proxy_auth_configs(&db).await;
 
     return Ok(configs);
 }
@@ -1207,9 +1219,8 @@ async fn is_user_feature_enabled(
     user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<bool, BError> {
     let user_id = format!("{}", &user_config.0.lock().await.id);
-    let db = database.0.lock().await;
-    let conn = db.connect().unwrap_or_log();
-    let is_enabled = global_db::is_user_feature_enabled(&conn, feature, user_id.as_str()).await;
+    let db = database.0.read().await;
+    let is_enabled = global_db::is_user_feature_enabled(&db, feature, user_id.as_str()).await;
 
     return Ok(is_enabled);
 }
@@ -1312,25 +1323,10 @@ async fn initialize_database_connection() -> Database {
         })
         .replace("libsql", "https");
 
-    //  info!("Database file={}, remote={}", &db_file, &url);
-
     let db = libsql::Builder::new_remote_replica(db_file, url, auth_token)
-        .periodic_sync(Duration::from_secs(3600))
         .build()
         .await
         .unwrap();
-
-    let _ = db.sync().await.unwrap();
-
-    info!("Database ref created");
-
-    let conn = db.connect().unwrap();
-
-    info!("Database connected");
-
-    info!("Database synced");
-    global_db::migrate(&conn).await;
-    let _ = db.sync().await.unwrap();
 
     return db;
 }
@@ -1352,10 +1348,10 @@ async fn initialize_axiom(user: &UserConfig) -> AxiomClientState {
     };
 }
 
-async fn initialize_cache_db() -> libsql::Database {
+async fn initialize_cache_db(profile: &str) -> libsql::Database {
     return libsql::Builder::new_local(
         user::wombat_dir()
-            .join("cache.db")
+            .join(format!("cache-{}.db", profile))
             .to_str()
             .unwrap_or_log()
             .to_string(),
@@ -1389,8 +1385,8 @@ async fn main() {
             panic!("Unknown logger: {}", logger);
         }
     };
-    let db = Arc::new(Mutex::new(initialize_database_connection().await));
-    let cache_db = Arc::new(RwLock::new(initialize_cache_db().await));
+
+    let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
 
     let user = UserConfig::default();
     tauri::Builder::default()
@@ -1408,15 +1404,17 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(DatabaseInstance(db.clone()))
+        .manage(DatabaseInstance(Arc::new(RwLock::new(
+            global_db::GlobDatabase::new(initialize_database_connection().await),
+        ))))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
-            RdsResolver::new(cache_db.clone()).await,
+            RdsResolver::new(cache_db.clone()),
         ))))
         .manage(ClusterResolverInstance(Arc::new(RwLock::new(
-            ClusterResolver::new(cache_db.clone()).await,
+            ClusterResolver::new(cache_db.clone()),
         ))))
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
-            EcsResolver::new(cache_db.clone()).await,
+            EcsResolver::new(cache_db.clone()),
         ))))
         .invoke_handler(tauri::generate_handler![
             user_config,
@@ -1442,7 +1440,8 @@ async fn main() {
             log_filters,
             proxy_auth_configs,
             is_user_feature_enabled,
-            ping
+            ping,
+            is_db_synchronized
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1470,7 +1469,7 @@ struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 
-struct DatabaseInstance(Arc<Mutex<Database>>);
+struct DatabaseInstance(Arc<RwLock<global_db::GlobDatabase>>);
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
