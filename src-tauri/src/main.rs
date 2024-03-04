@@ -411,10 +411,10 @@ async fn db_credentials(
     let user_config = user_config.0.lock().await;
     let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
     let infra_default_role = &db.name;
-    let profile_name = ssm_role.get(&db.name).unwrap_or(&infra_default_role);
-    info!("Using infra profile: {}", &profile_name);
+    let ssm_profile = ssm_role.get(&db.name).unwrap_or(&infra_default_role);
+    info!("Using infra profile: {}", &ssm_profile);
     let db_infra_sdk = aws_config::defaults(BehaviorVersion::latest())
-        .profile_name(profile_name)
+        .profile_name(ssm_profile)
         .load()
         .await;
 
@@ -933,7 +933,8 @@ async fn start_db_proxy(
         Ok(authorized_user) => authorized_user,
     };
 
-    let local_port = user_config.0.lock().await.get_db_port(&db.arn);
+    let mut user_config = user_config.0.lock().await;
+    let local_port = user_config.get_db_port(&db.arn);
     window
         .emit(
             "proxy-starting",
@@ -955,11 +956,14 @@ async fn start_db_proxy(
     )
     .await;
 
+    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
+    let infra_default_role = &db.name;
+    let ssm_profile = ssm_role.get(&db.name).unwrap_or(&infra_default_role).to_owned();
     proxy::start_aws_ssm_proxy(
         db.arn,
         window,
         bastion.instance_id,
-        authorized_user.profile.to_owned(),
+        ssm_profile,
         db.endpoint.address,
         db.endpoint.port,
         local_port,
@@ -1100,7 +1104,8 @@ async fn start_service_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let local_port = user_config.0.lock().await.get_service_port(&service.arn);
+    let mut user_config = user_config.0.lock().await;
+    let local_port = user_config.get_service_port(&service.arn);
 
     let aws_local_port = local_port + 10000;
     window
@@ -1168,6 +1173,9 @@ async fn start_service_proxy(
         }
     }
 
+    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
+    let infra_default_role = &service.name;
+    let ssm_profile = ssm_role.get(&service.name).unwrap_or(&infra_default_role).to_owned();
     let handle = proxy::start_proxy_to_aws_proxy(
         local_port,
         aws_local_port,
@@ -1179,7 +1187,7 @@ async fn start_service_proxy(
         service.arn,
         window,
         bastion.instance_id,
-        authorized_user.profile.clone(),
+        ssm_profile,
         host,
         80,
         aws_local_port,
