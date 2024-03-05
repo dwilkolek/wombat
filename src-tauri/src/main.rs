@@ -1,12 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
-#[cfg(debug_assertions)]
-use dotenvy::dotenv;
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
+#[cfg(debug_assertions)]
+use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
 use libsql::Database;
 use log::{debug, error, info, warn};
@@ -194,6 +194,11 @@ async fn login(
         Ok(authorized_user) => authorized_user,
     };
 
+    let glob_db_clopne = database.0.clone();
+    let db_sync_handle = tokio::spawn(async move {
+        glob_db_clopne.write().await.sync().await;
+    });
+
     ingest_log(
         &axiom.0,
         &authorized_user.id,
@@ -202,15 +207,6 @@ async fn login(
         None,
     )
     .await;
-
-    let _ = window.emit("message", "Syncing global state...");
-
-    let mut db = database.0.write().await;
-    db.sync().await;
-    if !global_db::is_feature_enabled(&db, "wombat", authorized_user.id.to_string().as_str()).await
-    {
-        return Err(BError::new("login", "Not allowed to start."));
-    }
 
     let _ = window.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
@@ -269,6 +265,14 @@ async fn login(
             Some(services.len()),
         )
         .await;
+    }
+
+    let _ = window.emit("message", "Syncing global state...");
+    let _ = db_sync_handle.await;
+    let db = database.0.read().await;
+    if !global_db::is_feature_enabled(&db, "wombat", authorized_user.id.to_string().as_str()).await
+    {
+        return Err(BError::new("login", "Failed to start."));
     }
 
     let refresher_axiom = Arc::clone(&axiom.0);
@@ -1419,6 +1423,9 @@ async fn main() {
     };
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
+    let glob_db = Arc::new(RwLock::new(global_db::GlobDatabase::new(
+        initialize_database_connection(&app_config).await,
+    )));
 
     let user = UserConfig::default();
     tauri::Builder::default()
@@ -1436,9 +1443,7 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(DatabaseInstance(Arc::new(RwLock::new(
-            global_db::GlobDatabase::new(initialize_database_connection(&app_config).await),
-        ))))
+        .manage(DatabaseInstance(glob_db))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
             RdsResolver::new(cache_db.clone()),
         ))))
