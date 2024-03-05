@@ -40,13 +40,16 @@ impl GlobDatabase {
     }
 }
 
-pub async fn is_feature_enabled(db: &GlobDatabase, feature: &str) -> bool {
+pub async fn is_feature_enabled(db: &GlobDatabase, feature: &str, user_uuid: &str) -> bool {
     log::info!("checking feature {}", feature);
+    if db.synchronized == false {
+        return false;
+    }
     let conn = db.get_connection().await;
     let result = conn
         .query(
-            "SELECT enabled FROM features WHERE name = ?",
-            params![feature],
+            "SELECT enabled FROM features WHERE name = ? AND enabled = true AND (user_uuid = ? OR user_uuid IS NULL);",
+            params![feature, user_uuid],
         )
         .await;
     match result {

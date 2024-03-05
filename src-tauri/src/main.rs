@@ -1,11 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
+#[cfg(debug_assertions)]
+use dotenvy::dotenv;
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
-use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
 use libsql::Database;
 use log::{debug, error, info, warn};
@@ -206,7 +207,8 @@ async fn login(
 
     let mut db = database.0.write().await;
     db.sync().await;
-    if !global_db::is_feature_enabled(&db, "wombat").await {
+    if !global_db::is_feature_enabled(&db, "wombat", authorized_user.id.to_string().as_str()).await
+    {
         return Err(BError::new("login", "Not allowed to start."));
     }
 
@@ -1301,7 +1303,45 @@ async fn open_dbeaver(
     return Ok(());
 }
 
-async fn initialize_database_connection() -> Database {
+#[cfg(debug_assertions)]
+fn app_config() -> AppConfig {
+    let _ = dotenv();
+    AppConfig {
+        turso_auth_token: env::var("TURSO_AUTH_TOKEN").unwrap_or_else(|_| {
+            debug!("Using default token since TURSO_AUTH_TOKEN was not set");
+            "%%TURSO_AUTH_TOKEN%%".to_string()
+        }),
+        turso_sync_url: env::var("TURSO_SYNC_URL").unwrap_or_else(|_| {
+            debug!("Using default token since TURSO_AUTH_TOKEN was not set");
+            "%%TURSO_AUTH_TOKEN%%".to_string()
+        }),
+        logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
+        axiom_token: None,
+        axiom_org: "shrug".to_owned(),
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn app_config() -> AppConfig {
+    AppConfig {
+        logger: "file".to_owned(),
+        turso_auth_token: "%%TURSO_AUTH_TOKEN%%".to_string(),
+        turso_sync_url: "%%TURSO_SYNC_URL%%".to_string(),
+        axiom_token: Some("%%AXIOM_TOKEN%%".to_string()),
+        axiom_org: "%%AXIOM_ORG%%".to_owned(),
+    }
+}
+
+#[derive(Debug)]
+struct AppConfig {
+    logger: String,
+    turso_auth_token: String,
+    turso_sync_url: String,
+    axiom_token: Option<String>,
+    axiom_org: String,
+}
+
+async fn initialize_database_connection(config: &AppConfig) -> Database {
     let db_file = env::var("DB_PATH").unwrap_or_else(|_| {
         debug!("Using default db path since DB_PATH was not set");
         user::wombat_dir()
@@ -1311,17 +1351,9 @@ async fn initialize_database_connection() -> Database {
             .to_string()
     });
 
-    let auth_token = env::var("TURSO_AUTH_TOKEN").unwrap_or_else(|_| {
-        debug!("Using default token since TURSO_AUTH_TOKEN was not set");
-        "%%TURSO_AUTH_TOKEN%%".to_string()
-    });
+    let auth_token = config.turso_auth_token.clone();
 
-    let url = env::var("TURSO_SYNC_URL")
-        .unwrap_or_else(|_| {
-            debug!("Using default sync url since TURSO_SYNC_URL was not set");
-            "%%TURSO_SYNC_URL%%".to_string()
-        })
-        .replace("libsql", "https");
+    let url = config.turso_sync_url.replace("libsql", "https");
 
     let db = libsql::Builder::new_remote_replica(db_file, url, auth_token)
         .build()
@@ -1331,20 +1363,22 @@ async fn initialize_database_connection() -> Database {
     return db;
 }
 
-async fn initialize_axiom(user: &UserConfig) -> AxiomClientState {
-    let client = Client::builder()
-        .with_token("%%AXIOM_TOKEN%%")
-        .with_org_id("%%AXIOM_ORG%%")
-        .build();
-    return match format!("%%{}%%", "AXIOM_TOKEN") == "%%AXIOM_TOKEN%%" {
+async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientState {
+    return match congig.axiom_token.is_none() {
         true => AxiomClientState(Arc::new(Mutex::new(None))),
-        false => AxiomClientState(Arc::new(Mutex::new(match client {
-            Ok(client) => {
-                ingest_log_with_client(&client, &user.id, Action::Start, None, None).await;
-                Some(client)
-            }
-            Err(_) => None,
-        }))),
+        false => {
+            let client = Client::builder()
+                .with_token(congig.axiom_token.as_ref().unwrap())
+                .with_org_id(congig.axiom_org.as_str())
+                .build();
+            return AxiomClientState(Arc::new(Mutex::new(match client {
+                Ok(client) => {
+                    ingest_log_with_client(&client, &user.id, Action::Start, None, None).await;
+                    Some(client)
+                }
+                Err(_) => None,
+            })));
+        }
     };
 }
 
@@ -1364,10 +1398,8 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
-    let _ = dotenv();
-    let logger = env::var("LOGGER").unwrap_or_else(|_| "file".to_string());
-
-    let _guard = match logger.as_str() {
+    let app_config = app_config();
+    let _guard = match app_config.logger.as_str() {
         "console" => {
             tracing_subscriber::fmt().init();
             None
@@ -1382,7 +1414,7 @@ async fn main() {
             Some(guard)
         }
         _ => {
-            panic!("Unknown logger: {}", logger);
+            panic!("Unknown logger: {}", &app_config.logger);
         }
     };
 
@@ -1390,7 +1422,7 @@ async fn main() {
 
     let user = UserConfig::default();
     tauri::Builder::default()
-        .manage(initialize_axiom(&user).await)
+        .manage(initialize_axiom(&user, &app_config).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
             user_id: user.id.clone(),
@@ -1405,7 +1437,7 @@ async fn main() {
             search_log_handler: None,
         }))))
         .manage(DatabaseInstance(Arc::new(RwLock::new(
-            global_db::GlobDatabase::new(initialize_database_connection().await),
+            global_db::GlobDatabase::new(initialize_database_connection(&app_config).await),
         ))))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
             RdsResolver::new(cache_db.clone()),
