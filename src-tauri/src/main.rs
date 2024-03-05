@@ -1,11 +1,12 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
+#[cfg(debug_assertions)]
+use dotenvy::dotenv;
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
-use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
 use libsql::Database;
 use log::{debug, error, info, warn};
@@ -1321,12 +1322,12 @@ fn app_config() -> AppConfig {
 }
 
 #[cfg(not(debug_assertions))]
-fn app_config() {
+fn app_config() -> AppConfig {
     AppConfig {
         logger: "file".to_owned(),
-        turso_auth_token: "%%TURSO_AUTH_TOKEN%%",
-        turso_sync_url: "%%TURSO_SYNC_URL%%",
-        axiom_token: Some("%%AXIOM_TOKEN%%"),
+        turso_auth_token: "%%TURSO_AUTH_TOKEN%%".to_string(),
+        turso_sync_url: "%%TURSO_SYNC_URL%%".to_string(),
+        axiom_token: Some("%%AXIOM_TOKEN%%".to_string()),
         axiom_org: "%%AXIOM_ORG%%".to_owned(),
     }
 }
