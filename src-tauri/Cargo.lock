@@ -2976,9 +2976,9 @@ checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
 
 [[package]]
 name = "libloading"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2caa5afb8bf9f3a2652760ce7d4f62d21c4d5a423e68466fca30df82f2330164"
+checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
  "windows-targets 0.52.4",
@@ -2998,7 +2998,7 @@ dependencies = [
 [[package]]
 name = "libsql"
 version = "0.2.0"
-source = "git+https://github.com/tursodatabase/libsql#bb1dd0374846c236f6a7ab6190d06955dca023a4"
+source = "git+https://github.com/tursodatabase/libsql#23f8fd2711c71009ebe29b40b468087a115b8574"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3034,7 +3034,7 @@ dependencies = [
 [[package]]
 name = "libsql-ffi"
 version = "0.1.0"
-source = "git+https://github.com/tursodatabase/libsql#bb1dd0374846c236f6a7ab6190d06955dca023a4"
+source = "git+https://github.com/tursodatabase/libsql#23f8fd2711c71009ebe29b40b468087a115b8574"
 dependencies = [
  "bindgen",
  "cc",
@@ -3044,7 +3044,7 @@ dependencies = [
 [[package]]
 name = "libsql-rusqlite"
 version = "0.29.0"
-source = "git+https://github.com/tursodatabase/libsql#bb1dd0374846c236f6a7ab6190d06955dca023a4"
+source = "git+https://github.com/tursodatabase/libsql#23f8fd2711c71009ebe29b40b468087a115b8574"
 dependencies = [
  "bitflags 2.4.2",
  "fallible-iterator 0.2.0",
@@ -3057,7 +3057,7 @@ dependencies = [
 [[package]]
 name = "libsql-sqlite3-parser"
 version = "0.11.1"
-source = "git+https://github.com/tursodatabase/libsql#bb1dd0374846c236f6a7ab6190d06955dca023a4"
+source = "git+https://github.com/tursodatabase/libsql#23f8fd2711c71009ebe29b40b468087a115b8574"
 dependencies = [
  "bitflags 2.4.2",
  "cc",
@@ -3075,7 +3075,7 @@ dependencies = [
 [[package]]
 name = "libsql-sys"
 version = "0.3.0"
-source = "git+https://github.com/tursodatabase/libsql#bb1dd0374846c236f6a7ab6190d06955dca023a4"
+source = "git+https://github.com/tursodatabase/libsql#23f8fd2711c71009ebe29b40b468087a115b8574"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -3101,7 +3101,7 @@ dependencies = [
 [[package]]
 name = "libsql_replication"
 version = "0.2.0"
-source = "git+https://github.com/tursodatabase/libsql#bb1dd0374846c236f6a7ab6190d06955dca023a4"
+source = "git+https://github.com/tursodatabase/libsql#23f8fd2711c71009ebe29b40b468087a115b8574"
 dependencies = [
  "aes",
  "async-stream",
@@ -7255,7 +7255,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "async-trait",
  "aws-config",
