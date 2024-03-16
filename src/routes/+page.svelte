@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
+	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
 	import { fetch } from '@tauri-apps/api/http';
@@ -90,32 +91,27 @@
 					>
 						<div class="form-control">
 							<label class="label" for="aws-profile">
-								<span class="label-text">AWS profile</span>
+								<span class="label-text">AWS team profile</span>
 							</label>
-							<input
-								id="aws-profile"
-								type="text"
-								autocomplete="off"
-								autocorrect="off"
-								autocapitalize="off"
-								spellcheck="false"
-								placeholder="AWS profile"
-								class="input input-bordered w-full max-w-xs"
-								bind:value={profile}
-								required
-							/>
+							{#await $availableProfilesStore}
+								loading profiles...
+							{:then availableProfiles}
+								<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
+									{#each availableProfiles as availableProfile}
+										<option value={availableProfile}>{availableProfile}</option>
+									{/each}
+								</select>
+							{/await}
 						</div>
 						{#await dependenciesPromise then deps}
-							{#if !Object.entries(deps).some((v) => v[0] == "aws-cli" && v[1].Err)}
+							{#if !Object.entries(deps).some((v) => v[0] == 'aws-cli' && v[1].Err)}
 								<div class="form-control mt-6">
 									<button class="btn btn-accent" disabled={loading} type="submit">
 										{buttonText}</button
 									>
 								</div>
 							{:else}
-								<div class="text-rose-500">
-									Required dependency is missing
-								</div>
+								<div class="text-rose-500">Required dependency is missing</div>
 							{/if}
 						{/await}
 					</form>

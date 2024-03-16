@@ -36,7 +36,7 @@
 					>Logs 🧐</a
 				>
 			</li>
-			<li>
+			<!-- <li>
 				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 					>Services (ECS)
 				</a>
@@ -45,7 +45,7 @@
 				<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
 					>Databases (RDS)</a
 				>
-			</li>
+			</li> -->
 			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a

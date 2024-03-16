@@ -36,6 +36,7 @@ pub struct Endpoint {
 pub struct RdsInstance {
     pub arn: String,
     pub name: String,
+    pub normalized_name: String,
     pub engine: String,
     pub engine_version: String,
     pub endpoint: Endpoint,
@@ -83,11 +84,34 @@ pub struct ServiceDetails {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceDetailsMissing {
+    pub timestamp: DateTime<Utc>,
+    pub arn: String,
+    pub name: shared::TrackedName,
+    pub error: String,
+    pub env: Env,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
     pub log_stream_name: String,
     pub timestamp: i64,
     pub ingestion_time: i64,
     pub message: String,
+}
+
+pub async fn available_profiles() -> Vec<String> {
+    let cf = aws_config::profile::load(
+        &aws_types::os_shim_internal::Fs::real(),
+        &aws_types::os_shim_internal::Env::real(),
+        &aws_config::profile::profile_file::ProfileFiles::default(),
+        None,
+    )
+    .await;
+    match cf {
+        Ok(cf) => cf.profiles().into_iter().map(|p| p.to_owned()).collect(),
+        Err(_) => vec![],
+    }
 }
 
 pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
@@ -323,6 +347,7 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
 
                 let db = RdsInstance {
                     arn: db_instance_arn,
+                    normalized_name: name.replace("-migrated", ""),
                     name,
                     engine,
                     engine_version,
@@ -419,7 +444,7 @@ pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<Ec
 pub async fn service_details(
     config: aws_config::SdkConfig,
     service_arns: Vec<String>,
-) -> Vec<ServiceDetails> {
+) -> Vec<Result<ServiceDetails, ServiceDetailsMissing>> {
     let mut result = Vec::new();
     let mut tokio_tasks = Vec::new();
     for service_arn in service_arns {
@@ -436,7 +461,10 @@ pub async fn service_details(
     result
 }
 
-pub async fn service_detail(config: &aws_config::SdkConfig, service_arn: String) -> ServiceDetails {
+pub async fn service_detail(
+    config: &aws_config::SdkConfig,
+    service_arn: String,
+) -> Result<ServiceDetails, ServiceDetailsMissing> {
     info!("Fetching service details for {}", service_arn);
 
     let ecs_client = ecs::Client::new(config);
@@ -446,8 +474,17 @@ pub async fn service_detail(config: &aws_config::SdkConfig, service_arn: String)
         .services(&service_arn)
         .cluster(cluster)
         .send()
-        .await
-        .unwrap_or_log();
+        .await;
+    if service.is_err() {
+        return Err(ServiceDetailsMissing {
+            name: shared::ecs_arn_to_name(&service_arn),
+            timestamp: Utc::now(),
+            env: Env::from_any(&service_arn),
+            error: "Failed to describe service".to_owned(),
+            arn: service_arn,
+        });
+    }
+    let service = service.unwrap();
     let service = service.services();
     let service = &service[0];
     let task_def_arn = service.task_definition().unwrap_or_log();
@@ -455,8 +492,18 @@ pub async fn service_detail(config: &aws_config::SdkConfig, service_arn: String)
         .describe_task_definition()
         .task_definition(task_def_arn)
         .send()
-        .await
-        .unwrap_or_log();
+        .await;
+
+    if task_def.is_err() {
+        return Err(ServiceDetailsMissing {
+            name: shared::ecs_arn_to_name(&service_arn),
+            timestamp: Utc::now(),
+            env: Env::from_any(&service_arn),
+            error: "Failed to fetch task definition".to_owned(),
+            arn: service_arn,
+        });
+    }
+    let task_def = task_def.unwrap();
 
     let task_def = task_def.task_definition().unwrap_or_log();
     let container_def = &task_def.container_definitions()[0];
@@ -464,17 +511,17 @@ pub async fn service_detail(config: &aws_config::SdkConfig, service_arn: String)
         .image()
         .unwrap_or_log()
         .split(":")
-        .last()
-        .unwrap_or_log()
+        .last().unwrap_or("missing")
         .to_owned();
-    return ServiceDetails {
+
+    return Ok(ServiceDetails {
         name: shared::ecs_arn_to_name(&service_arn),
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
         version: version,
         env: Env::from_any(&service_arn),
-    };
+    });
 }
 
 pub trait OnLogFound: Send {

@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
+use aws::{Cluster, DbSecret, LogEntry, RdsInstance};
 use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
@@ -75,7 +75,7 @@ impl ProxyEventMessage {
 #[derive(Clone, serde::Serialize)]
 struct ServiceDetailsPayload {
     app: String,
-    services: Vec<aws::ServiceDetails>,
+    services: Vec<Result<aws::ServiceDetails, aws::ServiceDetailsMissing>>,
     dbs: Vec<aws::RdsInstance>,
     timestamp: DateTime<Utc>,
 }
@@ -95,6 +95,7 @@ async fn get_authorized(
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<AuthorizedUser, String> {
     let mut app_ctx = app_state.lock().await;
+    dbg!(app_ctx.active_profile.as_ref());
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
     let user_id = app_ctx.user_id.clone();
     let last_check = app_ctx.last_auth_check;
@@ -274,7 +275,7 @@ async fn login(
     let _ = window.emit("message", "Syncing global state...");
     let _ = db_sync_handle.await;
     let db = database.0.read().await;
-    if !global_db::is_feature_enabled(&db, "wombat", authorized_user.id.to_string().as_str()).await
+    if !global_db::is_feature_enabled(&db, "wombat-2.2.0", authorized_user.id.to_string().as_str()).await
     {
         return Err(BError::new("login", "Failed to start."));
     }
@@ -289,67 +290,67 @@ async fn login(
 
     let _ = window.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(3600));
-        let initial_wait = tokio::time::sleep(Duration::from_secs(10));
+        // let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        let initial_wait = tokio::time::sleep(Duration::from_secs(20));
         initial_wait.await;
-        loop {
-            interval.tick().await;
-            {
-                let mut rds_resolver_instance = rds_resolver_instance.write().await;
-                let databases = rds_resolver_instance
-                    .refresh(&authorized_user.sdk_config)
-                    .await;
+        // loop {
+        // interval.tick().await;
+        {
+            let mut rds_resolver_instance = rds_resolver_instance.write().await;
+            let databases = rds_resolver_instance
+                .refresh(&authorized_user.sdk_config)
+                .await;
 
-                if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
-                    ingest_log_with_client(
-                        axiom,
-                        &refresher_user_id,
-                        Action::RefreshRdsList,
-                        None,
-                        Some(databases.len()),
-                    )
-                    .await;
-                }
-            }
-
-            let clusters;
-            {
-                {
-                    let mut cluster_resolver_instance = cluster_resolver_instance.write().await;
-
-                    clusters = cluster_resolver_instance
-                        .refresh(&authorized_user.sdk_config)
-                        .await;
-                }
-                if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
-                    ingest_log_with_client(
-                        axiom,
-                        &authorized_user.id,
-                        Action::RefreshClusterList,
-                        None,
-                        Some(clusters.len()),
-                    )
-                    .await;
-                }
-            }
-            {
-                let mut ecs_resolver_instance = ecs_resolver_instance.write().await;
-                let services = ecs_resolver_instance
-                    .refresh(&authorized_user.sdk_config, clusters)
-                    .await;
-
-                if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
-                    ingest_log_with_client(
-                        axiom,
-                        &authorized_user.id,
-                        Action::RefreshEcsList,
-                        None,
-                        Some(services.len()),
-                    )
-                    .await;
-                }
+            if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
+                ingest_log_with_client(
+                    axiom,
+                    &refresher_user_id,
+                    Action::RefreshRdsList,
+                    None,
+                    Some(databases.len()),
+                )
+                .await;
             }
         }
+
+        let clusters;
+        {
+            {
+                let mut cluster_resolver_instance = cluster_resolver_instance.write().await;
+
+                clusters = cluster_resolver_instance
+                    .refresh(&authorized_user.sdk_config)
+                    .await;
+            }
+            if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
+                ingest_log_with_client(
+                    axiom,
+                    &authorized_user.id,
+                    Action::RefreshClusterList,
+                    None,
+                    Some(clusters.len()),
+                )
+                .await;
+            }
+        }
+        {
+            let mut ecs_resolver_instance = ecs_resolver_instance.write().await;
+            let services = ecs_resolver_instance
+                .refresh(&authorized_user.sdk_config, clusters)
+                .await;
+
+            if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
+                ingest_log_with_client(
+                    axiom,
+                    &authorized_user.id,
+                    Action::RefreshEcsList,
+                    None,
+                    Some(services.len()),
+                )
+                .await;
+            }
+        }
+        // }
     }));
 
     let _ = window.emit("message", "Success!");
@@ -413,26 +414,36 @@ async fn save_preffered_envs(
 
 async fn db_credentials(
     authorized_user: &AuthorizedUser,
-    user_config: &tauri::State<'_, UserConfigState>,
+    aws_config: &aws_config::SdkConfig,
     db: &aws::RdsInstance,
 ) -> Result<DbSecret, BError> {
-    let user_config = user_config.0.lock().await;
-    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
-    let infra_default_role = &db.name;
-    let ssm_profile = ssm_role.get(&db.name).unwrap_or(&infra_default_role);
-    info!("Using infra profile: {}", &ssm_profile);
-    let db_infra_sdk = aws_config::defaults(BehaviorVersion::latest())
-        .profile_name(ssm_profile)
-        .load()
-        .await;
-
-    let secret = aws::db_secret(&db_infra_sdk, &db.name, &db.env).await;
+    let secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
 
     if secret.is_err() {
         warn!("Falling back to user profile: {}", &authorized_user.profile);
         return aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
     }
     return secret;
+}
+
+async fn select_aws_config(
+    app: &str,
+    user_config: &tauri::State<'_, UserConfigState>,
+) -> (String, aws_config::SdkConfig) {
+    let app = app.to_owned();
+    let app_clone = app.to_owned();
+    let user_config = user_config.0.lock().await;
+    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
+    let ssm_profile = ssm_role.get(app.as_str()).unwrap_or(&app_clone);
+    let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
+    return (
+        app,
+        aws_config::defaults(BehaviorVersion::latest())
+            .profile_name(ssm_profile)
+            .region(region_provider)
+            .load()
+            .await,
+    );
 }
 
 #[tauri::command]
@@ -447,8 +458,8 @@ async fn credentials(
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
-
-    let secret = db_credentials(&authorized_user, &user_config, &db).await;
+    let (_aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
+    let secret = db_credentials(&authorized_user, &aws_config, &db).await;
     match &secret {
         Ok(_) => {
             ingest_log(
@@ -941,6 +952,8 @@ async fn start_db_proxy(
         Ok(authorized_user) => authorized_user,
     };
 
+    let (_aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
+
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
     window
@@ -949,7 +962,8 @@ async fn start_db_proxy(
             ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone(), None),
         )
         .unwrap_or_log();
-    let bastions = aws::bastions(&authorized_user.sdk_config).await;
+
+    let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
         .into_iter()
         .find(|b| b.env == db.env)
@@ -966,7 +980,10 @@ async fn start_db_proxy(
 
     let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
     let infra_default_role = &db.name;
-    let ssm_profile = ssm_role.get(&db.name).unwrap_or(&infra_default_role).to_owned();
+    let ssm_profile = ssm_role
+        .get(&db.name)
+        .unwrap_or(&infra_default_role)
+        .to_owned();
     proxy::start_aws_ssm_proxy(
         db.arn,
         window,
@@ -1058,7 +1075,10 @@ async fn service_details(
         None,
     )
     .await;
-    info!("Called for service_details: {}", &app);
+    info!(
+        "Called for service_details: {}, profile: {}",
+        &app, &authorized_user.profile
+    );
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
     tokio::task::spawn(async move {
@@ -1084,8 +1104,7 @@ async fn service_details(
                 .collect()
         }
 
-        let services: Vec<ServiceDetails> =
-            aws::service_details(authorized_user.sdk_config, service_arns).await;
+        let services = aws::service_details(authorized_user.sdk_config, service_arns).await;
 
         window
             .emit(
@@ -1112,8 +1131,11 @@ async fn start_service_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<(), BError> {
-    let mut user_config = user_config.0.lock().await;
-    let local_port = user_config.get_service_port(&service.arn);
+    let local_port;
+    {
+        let mut user_config = user_config.0.lock().await;
+        local_port = user_config.get_service_port(&service.arn);
+    }
 
     let aws_local_port = local_port + 10000;
     window
@@ -1133,7 +1155,9 @@ async fn start_service_proxy(
         Ok(authorized_user) => authorized_user,
     };
 
-    let bastions = aws::bastions(&authorized_user.sdk_config).await;
+    let (aws_profile, aws_config) = select_aws_config(&service.name, &user_config).await;
+
+    let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
         .into_iter()
         .find(|b| b.env == service.env)
@@ -1160,7 +1184,7 @@ async fn start_service_proxy(
                 info!("Adding jepsen auth interceptor, {:?}", &proxy_auth_config);
                 interceptors.push(Box::new(
                     proxy_authenticators::JepsenAutheticator::from_proxy_auth_config(
-                        &authorized_user.sdk_config,
+                        &aws_config,
                         proxy_auth_config.clone(),
                     ),
                 ));
@@ -1181,9 +1205,6 @@ async fn start_service_proxy(
         }
     }
 
-    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
-    let infra_default_role = &service.name;
-    let ssm_profile = ssm_role.get(&service.name).unwrap_or(&infra_default_role).to_owned();
     let handle = proxy::start_proxy_to_aws_proxy(
         local_port,
         aws_local_port,
@@ -1195,7 +1216,7 @@ async fn start_service_proxy(
         service.arn,
         window,
         bastion.instance_id,
-        ssm_profile,
+        aws_profile,
         host,
         80,
         aws_local_port,
@@ -1242,10 +1263,29 @@ async fn is_user_feature_enabled(
 
     return Ok(is_enabled);
 }
+#[tauri::command]
+async fn is_feature_enabled(
+    feature: &str,
+    database: tauri::State<'_, DatabaseInstance>,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<bool, BError> {
+    let user_id = format!("{}", &user_config.0.lock().await.id);
+    let db = database.0.read().await;
+    let is_enabled = global_db::is_feature_enabled(&db, feature, user_id.as_str()).await;
+
+    return Ok(is_enabled);
+}
+
 
 #[tauri::command]
 async fn check_dependencies() -> Result<HashMap<String, Result<String, String>>, ()> {
     return Ok(dependency_check::check_dependencies());
+}
+
+#[tauri::command]
+async fn available_profiles() -> Result<Vec<String>, BError> {
+    let profiles = aws::available_profiles().await;
+    return Ok(profiles);
 }
 
 #[tauri::command]
@@ -1288,7 +1328,8 @@ async fn open_dbeaver(
             .clone();
     }
 
-    let secret = db_credentials(&authorized_user, &user_config, &db).await;
+    let (_aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
+    let secret = db_credentials(&authorized_user, &aws_config, &db).await;
     if let Err(err) = secret {
         ingest_log(
             &axiom.0,
@@ -1494,10 +1535,12 @@ async fn main() {
             abort_find_logs,
             log_filters,
             proxy_auth_configs,
+            is_feature_enabled,
             is_user_feature_enabled,
             ping,
             is_db_synchronized,
-            check_dependencies
+            check_dependencies,
+            available_profiles
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");

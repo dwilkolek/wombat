@@ -6292,6 +6292,7 @@ dependencies = [
  "aws-sdk-rds",
  "aws-sdk-secretsmanager",
  "aws-sdk-ssm",
+ "aws-types",
  "axiom-rs",
  "chrono",
  "dotenvy",

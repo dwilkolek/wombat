@@ -11,6 +11,7 @@
 	import DbTaskStatus from './db-task-status.svelte';
 	import ServiceTaskStatus from './service-task-status.svelte';
 	import AppCardHr from './app-card-hr.svelte';
+	import { invoke } from '@tauri-apps/api';
 	export let app: string;
 	export let displayConfig: {
 		envs: AwsEnv[] | null;
@@ -95,7 +96,7 @@
 							<div class="font-medium w-16 text-xs italic">{enabled_env}:</div>
 							<div class="flex gap-1 app-env-cell-stack">
 								{#if value}
-									{#each value.services as service}
+									{#each value.services.filter(service => !service.error) as service}
 										{@const task = tasks.find((task) => task.arn == service.arn)}
 										<div class="flex flex-row items-center gap-1 px-1">
 											<ServiceCell {service} />
@@ -106,6 +107,12 @@
 											</div>
 										</div>
 									{/each}
+									{#each value.services.filter(service => service.error) as service}
+									{@const task = tasks.find((task) => task.arn == service.arn)}
+									<div class="flex flex-row items-center gap-1 px-1 text-rose-800 text-sm">
+										{service.error}
+									</div>
+								{/each}
 
 									{#each value.dbs as db}
 										{@const task = tasks.find((task) => task.arn == db.arn)}
