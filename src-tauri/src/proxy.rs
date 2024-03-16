@@ -1,5 +1,6 @@
 use crate::{global_db, AsyncTaskManager, ProxyEventMessage};
 use async_trait::async_trait;
+use aws_config::meta::region::RegionProviderChain;
 use filepath::FilePath;
 use log::{error, info, warn};
 use shared_child::SharedChild;
@@ -12,7 +13,7 @@ use std::time::{Duration, SystemTime};
 use tauri::Window;
 use tempdir::TempDir;
 use tokio::time::sleep;
-use tracing_unwrap::ResultExt;
+use tracing_unwrap::{OptionExt, ResultExt};
 use warp::http::{HeaderName, HeaderValue};
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;
@@ -35,6 +36,8 @@ pub async fn start_aws_ssm_proxy(
     proxy_auth_config: Option<global_db::ProxyAuthConfig>,
 ) {
     let mut command = Command::new("aws");
+    let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
+    let region =  region_provider.region().await.unwrap_or_log(); 
     command.args([
         "ssm",
         "start-session",
@@ -42,6 +45,8 @@ pub async fn start_aws_ssm_proxy(
         &bastion,
         "--profile",
         &profile,
+        "--region",
+        region.to_string().as_str(),
         "--document-name",
         "AWS-StartPortForwardingSessionToRemoteHost",
         "--parameters",
