@@ -6,6 +6,7 @@
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';
+	import { featuresStore } from '$lib/stores/feature-store';
 
 	const logout = async () => {
 		try {
@@ -36,16 +37,27 @@
 					>Logs 🧐</a
 				>
 			</li>
-			<!-- <li>
-				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
-					>Services (ECS)
-				</a>
-			</li>
-			<li>
-				<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
-					>Databases (RDS)</a
-				>
-			</li> -->
+			{#await $featuresStore then features}
+				<li>
+					{#if features.ecsTab}
+						<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
+							>Services (ECS)
+						</a>
+					{:else}
+						<span class="opacity-30">Services (ECS) </span>
+					{/if}
+				</li>
+			
+				<li>
+					{#if features.rdsTab}
+						<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
+							>Databases (RDS)</a
+						>
+					{:else}
+						<span class="opacity-30">Databases (RDS)</span>
+					{/if}
+				</li>
+			{/await}
 			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a

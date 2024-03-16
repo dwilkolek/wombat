@@ -952,7 +952,7 @@ async fn start_db_proxy(
         Ok(authorized_user) => authorized_user,
     };
 
-    let (_aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
+    let (aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
 
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
@@ -978,17 +978,11 @@ async fn start_db_proxy(
     )
     .await;
 
-    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
-    let infra_default_role = &db.name;
-    let ssm_profile = ssm_role
-        .get(&db.name)
-        .unwrap_or(&infra_default_role)
-        .to_owned();
     proxy::start_aws_ssm_proxy(
         db.arn,
         window,
         bastion.instance_id,
-        ssm_profile,
+        aws_profile,
         db.endpoint.address,
         db.endpoint.port,
         local_port,
