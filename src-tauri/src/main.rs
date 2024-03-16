@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbSecret, LogEntry, RdsInstance, ServiceDetails};
+use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
@@ -178,11 +179,13 @@ async fn login(
     database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<UserConfig, BError> {
     {
+        let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
         let mut app_state = app_state.0.lock().await;
         app_state.active_profile = Some(profile.to_owned());
         app_state.sdk_config = Some(
             aws_config::defaults(BehaviorVersion::latest())
                 .profile_name(profile)
+                .region(region_provider)
                 .load()
                 .await,
         );
