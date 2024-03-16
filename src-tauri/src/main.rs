@@ -95,7 +95,6 @@ async fn get_authorized(
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<AuthorizedUser, String> {
     let mut app_ctx = app_state.lock().await;
-    dbg!(app_ctx.active_profile.as_ref());
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
     let user_id = app_ctx.user_id.clone();
     let last_check = app_ctx.last_auth_check;
@@ -451,10 +450,11 @@ async fn credentials(
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
-    
+
     let (aws_profile, aws_config) = use_aws_config(&db.normalized_name).await;
-    let override_aws_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (override_aws_profile, override_aws_config ) = use_aws_config(&override_aws_profile).await;
+    let override_aws_profile =
+        select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
+    let (override_aws_profile, override_aws_config) = use_aws_config(&override_aws_profile).await;
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -469,7 +469,6 @@ async fn credentials(
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             }
-            
         }
     }
 
@@ -1340,8 +1339,9 @@ async fn open_dbeaver(
     }
 
     let (aws_profile, aws_config) = use_aws_config(&db.normalized_name).await;
-    let override_aws_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (override_aws_profile, override_aws_config ) = use_aws_config(&override_aws_profile).await;
+    let override_aws_profile =
+        select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
+    let (override_aws_profile, override_aws_config) = use_aws_config(&override_aws_profile).await;
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -1356,10 +1356,9 @@ async fn open_dbeaver(
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             }
-            
         }
     }
-    
+
     if let Err(err) = secret {
         ingest_log(
             &axiom.0,

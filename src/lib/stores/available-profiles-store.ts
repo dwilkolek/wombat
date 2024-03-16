@@ -8,7 +8,14 @@ const createAvailableProfilesStore = () => {
     invoke<string[]>('available_profiles').then((resp) => {
         set(resp);
     });
+    const refresh = () => {
+        invoke<string[]>('available_profiles').then((resp) => {
+            set(resp);
+        });
+    }
+    
     return {
+        refresh,
         subscribe,
         set,
         update,

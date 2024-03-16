@@ -17,7 +17,7 @@ pub fn wombat_dir() -> PathBuf {
 pub struct UserConfig {
     pub id: Uuid,
     verson: i8,
-    last_used_profile: Option<String>,    
+    last_used_profile: Option<String>,
     known_profiles: HashSet<String>,
     pub tracked_names: HashSet<TrackedName>,
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,

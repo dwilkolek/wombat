@@ -108,8 +108,27 @@ pub async fn available_profiles() -> Vec<String> {
         None,
     )
     .await;
+
     match cf {
-        Ok(cf) => cf.profiles().into_iter().map(|p| p.to_owned()).collect(),
+        Ok(cf) => {
+            let mut profiles: Vec<String> =
+                cf.profiles().into_iter().map(|p| p.to_owned()).collect();
+            profiles.retain(|profile| {
+                if let Some(profile_details) = cf.get_profile(profile.as_str()) {
+                    if let Some(role) = profile_details.get("role_arn") {
+                        let valid_role =
+                            role.ends_with(format!("/{}-infra", profile.as_str()).as_str());
+                        if !valid_role {
+                            warn!("Profile {} has invalid role: {}", profile, role);
+                        }
+                        return valid_role;
+                    }
+                }
+                false
+            });
+
+            profiles
+        }
         Err(_) => vec![],
     }
 }
@@ -511,7 +530,8 @@ pub async fn service_detail(
         .image()
         .unwrap_or_log()
         .split(":")
-        .last().unwrap_or("missing")
+        .last()
+        .unwrap_or("missing")
         .to_owned();
 
     return Ok(ServiceDetails {

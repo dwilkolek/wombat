@@ -80,6 +80,7 @@
 							try {
 								loading = true;
 								await login(profile);
+								availableProfilesStore.refresh()
 								loading = false;
 								goto(`/logged/apps`, { replaceState: true });
 							} catch (e) {
@@ -93,7 +94,19 @@
 							<label class="label" for="aws-profile">
 								<span class="label-text">AWS team profile</span>
 							</label>
-							{#await $availableProfilesStore}
+							<input
+								id="aws-profile"
+								type="text"
+								autocomplete="off"
+								autocorrect="off"
+								autocapitalize="off"
+								spellcheck="false"
+								placeholder="AWS profile"
+								class="input input-bordered w-full max-w-xs"
+								bind:value={profile}
+								required
+							/>
+							<!-- {#await $availableProfilesStore}
 								loading profiles...
 							{:then availableProfiles}
 								<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
@@ -101,7 +114,7 @@
 										<option value={availableProfile}>{availableProfile}</option>
 									{/each}
 								</select>
-							{/await}
+							{/await} -->
 						</div>
 						{#await dependenciesPromise then deps}
 							{#if !Object.entries(deps).some((v) => v[0] == 'aws-cli' && v[1].Err)}
