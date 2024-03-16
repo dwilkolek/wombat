@@ -41,6 +41,7 @@ mod proxy_authenticators;
 mod rds_resolver;
 mod shared;
 mod user;
+mod dependency_check;
 
 #[derive(Clone, serde::Serialize)]
 struct ProxyEventMessage {
@@ -1235,6 +1236,11 @@ async fn is_user_feature_enabled(
 }
 
 #[tauri::command]
+async fn check_dependencies() -> Result<HashMap<String, Result<String, String>>, ()> {
+    return Ok(dependency_check::check_dependencies());
+}
+
+#[tauri::command]
 async fn open_dbeaver(
     window: Window,
     db: aws::RdsInstance,
@@ -1405,6 +1411,7 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
+
     let app_config = app_config();
     let _guard = match app_config.logger.as_str() {
         "console" => {
@@ -1481,7 +1488,8 @@ async fn main() {
             proxy_auth_configs,
             is_user_feature_enabled,
             ping,
-            is_db_synchronized
+            is_db_synchronized, 
+            check_dependencies
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
