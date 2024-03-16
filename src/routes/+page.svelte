@@ -6,6 +6,7 @@
 	import { fetch } from '@tauri-apps/api/http';
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/api/process';
+	import { invoke } from '@tauri-apps/api';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
@@ -30,6 +31,10 @@
 		buttonText = event.payload;
 	});
 
+	let dependenciesPromise = invoke<{ [key: string]: { Ok: string } & { Err: String } }>(
+		'check_dependencies'
+	);
+
 	listen<string>('KILL_ME', () => {
 		exit(1);
 	});
@@ -41,6 +46,27 @@
 </svelte:head>
 {#await subscribe then _}
 	<div class="hero max-h-screen min-h-screen bg-base-200">
+		<div class="absolute right-0 top-4 p-2">
+			{#await dependenciesPromise then deps}
+				<div class="flex flex-col gap-1">
+					{#each Object.entries(deps) as dep}
+						<div class="flex items-center gap-1 text-sm">
+							{#if dep[1].Ok}
+								<div class="bg-lime-500 w-2 h-2 rounded rounded-full" />
+							{:else}
+								<div class="bg-rose-500 w-2 h-2 rounded rounded-full" />
+							{/if}
+							<span>
+								{dep[0]} :
+							</span>
+							<span class="">
+								{dep[1].Ok ?? dep[1].Err}
+							</span>
+						</div>
+					{/each}
+				</div>
+			{/await}
+		</div>
 		<div class="hero-content flex-col">
 			<div class="text-center">
 				<h1 class="text-5xl font-medium">Hello!</h1>
@@ -79,10 +105,19 @@
 								required
 							/>
 						</div>
-
-						<div class="form-control mt-6">
-							<button class="btn btn-accent" disabled={loading} type="submit"> {buttonText}</button>
-						</div>
+						{#await dependenciesPromise then deps}
+							{#if !Object.entries(deps).some((v) => v[0] == "aws-cli" && v[1].Err)}
+								<div class="form-control mt-6">
+									<button class="btn btn-accent" disabled={loading} type="submit">
+										{buttonText}</button
+									>
+								</div>
+							{:else}
+								<div class="text-rose-500">
+									Required dependency is missing
+								</div>
+							{/if}
+						{/await}
 					</form>
 				</div>
 			</div>
