@@ -9,7 +9,7 @@
 </script>
 
 {#await $availableProfilesStore then availableProfiles}
-	{#if $featuresStore.allowAllProxies || availableProfiles.some((profile) => profile == database.normalized_name)}
+	{#if $featuresStore.devWay || availableProfiles.some((profile) => profile == database.normalized_name)}
 		<div class="tooltip tooltip-left" data-tip="Start proxy">
 			<button
 				class="flex flex-row gap-1"

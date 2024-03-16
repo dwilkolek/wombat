@@ -28,7 +28,7 @@
 </script>
 
 {#await $availableProfilesStore then availableProfiles}
-	{#if $featuresStore.allowAllProxies || availableProfiles.some((profile) => profile == service.name)}
+	{#if $featuresStore.devWay || availableProfiles.some((profile) => profile == service.name)}
 		<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
 			<div class="dropdown">
 				<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">
@@ -71,7 +71,7 @@
 					{#await $availableProfilesStore then availableProfiles}
 						{#each $proxyAuthConfigsStore as config}
 							{@const disabled =
-								!$featuresStore.allowAllProxies &&
+								!$featuresStore.devWay &&
 								!availableProfiles.some(
 									(profile) => profile == config.from_app || config.from_app == '*'
 								)}

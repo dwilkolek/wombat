@@ -6,35 +6,30 @@ const createFeatureStore = () => {
 	const features = writable({
 		ecsTab: false,
 		rdsTab: false,
-		allowAllProxies: false,
-		allowAllSecrets: false
+		devWay: false,
 	});
 
 	Promise.all([
 		invoke<boolean>('is_feature_enabled', { feature: 'ecs-tab' }),
 		invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
-		invoke<boolean>('is_feature_enabled', { feature: 'allow-all-proxies' }),
-		invoke<boolean>('is_feature_enabled', { feature: 'allow-all-secrets' })
-	]).then(([ecsTab, rdsTab, allowAllProxies, allowAllSecrets ]) => {
+		invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
+	]).then(([ecsTab, rdsTab, devWay ]) => {
 		features.set({
 			ecsTab,
 			rdsTab,
-			allowAllProxies,
-			allowAllSecrets,
+			devWay,
 		});
 	});
 	listen('cache-refreshed', () => {
 		Promise.all([
             invoke<boolean>('is_feature_enabled', { feature: 'ecs-tab' }),
             invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
-            invoke<boolean>('is_feature_enabled', { feature: 'allow-all-proxies' }),
-            invoke<boolean>('is_feature_enabled', { feature: 'allow-all-secrets' })
-        ]).then(([ecsTab, rdsTab, allowAllProxies, allowAllSecrets ]) => {
+            invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
+        ]).then(([ecsTab, rdsTab, devWay ]) => {
             features.set({
                 ecsTab,
                 rdsTab,
-                allowAllProxies,
-                allowAllSecrets,
+                devWay,
             });
         });
 	});

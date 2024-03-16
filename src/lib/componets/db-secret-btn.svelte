@@ -39,7 +39,7 @@
 
 {#if database}
 	{#await $availableProfilesStore then availableProfiles}
-		{#if $featuresStore.allowAllSecrets || availableProfiles.some((profile) => profile == database?.normalized_name)}
+		{#if $featuresStore.devWay || availableProfiles.some((profile) => profile == database?.normalized_name)}
 			<div class="tooltip tooltip-left" data-tip="Search for secret">
 				<button>
 					<!-- svelte-ignore a11y-click-events-have-key-events -->

@@ -275,7 +275,8 @@ async fn login(
     let _ = window.emit("message", "Syncing global state...");
     let _ = db_sync_handle.await;
     let db = database.0.read().await;
-    if !global_db::is_feature_enabled(&db, "wombat-2.2.0", authorized_user.id.to_string().as_str()).await
+    if !global_db::is_feature_enabled(&db, "wombat-2.2.0", authorized_user.id.to_string().as_str())
+        .await
     {
         return Err(BError::new("login", "Failed to start."));
     }
@@ -290,11 +291,8 @@ async fn login(
 
     let _ = window.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
-        // let mut interval = tokio::time::interval(Duration::from_secs(3600));
         let initial_wait = tokio::time::sleep(Duration::from_secs(20));
         initial_wait.await;
-        // loop {
-        // interval.tick().await;
         {
             let mut rds_resolver_instance = rds_resolver_instance.write().await;
             let databases = rds_resolver_instance
@@ -350,7 +348,6 @@ async fn login(
                 .await;
             }
         }
-        // }
     }));
 
     let _ = window.emit("message", "Success!");
@@ -412,32 +409,28 @@ async fn save_preffered_envs(
     user_config.save_preffered_envs(envs)
 }
 
-async fn db_credentials(
+async fn select_aws_profile(
+    profile: &str,
     authorized_user: &AuthorizedUser,
-    aws_config: &aws_config::SdkConfig,
-    db: &aws::RdsInstance,
-) -> Result<DbSecret, BError> {
-    let secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
-
-    if secret.is_err() {
-        warn!("Falling back to user profile: {}", &authorized_user.profile);
-        return aws::db_secret(&authorized_user.sdk_config, &db.name, &db.env).await;
-    }
-    return secret;
+    database: &tauri::State<'_, DatabaseInstance>,
+) -> String {
+    let database = database.0.read().await;
+    let is_enabled =
+        global_db::is_feature_enabled(&database, "dev-way", &format!("{}", authorized_user.id))
+            .await;
+    let ssm_profile_override = if is_enabled {
+        authorized_user.profile.clone()
+    } else {
+        profile.to_owned()
+    };
+    return ssm_profile_override;
 }
 
-async fn select_aws_config(
-    app: &str,
-    user_config: &tauri::State<'_, UserConfigState>,
-) -> (String, aws_config::SdkConfig) {
-    let app = app.to_owned();
-    let app_clone = app.to_owned();
-    let user_config = user_config.0.lock().await;
-    let ssm_role = user_config.ssm_role.as_ref().unwrap_or_log();
-    let ssm_profile = ssm_role.get(app.as_str()).unwrap_or(&app_clone);
+async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig) {
     let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
+
     return (
-        app,
+        ssm_profile.to_owned(),
         aws_config::defaults(BehaviorVersion::latest())
             .profile_name(ssm_profile)
             .region(region_provider)
@@ -451,15 +444,35 @@ async fn credentials(
     window: Window,
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
-    user_config: tauri::State<'_, UserConfigState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<DbSecret, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
-    let (_aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
-    let secret = db_credentials(&authorized_user, &aws_config, &db).await;
+    
+    let (aws_profile, aws_config) = use_aws_config(&db.normalized_name).await;
+    let override_aws_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
+    let (override_aws_profile, override_aws_config ) = use_aws_config(&override_aws_profile).await;
+
+    let secret;
+    let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
+    match found_db_secret {
+        Ok(found_secret) => {
+            secret = Ok(found_secret);
+        }
+        Err(err) => {
+            if override_aws_profile == aws_profile {
+                secret = Err(err);
+            } else {
+                warn!("Falling back to user profile: {}", &override_aws_profile);
+                secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
+            }
+            
+        }
+    }
+
     match &secret {
         Ok(_) => {
             ingest_log(
@@ -946,13 +959,15 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
+    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_db_proxy", msg)),
         Ok(authorized_user) => authorized_user,
     };
 
-    let (aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
+    let ssm_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
+    let (aws_profile, aws_config) = use_aws_config(&ssm_profile).await;
 
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
@@ -1124,6 +1139,7 @@ async fn start_service_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
+    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<(), BError> {
     let local_port;
     {
@@ -1149,7 +1165,8 @@ async fn start_service_proxy(
         Ok(authorized_user) => authorized_user,
     };
 
-    let (aws_profile, aws_config) = select_aws_config(&service.name, &user_config).await;
+    let ssm_profile = select_aws_profile(&service.name, &authorized_user, &database).await;
+    let (aws_profile, aws_config) = use_aws_config(&ssm_profile).await;
 
     let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
@@ -1270,7 +1287,6 @@ async fn is_feature_enabled(
     return Ok(is_enabled);
 }
 
-
 #[tauri::command]
 async fn check_dependencies() -> Result<HashMap<String, Result<String, String>>, ()> {
     return Ok(dependency_check::check_dependencies());
@@ -1290,6 +1306,7 @@ async fn open_dbeaver(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
+    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<(), BError> {
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
@@ -1322,8 +1339,27 @@ async fn open_dbeaver(
             .clone();
     }
 
-    let (_aws_profile, aws_config) = select_aws_config(&db.normalized_name, &user_config).await;
-    let secret = db_credentials(&authorized_user, &aws_config, &db).await;
+    let (aws_profile, aws_config) = use_aws_config(&db.normalized_name).await;
+    let override_aws_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
+    let (override_aws_profile, override_aws_config ) = use_aws_config(&override_aws_profile).await;
+
+    let secret;
+    let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
+    match found_db_secret {
+        Ok(found_secret) => {
+            secret = Ok(found_secret);
+        }
+        Err(err) => {
+            if override_aws_profile == aws_profile {
+                secret = Err(err);
+            } else {
+                warn!("Falling back to user profile: {}", &override_aws_profile);
+                secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
+            }
+            
+        }
+    }
+    
     if let Err(err) = secret {
         ingest_log(
             &axiom.0,
