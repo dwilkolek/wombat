@@ -17,7 +17,8 @@ pub fn wombat_dir() -> PathBuf {
 pub struct UserConfig {
     pub id: Uuid,
     verson: i8,
-    last_used_profile: Option<String>,
+    last_used_profile: Option<String>,    
+    known_profiles: HashSet<String>,
     pub tracked_names: HashSet<TrackedName>,
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
@@ -52,6 +53,7 @@ impl UserConfig {
                 id: Uuid::new_v4(),
                 verson: 1,
                 last_used_profile: None,
+                known_profiles: HashSet::new(),
                 tracked_names: HashSet::new(),
                 db_proxy_port_map: HashMap::new(),
                 service_proxy_port_map: HashMap::new(),
@@ -185,6 +187,7 @@ impl UserConfig {
 
     pub fn use_profile(&mut self, profile: &str) {
         self.last_used_profile = Some(profile.to_owned());
+        self.known_profiles.insert(profile.to_owned());
         self.save()
     }
 
