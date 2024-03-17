@@ -7,6 +7,7 @@
 	import { featuresStore } from '$lib/stores/feature-store';
 
 	export let service: ServiceDetails;
+	let { infraProfiles } = availableProfilesStore;
 
 	const start_proxy = async (proxyAuthConfig: ProxyAuthConfig | null) => {
 		if (service?.env == AwsEnv.PROD) {
@@ -27,8 +28,8 @@
 	};
 </script>
 
-{#await $availableProfilesStore then availableProfiles}
-	{#if $featuresStore.devWay || availableProfiles.some((profile) => profile == service.name)}
+{#await $infraProfiles then infraProfiles}
+	{#if $featuresStore.devWay || infraProfiles.some((profile) => profile == service.name)}
 		<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
 			<div class="dropdown">
 				<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">
@@ -68,31 +69,27 @@
 					<li>
 						<button on:click|preventDefault={() => start_proxy(null)}>No auth proxy</button>
 					</li>
-					{#await $availableProfilesStore then availableProfiles}
-						{#each $proxyAuthConfigsStore as config}
-							{@const disabled =
-								!$featuresStore.devWay &&
-								!availableProfiles.some(
-									(profile) => profile == config.from_app || config.from_app == '*'
-								)}
+					{#each $proxyAuthConfigsStore as config}
+						{@const disabled =
+							!$featuresStore.devWay &&
+							!infraProfiles.some(
+								(profile) => profile == config.from_app || config.from_app == '*'
+							)}
 
-							{#if config.to_app == service.name && config.env == service.env}
-								<li class={disabled ? 'opacity-30 cursor-not-allowed' : ''}>
-									<button
-										{disabled}
-										on:click|preventDefault={() => {
-											console.log('click');
-											start_proxy(config);
-										}}
-									>
-										{config.auth_type}: {config.jepsen_client_id ??
-											config.basic_user ??
-											'?'}</button
-									>
-								</li>
-							{/if}
-						{/each}
-					{/await}
+						{#if config.to_app == service.name && config.env == service.env}
+							<li class={disabled ? 'opacity-30 cursor-not-allowed' : ''}>
+								<button
+									{disabled}
+									on:click|preventDefault={() => {
+										console.log('click');
+										start_proxy(config);
+									}}
+								>
+									{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
+								>
+							</li>
+						{/if}
+					{/each}
 				</ul>
 			</div>
 		</div>

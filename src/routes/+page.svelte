@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	import { open } from '@tauri-apps/api/shell';
 	import { version } from '$app/environment';
 	import { fetch } from '@tauri-apps/api/http';
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/api/process';
 	import { invoke } from '@tauri-apps/api';
+	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
@@ -39,6 +39,7 @@
 	listen<string>('KILL_ME', () => {
 		exit(1);
 	});
+	const { ssoProfiles } = availableProfilesStore;
 </script>
 
 <svelte:head>
@@ -80,7 +81,6 @@
 							try {
 								loading = true;
 								await login(profile);
-								availableProfilesStore.refresh()
 								loading = false;
 								goto(`/logged/apps`, { replaceState: true });
 							} catch (e) {
@@ -92,29 +92,15 @@
 					>
 						<div class="form-control">
 							<label class="label" for="aws-profile">
-								<span class="label-text">AWS team profile</span>
+								<span class="label-text">AWS profile</span>
 							</label>
-							<input
-								id="aws-profile"
-								type="text"
-								autocomplete="off"
-								autocorrect="off"
-								autocapitalize="off"
-								spellcheck="false"
-								placeholder="AWS profile"
-								class="input input-bordered w-full max-w-xs"
-								bind:value={profile}
-								required
-							/>
-							<!-- {#await $availableProfilesStore}
-								loading profiles...
-							{:then availableProfiles}
-								<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
-									{#each availableProfiles as availableProfile}
-										<option value={availableProfile}>{availableProfile}</option>
+							<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
+								{#await $ssoProfiles then ssoProfiles}
+									{#each ssoProfiles as ssoProfile}
+										<option value={ssoProfile}>{ssoProfile}</option>
 									{/each}
-								</select>
-							{/await} -->
+								{/await}
+							</select>
 						</div>
 						{#await dependenciesPromise then deps}
 							{#if !Object.entries(deps).some((v) => v[0] == 'aws-cli' && v[1].Err)}

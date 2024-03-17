@@ -6,10 +6,11 @@
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let database: RdsInstance;
+	let {infraProfiles} = availableProfilesStore;
 </script>
 
-{#await $availableProfilesStore then availableProfiles}
-	{#if $featuresStore.devWay || availableProfiles.some((profile) => profile == database.normalized_name)}
+{#await $infraProfiles then infraProfiles}
+	{#if $featuresStore.devWay || infraProfiles.some((profile) => profile == database.normalized_name)}
 		<div class="tooltip tooltip-left" data-tip="Start proxy">
 			<button
 				class="flex flex-row gap-1"

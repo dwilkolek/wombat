@@ -7,6 +7,8 @@
 	import { featuresStore } from '$lib/stores/feature-store';
 	export let database: RdsInstance | undefined;
 
+	let {infraProfiles} = availableProfilesStore;
+
 	const credentialsHandler = async () => {
 		let answer = await ask(
 			'Are you alone and not sharing screen?\nAccess to credentials is recorded.\nRequires access to Secret Manager.',
@@ -38,8 +40,8 @@
 </script>
 
 {#if database}
-	{#await $availableProfilesStore then availableProfiles}
-		{#if $featuresStore.devWay || availableProfiles.some((profile) => profile == database?.normalized_name)}
+	{#await $infraProfiles then infraProfiles}
+		{#if $featuresStore.devWay || infraProfiles.some((profile) => profile == database?.normalized_name)}
 			<div class="tooltip tooltip-left" data-tip="Search for secret">
 				<button>
 					<!-- svelte-ignore a11y-click-events-have-key-events -->

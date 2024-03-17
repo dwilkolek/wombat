@@ -1292,8 +1292,14 @@ async fn check_dependencies() -> Result<HashMap<String, Result<String, String>>,
 }
 
 #[tauri::command]
-async fn available_profiles() -> Result<Vec<String>, BError> {
-    let profiles = aws::available_profiles().await;
+async fn available_infra_profiles() -> Result<Vec<String>, BError> {
+    let profiles = aws::available_infra_profiles().await;
+    return Ok(profiles);
+}
+
+#[tauri::command]
+async fn available_sso_profiles() -> Result<Vec<String>, BError> {
+    let profiles = aws::available_sso_profiles().await;
     return Ok(profiles);
 }
 
@@ -1569,7 +1575,8 @@ async fn main() {
             ping,
             is_db_synchronized,
             check_dependencies,
-            available_profiles
+            available_infra_profiles,
+            available_sso_profiles
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri application");
