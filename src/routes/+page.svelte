@@ -46,7 +46,7 @@
 </svelte:head>
 {#await subscribe then _}
 	<div class="hero max-h-screen min-h-screen bg-base-200">
-		<div class="absolute right-0 top-4 p-2">
+		<div class="absolute left-4 top-4 p-2">
 			{#await dependenciesPromise then deps}
 				<div class="flex flex-col gap-1">
 					{#each Object.entries(deps) as dep}

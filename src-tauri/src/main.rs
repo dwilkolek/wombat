@@ -34,6 +34,7 @@ use wait_timeout::ChildExt;
 mod aws;
 mod cache_db;
 mod cluster_resolver;
+mod dependency_check;
 mod ecs_resolver;
 mod global_db;
 mod proxy;
@@ -41,7 +42,6 @@ mod proxy_authenticators;
 mod rds_resolver;
 mod shared;
 mod user;
-mod dependency_check;
 
 #[derive(Clone, serde::Serialize)]
 struct ProxyEventMessage {
@@ -1488,7 +1488,7 @@ async fn main() {
             proxy_auth_configs,
             is_user_feature_enabled,
             ping,
-            is_db_synchronized, 
+            is_db_synchronized,
             check_dependencies
         ])
         .run(tauri::generate_context!())

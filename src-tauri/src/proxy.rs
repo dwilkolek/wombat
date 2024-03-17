@@ -37,7 +37,7 @@ pub async fn start_aws_ssm_proxy(
 ) {
     let mut command = Command::new("aws");
     let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
-    let region =  region_provider.region().await.unwrap_or_log(); 
+    let region = region_provider.region().await.unwrap_or_log();
     command.args([
         "ssm",
         "start-session",
