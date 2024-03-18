@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import Icon from '$lib/images/128x128.png';
+	import WombatIcon from '$lib/images/128x128.png';
+	import PikachuIcon from '$lib/images/pikachu.png';
+	import PsyduckIcon from '$lib/images/psyduck.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';
+	import { featuresStore } from '$lib/stores/feature-store';
 
 	const logout = async () => {
 		try {
@@ -27,7 +30,7 @@
 					class={$page.url.pathname === '/logged/apps' ? 'active pl-10 relative' : 'pl-10 relative'}
 					href="/logged/apps"
 				>
-					<img class="h-10 absolute -left-2" alt="wombat" src={Icon} />
+					<img class="h-10 absolute -left-2" alt="wombat" src={WombatIcon} />
 					Apps
 				</a>
 			</li>
@@ -36,16 +39,27 @@
 					>Logs 🧐</a
 				>
 			</li>
-			<li>
-				<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
-					>Services (ECS)
-				</a>
-			</li>
-			<li>
-				<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
-					>Databases (RDS)</a
-				>
-			</li>
+			{#await $featuresStore then features}
+				<li>
+					{#if features.ecsTab}
+						<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
+							>Services (ECS)
+						</a>
+					{:else}
+						<span class="opacity-30">Services (ECS) </span>
+					{/if}
+				</li>
+
+				<li>
+					{#if features.rdsTab}
+						<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
+							>Databases (RDS)</a
+						>
+					{:else}
+						<span class="opacity-30">Databases (RDS)</span>
+					{/if}
+				</li>
+			{/await}
 			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a
@@ -55,6 +69,13 @@
 	</div>
 
 	<div class="flex items-center gap-4">
+		{#if $featuresStore.devWay}
+			<img class="h-8" alt="dev-way" src={PikachuIcon} />
+		{:else}
+			<img class="h-8" alt="platform-way" src={PsyduckIcon} />
+		{/if}
+		
+
 		{#await userConfig then { last_used_profile, id }}
 			<div class="flex items-center gap-2">
 				<span>{last_used_profile}</span>
