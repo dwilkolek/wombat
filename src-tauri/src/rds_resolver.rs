@@ -108,6 +108,7 @@ async fn fetch_databases(conn: &libsql::Connection) -> Vec<aws::RdsInstance> {
                         let appname_tag = row.get::<String>(7).unwrap();
                         databases.push(aws::RdsInstance {
                             arn,
+                            normalized_name: name.replace("-migrated", ""),
                             name,
                             engine,
                             engine_version,

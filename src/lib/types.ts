@@ -41,6 +41,14 @@ export type ServiceDetails = {
 	timestamp: number;
 };
 
+export type ServiceDetailsMissing = {
+	timestamp: number;
+	arn: string;
+	name: string;
+	error: string;
+	env: AwsEnv;
+};
+
 export type Endpoint = {
 	address: string;
 	port: number;
@@ -48,6 +56,7 @@ export type Endpoint = {
 
 export type RdsInstance = {
 	name: string;
+	normalized_name: string;
 	engine: string;
 	engine_version: string;
 	endpoint: Endpoint;
@@ -74,19 +83,19 @@ export type BError = {
 	command: string;
 };
 
-
 export type ProxyAuthConfig = {
-     to_app: string,
-     env: string,
+	from_app: string;
+	to_app: string;
+	env: string;
 
-     auth_type: string,
-     api_path: string,
+	auth_type: string;
+	api_path: string;
 
-     jepsen_auth_api: string | null | undefined,
-     jepsen_api_name: string | null | undefined,
-     jepsen_client_id: string | null | undefined,
+	jepsen_auth_api: string | null | undefined;
+	jepsen_api_name: string | null | undefined;
+	jepsen_client_id: string | null | undefined;
 
-     basic_user: string | null | undefined,
+	basic_user: string | null | undefined;
 
-     secret_name: string,
+	secret_name: string;
 };

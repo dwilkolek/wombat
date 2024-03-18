@@ -4,7 +4,7 @@
 
 	import { taskStore } from '$lib/stores/task-store';
 	import type { ServiceDetails } from '$lib/types';
-
+	
 	export let service: ServiceDetails;
 	$: port = $taskStore?.find((t) => t.arn == service?.arn)?.port;
 </script>

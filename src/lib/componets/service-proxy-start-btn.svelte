@@ -3,8 +3,11 @@
 	import { AwsEnv, type ProxyAuthConfig, type ServiceDetails } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
+	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { featuresStore } from '$lib/stores/feature-store';
 
 	export let service: ServiceDetails;
+	let { infraProfiles } = availableProfilesStore;
 
 	const start_proxy = async (proxyAuthConfig: ProxyAuthConfig | null) => {
 		if (service?.env == AwsEnv.PROD) {
@@ -25,51 +28,101 @@
 	};
 </script>
 
-<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
-	<div class="dropdown">
-		<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">
-			<div class="w-5 h-5 relative">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4 absolute"
+{#await $infraProfiles then infraProfiles}
+	{#if $featuresStore.devWay || infraProfiles.some((profile) => profile == service.name)}
+		<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
+			<div class="dropdown">
+				<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">
+					<div class="w-5 h-5 relative">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="w-4 h-4 absolute"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3m16.5 0h.008v.008h-.008v-.008zm-3 0h.008v.008h-.008v-.008z"
+							/>
+						</svg>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+							class="w-3 h-3 absolute text-xs right-0 bottom-0 text-accent"
+						>
+							<path
+								d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
+							/>
+						</svg>
+					</div>
+				</div>
+
+				<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
+				<ul
+					tabindex="0"
+					class="shadow menu dropdown-content z-[1] menu bg-base-100 rounded-box w-52"
 				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3m16.5 0h.008v.008h-.008v-.008zm-3 0h.008v.008h-.008v-.008z"
-					/>
-				</svg>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					viewBox="0 0 20 20"
-					fill="currentColor"
-					class="w-3 h-3 absolute text-xs right-0 bottom-0 text-accent"
-				>
-					<path
-						d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
-					/>
-				</svg>
+					<li>
+						<button on:click|preventDefault={() => start_proxy(null)}>No auth proxy</button>
+					</li>
+					{#each $proxyAuthConfigsStore as config}
+						{@const disabled =
+							!$featuresStore.devWay &&
+							!infraProfiles.some(
+								(profile) => profile == config.from_app || config.from_app == '*'
+							)}
+
+						{#if config.to_app == service.name && config.env == service.env}
+							<li class={disabled ? 'opacity-30 cursor-not-allowed' : ''}>
+								<button
+									{disabled}
+									on:click|preventDefault={() => {
+										console.log('click');
+										start_proxy(config);
+									}}
+								>
+									{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
+								>
+							</li>
+						{/if}
+					{/each}
+				</ul>
 			</div>
 		</div>
-
-		<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
-		<ul tabindex="0" class="shadow menu dropdown-content z-[1] menu bg-base-100 rounded-box w-52">
-			<li><button on:click|preventDefault={() => start_proxy(null)}>No auth proxy</button></li>
-			{#each $proxyAuthConfigsStore as config}
-				{#if config.to_app == service.name && config.env == service.env}
-					<li>
-						<button on:click|preventDefault={() => {
-							console.log('click')
-							start_proxy(config)
-						}}>{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
-						>
-					</li>
-				{/if}
-			{/each}
-		</ul>
-	</div>
-</div>
+	{:else}
+		<div class="tooltip tooltip-left h-[20px]" data-tip={`Missing aws profile: ${service.name}`}>
+			<div class="flex flex-row gap-1 items-center">
+				<div class="w-5 h-5 relative opacity-30">
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke-width="1.5"
+						stroke="currentColor"
+						class="w-4 h-4 absolute"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3m16.5 0h.008v.008h-.008v-.008zm-3 0h.008v.008h-.008v-.008z"
+						/>
+					</svg>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						class="w-3 h-3 absolute text-xs right-0 bottom-0 text-accent"
+					>
+						<path
+							d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
+						/>
+					</svg>
+				</div>
+			</div>
+		</div>
+	{/if}
+{/await}

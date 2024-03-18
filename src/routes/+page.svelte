@@ -7,6 +7,7 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/api/process';
 	import { invoke } from '@tauri-apps/api';
+	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
@@ -38,6 +39,7 @@
 	listen<string>('KILL_ME', () => {
 		exit(1);
 	});
+	const { ssoProfiles } = availableProfilesStore;
 </script>
 
 <svelte:head>
@@ -92,30 +94,23 @@
 							<label class="label" for="aws-profile">
 								<span class="label-text">AWS profile</span>
 							</label>
-							<input
-								id="aws-profile"
-								type="text"
-								autocomplete="off"
-								autocorrect="off"
-								autocapitalize="off"
-								spellcheck="false"
-								placeholder="AWS profile"
-								class="input input-bordered w-full max-w-xs"
-								bind:value={profile}
-								required
-							/>
+							<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
+								{#await $ssoProfiles then ssoProfiles}
+									{#each ssoProfiles as ssoProfile}
+										<option value={ssoProfile}>{ssoProfile}</option>
+									{/each}
+								{/await}
+							</select>
 						</div>
 						{#await dependenciesPromise then deps}
-							{#if !Object.entries(deps).some((v) => v[0] == "aws-cli" && v[1].Err)}
+							{#if !Object.entries(deps).some((v) => v[0] == 'aws-cli' && v[1].Err)}
 								<div class="form-control mt-6">
 									<button class="btn btn-accent" disabled={loading} type="submit">
 										{buttonText}</button
 									>
 								</div>
 							{:else}
-								<div class="text-rose-500">
-									Required dependency is missing
-								</div>
+								<div class="text-rose-500">Required dependency is missing</div>
 							{/if}
 						{/await}
 					</form>

@@ -1,15 +1,14 @@
 import { derived, get, writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
-import type { AwsEnv, RdsInstance, ServiceDetails } from '$lib/types';
+import type { AwsEnv, RdsInstance, ServiceDetails, ServiceDetailsMissing } from '$lib/types';
 import { ENVIRONMENTS } from './env-store';
 
 import { format } from 'date-fns';
-
 type ServiceDetailsPayload = {
 	app: string;
 	dbs: RdsInstance[];
-	services: ServiceDetails[];
+	services: { Ok?: ServiceDetails; Err?: ServiceDetailsMissing }[];
 	timestamp: number;
 };
 
@@ -19,7 +18,7 @@ const createServiceDetailsStore = () => {
 		innerStore.update((old) => {
 			return old.filter((o) => o.app !== app);
 		});
-	}
+	};
 	return { ...innerStore, refreshOne };
 };
 
@@ -32,11 +31,14 @@ listen<ServiceDetailsPayload>('new-service-details', (data) => {
 	});
 });
 listen('cache-refreshed', () => {
+	to = {};
 	allServiceDetailsStore.set([]);
 });
 listen('logged-out', () => {
+	to = {};
 	allServiceDetailsStore.set([]);
 });
+
 export const allServiceDetailsStore = createServiceDetailsStore();
 let refreshTimeout: number | undefined;
 const refresh = () => {
@@ -55,7 +57,7 @@ const refresh = () => {
 };
 refresh();
 
-const to: { [key: string]: Promise<void> } = {};
+let to: { [key: string]: Promise<void> } = {};
 export const serviceDetailStore = (app: string) =>
 	derived([allServiceDetailsStore], (stores) => {
 		const apps = stores[0];
@@ -69,11 +71,16 @@ export const serviceDetailStore = (app: string) =>
 		if (details) {
 			const result = {
 				app,
-				envs: new Map<AwsEnv, { services: ServiceDetails[]; dbs: RdsInstance[] }>(),
+				envs: new Map<
+					AwsEnv,
+					{ services: (ServiceDetails & ServiceDetailsMissing)[]; dbs: RdsInstance[] }
+				>(),
 				timestamp: format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')
 			};
 			for (const env of ENVIRONMENTS) {
-				const services = details.services.filter((s) => s.env === env);
+				const services = details.services
+					.map((s) => s.Ok ?? s.Err)
+					.filter((s) => s!.env === env) as (ServiceDetails & ServiceDetailsMissing)[];
 				const dbs = details.dbs.filter((s) => s.env === env);
 				if (services.length || dbs.length) {
 					result.envs.set(env, {

@@ -16,7 +16,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      - uses: bluwy/substitute-string-action@v1
+      - uses: bluwy/substitute-string-action@v2
         id: sub
         with:
           _input-file: 'src-tauri/src/main.rs'
@@ -28,7 +28,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_SYNC_URL: ${{ secrets.TURSO_SYNC_URL }}
       - name: setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
       - name: install Rust stable

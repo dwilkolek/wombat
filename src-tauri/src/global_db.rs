@@ -154,6 +154,7 @@ pub async fn log_filters(db: &GlobDatabase) -> Vec<LogFilter> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyAuthConfig {
+    pub from_app: String,
     pub to_app: String,
     pub env: String,
 
@@ -177,7 +178,9 @@ pub async fn get_proxy_auth_configs(db: &GlobDatabase) -> Vec<ProxyAuthConfig> {
     let conn = db.get_connection().await;
     let result = conn
         .query(
-            "SELECT to_app, env,
+            "SELECT 
+            from_app, 
+            to_app, env,
             auth_type, api_path,
 
             jepsen_auth_api,
