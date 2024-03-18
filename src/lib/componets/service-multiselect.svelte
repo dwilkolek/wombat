@@ -119,68 +119,72 @@
 								bind:this={inputElement}
 							/>
 						</div>
-						{#await services then services}
-							{#each services as o}
-								<!-- svelte-ignore a11y-click-events-have-key-events -->
-								<!-- svelte-ignore a11y-no-static-element-interactions -->
-								<div
-									class={`cursor-pointer w-full hover:bg-base-300`}
-									on:click={() => {
-										select(o);
-										inputValue = '';
-									}}
-								>
-									<div class="flex w-full items-center p-1 border-transparent border-l-2 relative">
-										<div class="w-full items-center flex">
-											<div class={`mx-2 leading-6 flex items-center gap-1`}>
-												{#if $selectedServices.some((selected) => selected.name == o.name)}
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														viewBox="0 0 20 20"
-														fill="currentColor"
-														class="w-4 h-4 text-lime-400"
-													>
-														<path
-															fill-rule="evenodd"
-															d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-															clip-rule="evenodd"
-														/>
-													</svg>
-												{:else}
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														viewBox="0 0 20 20"
-														fill="currentColor"
-														class="w-4 h-4"
-													>
-														<path
-															fill-rule="evenodd"
-															d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
-															clip-rule="evenodd"
-														/>
-													</svg>
-												{/if}
-												{#if tracked_names.includes(o.name)}
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														viewBox="0 0 20 20"
-														fill="currentColor"
-														class="w-3 h-3 text-warning"
-													>
-														<path
-															fill-rule="evenodd"
-															d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z"
-															clip-rule="evenodd"
-														/>
-													</svg>
-												{/if}
-												{o.name}
+						<div class="overflow-auto max-h-[250px]">
+							{#await services then services}
+								{#each services as o}
+									<!-- svelte-ignore a11y-click-events-have-key-events -->
+									<!-- svelte-ignore a11y-no-static-element-interactions -->
+									<div
+										class={`cursor-pointer w-full hover:bg-base-300`}
+										on:click={() => {
+											select(o);
+											inputValue = '';
+										}}
+									>
+										<div
+											class="flex w-full items-center p-1 border-transparent border-l-2 relative"
+										>
+											<div class="w-full items-center flex">
+												<div class={`mx-2 leading-6 flex items-center gap-1`}>
+													{#if $selectedServices.some((selected) => selected.name == o.name)}
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															viewBox="0 0 20 20"
+															fill="currentColor"
+															class="w-4 h-4 text-lime-400"
+														>
+															<path
+																fill-rule="evenodd"
+																d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+																clip-rule="evenodd"
+															/>
+														</svg>
+													{:else}
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															viewBox="0 0 20 20"
+															fill="currentColor"
+															class="w-4 h-4"
+														>
+															<path
+																fill-rule="evenodd"
+																d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z"
+																clip-rule="evenodd"
+															/>
+														</svg>
+													{/if}
+													{#if tracked_names.includes(o.name)}
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															viewBox="0 0 20 20"
+															fill="currentColor"
+															class="w-3 h-3 text-warning"
+														>
+															<path
+																fill-rule="evenodd"
+																d="M10.868 2.884c-.321-.772-1.415-.772-1.736 0l-1.83 4.401-4.753.381c-.833.067-1.171 1.107-.536 1.651l3.62 3.102-1.106 4.637c-.194.813.691 1.456 1.405 1.02L10 15.591l4.069 2.485c.713.436 1.598-.207 1.404-1.02l-1.106-4.637 3.62-3.102c.635-.544.297-1.584-.536-1.65l-4.752-.382-1.831-4.401z"
+																clip-rule="evenodd"
+															/>
+														</svg>
+													{/if}
+													{o.name}
+												</div>
 											</div>
 										</div>
 									</div>
-								</div>
-							{/each}
-						{/await}
+								{/each}
+							{/await}
+						</div>
 					</div>
 				</div>
 			{/if}
