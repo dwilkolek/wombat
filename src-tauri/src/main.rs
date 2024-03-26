@@ -180,7 +180,7 @@ async fn login(
     database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<UserConfig, BError> {
     {
-        let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
+        let region_provider = RegionProviderChain::default_provider().or_else("eu-west-1");
         let mut app_state = app_state.0.lock().await;
         app_state.active_profile = Some(profile.to_owned());
         app_state.sdk_config = Some(
