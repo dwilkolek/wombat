@@ -1,6 +1,5 @@
-use crate::{global_db, AsyncTaskManager, ProxyEventMessage};
+use crate::{aws, global_db, AsyncTaskManager, ProxyEventMessage};
 use async_trait::async_trait;
-use aws_config::meta::region::RegionProviderChain;
 use filepath::FilePath;
 use log::{error, info, warn};
 use shared_child::SharedChild;
@@ -36,7 +35,7 @@ pub async fn start_aws_ssm_proxy(
     proxy_auth_config: Option<global_db::ProxyAuthConfig>,
 ) {
     let mut command = Command::new("aws");
-    let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
+    let region_provider = aws::region_provider(profile.as_str()).await;
     let region = region_provider.region().await.unwrap_or_log();
     command.args([
         "ssm",
