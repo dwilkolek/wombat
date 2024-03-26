@@ -100,6 +100,32 @@ pub struct LogEntry {
     pub message: String,
 }
 
+pub async fn region_provider(profile: &str) -> aws_config::meta::region::RegionProviderChain {
+    return aws_config::meta::region::RegionProviderChain::first_try(
+        region_from_profile(profile).await,
+    )
+    .or_default_provider()
+    .or_else(aws_config::Region::new("eu-west-1"));
+}
+
+async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
+    let cf = aws_config::profile::load(
+        &aws_types::os_shim_internal::Fs::real(),
+        &aws_types::os_shim_internal::Env::real(),
+        &aws_config::profile::profile_file::ProfileFiles::default(),
+        None,
+    )
+    .await;
+    if let Ok(cf) = cf {
+        if let Some(profile) = cf.get_profile(profile) {
+            if let Some(region) = profile.get("region") {
+                return Some(aws_config::Region::new(region.to_owned()));
+            }
+        }
+    }
+    return None;
+}
+
 pub async fn available_infra_profiles() -> Vec<String> {
     let cf = aws_config::profile::load(
         &aws_types::os_shim_internal::Fs::real(),
@@ -148,14 +174,12 @@ pub async fn available_sso_profiles() -> Vec<String> {
                 cf.profiles().into_iter().map(|p| p.to_owned()).collect();
             profiles.retain(|profile| {
                 if let Some(profile_details) = cf.get_profile(profile.as_str()) {
-                        let role_arn = profile_details.get("role_arn");
-                        let is_sso_profile = profile_details.get("sso_start_url").is_some();
-                        return match role_arn {
-                            Some(role) => !role.ends_with("-infra") && is_sso_profile,                           
-                            None => is_sso_profile                            
-                        }
-                     
-                    
+                    let role_arn = profile_details.get("role_arn");
+                    let is_sso_profile = profile_details.get("sso_start_url").is_some();
+                    return match role_arn {
+                        Some(role) => !role.ends_with("-infra") && is_sso_profile,
+                        None => is_sso_profile,
+                    };
                 }
                 false
             });
