@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbSecret, LogEntry, RdsInstance};
-use aws_config::meta::region::RegionProviderChain;
 use aws_config::BehaviorVersion;
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
@@ -427,7 +426,7 @@ async fn select_aws_profile(
 }
 
 async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig) {
-    let region_provider = RegionProviderChain::default_provider().or_else("eu-east-1");
+    let region_provider = aws::region_provider(ssm_profile).await;
 
     return (
         ssm_profile.to_owned(),
