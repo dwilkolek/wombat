@@ -10,7 +10,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      - uses: bluwy/substitute-string-action@v2
+      - uses: bluwy/substitute-string-action@v3
         id: sub
         with:
           _input-file: 'src-tauri/src/main.rs'
