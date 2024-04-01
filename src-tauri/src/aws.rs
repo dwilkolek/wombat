@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::shared::{self, BError, Env};
+use aws_config::BehaviorVersion;
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
@@ -124,6 +125,19 @@ async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
         }
     }
     return None;
+}
+
+pub async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig) {
+    let region_provider = region_provider(ssm_profile).await;
+
+    return (
+        ssm_profile.to_owned(),
+        aws_config::defaults(BehaviorVersion::latest())
+            .profile_name(ssm_profile)
+            .region(region_provider)
+            .load()
+            .await,
+    );
 }
 
 pub async fn available_infra_profiles() -> Vec<String> {
