@@ -1218,7 +1218,7 @@ async fn start_service_proxy(
     let handle = proxy::start_proxy_to_aws_proxy(
         local_port,
         aws_local_port,
-        Arc::new(Mutex::new(proxy::RequestHandler { interceptors })),
+        Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
     )
     .await;
 
