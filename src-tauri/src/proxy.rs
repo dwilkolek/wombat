@@ -186,10 +186,10 @@ pub struct RequestHandler {
 async fn handle(
     uri: &str,
     headers: &mut Headers,
-    handler: Arc<tokio::sync::Mutex<RequestHandler>>,
+    handler: Arc<tokio::sync::RwLock<RequestHandler>>,
 ) {
     info!("Handling request, {}", &uri);
-    let handler = handler.lock().await;
+    let handler = handler.read().await;
     let interceptors_ref = &handler.interceptors;
     for interceptor in interceptors_ref.into_iter() {
         if interceptor.applies(uri) {
@@ -201,7 +201,7 @@ async fn handle(
 pub async fn start_proxy_to_aws_proxy(
     local_port: u16,
     aws_local_port: u16,
-    request_handler: Arc<tokio::sync::Mutex<RequestHandler>>,
+    request_handler: Arc<tokio::sync::RwLock<RequestHandler>>,
 ) -> tokio::sync::oneshot::Sender<()> {
     kill_pid_on_port(local_port).await;
 
