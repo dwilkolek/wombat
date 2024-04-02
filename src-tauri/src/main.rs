@@ -425,19 +425,6 @@ async fn select_aws_profile(
     return ssm_profile_override;
 }
 
-async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig) {
-    let region_provider = aws::region_provider(ssm_profile).await;
-
-    return (
-        ssm_profile.to_owned(),
-        aws_config::defaults(BehaviorVersion::latest())
-            .profile_name(ssm_profile)
-            .region(region_provider)
-            .load()
-            .await,
-    );
-}
-
 #[tauri::command]
 async fn credentials(
     window: Window,
@@ -451,10 +438,10 @@ async fn credentials(
         Ok(authorized_user) => authorized_user,
     };
 
-    let (aws_profile, aws_config) = use_aws_config(&db.normalized_name).await;
+    let (aws_profile, aws_config) = aws::use_aws_config(&db.normalized_name).await;
     let override_aws_profile =
         select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (override_aws_profile, override_aws_config) = use_aws_config(&override_aws_profile).await;
+    let (override_aws_profile, override_aws_config) = aws::use_aws_config(&override_aws_profile).await;
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -966,7 +953,7 @@ async fn start_db_proxy(
     };
 
     let ssm_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (aws_profile, aws_config) = use_aws_config(&ssm_profile).await;
+    let (aws_profile, aws_config) = aws::use_aws_config(&ssm_profile).await;
 
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
@@ -1165,8 +1152,7 @@ async fn start_service_proxy(
     };
 
     let ssm_profile = select_aws_profile(&service.name, &authorized_user, &database).await;
-    let (aws_profile, aws_config) = use_aws_config(&ssm_profile).await;
-
+    let (aws_profile, aws_config) = aws::use_aws_config(&ssm_profile).await;
     let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
         .into_iter()
@@ -1191,16 +1177,18 @@ async fn start_service_proxy(
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
         match proxy_auth_config.auth_type.as_str() {
             "jepsen" => {
-                info!("Adding jepsen auth interceptor, {:?}", &proxy_auth_config);
+                let source_app_profile = select_aws_profile(&proxy_auth_config.from_app, &authorized_user, &database).await;
+                let (source_app_profile, source_app_config) = &aws::use_aws_config(&source_app_profile).await;
+                info!("Adding jepsen auth interceptor, profile={}", &source_app_profile);
                 interceptors.push(Box::new(
                     proxy_authenticators::JepsenAutheticator::from_proxy_auth_config(
-                        &aws_config,
+                        source_app_config,
                         proxy_auth_config.clone(),
                     ),
                 ));
             }
             "basic" => {
-                info!("Adding basic auth interceptor, {:?}", &proxy_auth_config);
+                info!("Adding basic auth interceptor, profile={}", &authorized_user.profile);
                 interceptors.push(Box::new(
                     proxy_authenticators::BasicAutheticator::from_proxy_auth_config(
                         &authorized_user.sdk_config,
@@ -1344,10 +1332,10 @@ async fn open_dbeaver(
             .clone();
     }
 
-    let (aws_profile, aws_config) = use_aws_config(&db.normalized_name).await;
+    let (aws_profile, aws_config) = aws::use_aws_config(&db.normalized_name).await;
     let override_aws_profile =
         select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (override_aws_profile, override_aws_config) = use_aws_config(&override_aws_profile).await;
+    let (override_aws_profile, override_aws_config) = aws::use_aws_config(&override_aws_profile).await;
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
