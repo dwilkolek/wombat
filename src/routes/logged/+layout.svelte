@@ -81,13 +81,6 @@
 				<span>{last_used_profile}</span>
 			</div>
 		{/await}
-		{#await invoke('is_db_synchronized') then db_sync}
-			{#if db_sync}
-				<div class="bg-lime-500 min-w-3.5 min-h-3.5 rounded rounded-full" />
-			{:else}
-				<div class="bg-rose-500 min-w-3.5 min-h-3.5 rounded rounded-full" />
-			{/if}
-		{/await}
 		<button
 			on:click={async () => {
 				await execute('refresh_cache', undefined, true);
