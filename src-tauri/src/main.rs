@@ -1234,7 +1234,6 @@ async fn log_filters(
 ) -> Result<Vec<wombat_api::LogFilter>, BError> {
     let wombat_api = wombat_api_instance.0.read().await;
     let filters = wombat_api.log_filters().await;
-
     return Ok(filters);
 }
 #[tauri::command]

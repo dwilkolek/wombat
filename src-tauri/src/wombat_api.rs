@@ -114,6 +114,7 @@ impl WombatApi {
                 .await;
             if let Ok(response) = response {
                 if let Ok(body) = response.json::<Vec<LogFilter>>().await {
+                    log::info!("body ok {:?}", &body);
                     return body;
                 }
             }

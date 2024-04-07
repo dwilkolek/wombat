@@ -35,6 +35,7 @@
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
 	type LogFilter = {
+		id: number;
 		filter: string;
 		services: string[];
 		label: string;
