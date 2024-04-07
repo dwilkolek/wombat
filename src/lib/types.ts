@@ -84,6 +84,7 @@ export type BError = {
 };
 
 export type ProxyAuthConfig = {
+	id: number;
 	from_app: string;
 	to_app: string;
 	env: string;
