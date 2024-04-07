@@ -27,6 +27,9 @@ jobs:
           AXIOM_ORG: ${{ secrets.AXIOM_ORG }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TURSO_SYNC_URL: ${{ secrets.TURSO_SYNC_URL }}
+          WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
+          WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
+          WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
       - name: setup node
         uses: actions/setup-node@v4
         with:
