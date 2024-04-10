@@ -1,4 +1,4 @@
-use crate::{aws, global_db, AsyncTaskManager, ProxyEventMessage};
+use crate::{aws, wombat_api, AsyncTaskManager, ProxyEventMessage};
 use async_trait::async_trait;
 use filepath::FilePath;
 use log::{error, info, warn};
@@ -32,7 +32,7 @@ pub async fn start_aws_ssm_proxy(
     access_port: u16,
     async_task_manager: tauri::State<'_, AsyncTaskManager>,
 
-    proxy_auth_config: Option<global_db::ProxyAuthConfig>,
+    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
 ) {
     let mut command = Command::new("aws");
     let region_provider = aws::region_provider(profile.as_str()).await;
