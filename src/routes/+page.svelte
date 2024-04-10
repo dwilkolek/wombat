@@ -50,8 +50,9 @@
 	<div class="hero max-h-screen min-h-screen bg-base-200">
 		<div class="absolute left-4 top-4 p-2">
 			{#await dependenciesPromise then deps}
+				{@const entries = Object.entries(deps).sort((a, b) => a[0].localeCompare(b[0]))}
 				<div class="flex flex-col gap-1">
-					{#each Object.entries(deps) as dep}
+					{#each entries as dep}
 						<div class="flex items-center gap-1 text-sm">
 							{#if dep[1].Ok}
 								<div class="bg-lime-500 w-2 h-2 rounded rounded-full" />
@@ -103,7 +104,7 @@
 							</select>
 						</div>
 						{#await dependenciesPromise then deps}
-							{#if !Object.entries(deps).some((v) => v[0] == 'aws-cli' && v[1].Err)}
+							{#if !Object.entries(deps).some((v) => v[1].Err)}
 								<div class="form-control mt-6">
 									<button class="btn btn-accent" disabled={loading} type="submit">
 										{buttonText}</button

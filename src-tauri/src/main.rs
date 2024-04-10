@@ -8,7 +8,6 @@ use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
-use libsql::Database;
 use log::{debug, error, info, warn};
 use rds_resolver::RdsResolver;
 use regex::Regex;
@@ -35,12 +34,12 @@ mod cache_db;
 mod cluster_resolver;
 mod dependency_check;
 mod ecs_resolver;
-mod global_db;
 mod proxy;
 mod proxy_authenticators;
 mod rds_resolver;
 mod shared;
 mod user;
+mod wombat_api;
 
 #[derive(Clone, serde::Serialize)]
 struct ProxyEventMessage {
@@ -50,14 +49,14 @@ struct ProxyEventMessage {
     name: String,
     env: Env,
     proxy_type: ResourceType,
-    proxy_auth_config: Option<global_db::ProxyAuthConfig>,
+    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
 }
 impl ProxyEventMessage {
     fn new(
         arn: String,
         status: String,
         port: u16,
-        proxy_auth_config: Option<global_db::ProxyAuthConfig>,
+        proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     ) -> Self {
         Self {
             arn: arn.clone(),
@@ -140,11 +139,6 @@ async fn ping() -> Result<(), ()> {
 }
 
 #[tauri::command]
-async fn is_db_synchronized(database: tauri::State<'_, DatabaseInstance>) -> Result<bool, ()> {
-    Ok(database.0.read().await.synchronized)
-}
-
-#[tauri::command]
 async fn favorite(
     name: &str,
     user_config: tauri::State<'_, UserConfigState>,
@@ -176,7 +170,7 @@ async fn login(
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
 
-    database: tauri::State<'_, DatabaseInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, BError> {
     {
         let region_provider = aws::region_provider(profile).await;
@@ -197,11 +191,6 @@ async fn login(
         Err(msg) => return Err(BError::new("login", msg)),
         Ok(authorized_user) => authorized_user,
     };
-
-    let glob_db_clopne = database.0.clone();
-    let db_sync_handle = tokio::spawn(async move {
-        glob_db_clopne.write().await.sync().await;
-    });
 
     ingest_log(
         &axiom.0,
@@ -272,12 +261,13 @@ async fn login(
     }
 
     let _ = window.emit("message", "Syncing global state...");
-    let _ = db_sync_handle.await;
-    let db = database.0.read().await;
-    if !global_db::is_feature_enabled(&db, "wombat-2.2.0", authorized_user.id.to_string().as_str())
-        .await
-    {
-        return Err(BError::new("login", "Failed to start."));
+    let mut api = wombat_api_instance.0.write().await;
+    let api_status = api.status().await;
+    if let Err(status) = api_status {
+        return Err(BError::new(
+            "login",
+            format!("Wombat backend API is not ok. Reason: {}", status),
+        ));
     }
 
     let refresher_axiom = Arc::clone(&axiom.0);
@@ -411,12 +401,10 @@ async fn save_preffered_envs(
 async fn select_aws_profile(
     profile: &str,
     authorized_user: &AuthorizedUser,
-    database: &tauri::State<'_, DatabaseInstance>,
+    wombat_api_instance: &tauri::State<'_, WombatApiInstance>,
 ) -> String {
-    let database = database.0.read().await;
-    let is_enabled =
-        global_db::is_feature_enabled(&database, "dev-way", &format!("{}", authorized_user.id))
-            .await;
+    let wombat_api = wombat_api_instance.0.read().await;
+    let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
     let ssm_profile_override = if is_enabled {
         authorized_user.profile.clone()
     } else {
@@ -431,7 +419,7 @@ async fn credentials(
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database: tauri::State<'_, DatabaseInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<DbSecret, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("credentials", msg)),
@@ -440,8 +428,9 @@ async fn credentials(
 
     let (aws_profile, aws_config) = aws::use_aws_config(&db.normalized_name).await;
     let override_aws_profile =
-        select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (override_aws_profile, override_aws_config) = aws::use_aws_config(&override_aws_profile).await;
+        select_aws_profile(&db.normalized_name, &authorized_user, &wombat_api_instance).await;
+    let (override_aws_profile, override_aws_config) =
+        aws::use_aws_config(&override_aws_profile).await;
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -945,14 +934,15 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database: tauri::State<'_, DatabaseInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_db_proxy", msg)),
         Ok(authorized_user) => authorized_user,
     };
 
-    let ssm_profile = select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
+    let ssm_profile =
+        select_aws_profile(&db.normalized_name, &authorized_user, &wombat_api_instance).await;
     let (aws_profile, aws_config) = aws::use_aws_config(&ssm_profile).await;
 
     let mut user_config = user_config.0.lock().await;
@@ -1005,8 +995,6 @@ async fn refresh_cache(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-
-    database: tauri::State<'_, DatabaseInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("refresh_cache", msg)),
@@ -1040,9 +1028,6 @@ async fn refresh_cache(
         None,
     )
     .await;
-
-    let mut db = database.0.write().await;
-    db.sync().await;
 
     window.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
@@ -1120,12 +1105,12 @@ async fn service_details(
 async fn start_service_proxy(
     window: Window,
     service: aws::EcsService,
-    proxy_auth_config: Option<global_db::ProxyAuthConfig>,
+    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database: tauri::State<'_, DatabaseInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     let local_port;
     {
@@ -1151,7 +1136,8 @@ async fn start_service_proxy(
         Ok(authorized_user) => authorized_user,
     };
 
-    let ssm_profile = select_aws_profile(&service.name, &authorized_user, &database).await;
+    let ssm_profile =
+        select_aws_profile(&service.name, &authorized_user, &wombat_api_instance).await;
     let (aws_profile, aws_config) = aws::use_aws_config(&ssm_profile).await;
     let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
@@ -1177,9 +1163,18 @@ async fn start_service_proxy(
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
         match proxy_auth_config.auth_type.as_str() {
             "jepsen" => {
-                let source_app_profile = select_aws_profile(&proxy_auth_config.from_app, &authorized_user, &database).await;
-                let (source_app_profile, source_app_config) = &aws::use_aws_config(&source_app_profile).await;
-                info!("Adding jepsen auth interceptor, profile={}", &source_app_profile);
+                let source_app_profile = select_aws_profile(
+                    &proxy_auth_config.from_app,
+                    &authorized_user,
+                    &wombat_api_instance,
+                )
+                .await;
+                let (source_app_profile, source_app_config) =
+                    &aws::use_aws_config(&source_app_profile).await;
+                info!(
+                    "Adding jepsen auth interceptor, profile={}",
+                    &source_app_profile
+                );
                 interceptors.push(Box::new(
                     proxy_authenticators::JepsenAutheticator::from_proxy_auth_config(
                         source_app_config,
@@ -1188,7 +1183,10 @@ async fn start_service_proxy(
                 ));
             }
             "basic" => {
-                info!("Adding basic auth interceptor, profile={}", &authorized_user.profile);
+                info!(
+                    "Adding basic auth interceptor, profile={}",
+                    &authorized_user.profile
+                );
                 interceptors.push(Box::new(
                     proxy_authenticators::BasicAutheticator::from_proxy_auth_config(
                         &authorized_user.sdk_config,
@@ -1232,51 +1230,39 @@ async fn start_service_proxy(
 
 #[tauri::command]
 async fn log_filters(
-    database: tauri::State<'_, DatabaseInstance>,
-) -> Result<Vec<global_db::LogFilter>, BError> {
-    let db = database.0.read().await;
-    let filters = global_db::log_filters(&db).await;
-
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+) -> Result<Vec<wombat_api::LogFilter>, BError> {
+    let wombat_api = wombat_api_instance.0.read().await;
+    let filters = wombat_api.log_filters().await;
     return Ok(filters);
 }
 #[tauri::command]
 async fn proxy_auth_configs(
-    database: tauri::State<'_, DatabaseInstance>,
-) -> Result<Vec<global_db::ProxyAuthConfig>, BError> {
-    let db = database.0.read().await;
-    let configs = global_db::get_proxy_auth_configs(&db).await;
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+) -> Result<Vec<wombat_api::ProxyAuthConfig>, BError> {
+    let wombat_api = wombat_api_instance.0.read().await;
+    let configs = wombat_api.get_proxy_auth_configs().await;
 
     return Ok(configs);
 }
 
 #[tauri::command]
-async fn is_user_feature_enabled(
-    feature: &str,
-    database: tauri::State<'_, DatabaseInstance>,
-    user_config: tauri::State<'_, UserConfigState>,
-) -> Result<bool, BError> {
-    let user_id = format!("{}", &user_config.0.lock().await.id);
-    let db = database.0.read().await;
-    let is_enabled = global_db::is_user_feature_enabled(&db, feature, user_id.as_str()).await;
-
-    return Ok(is_enabled);
-}
-#[tauri::command]
 async fn is_feature_enabled(
     feature: &str,
-    database: tauri::State<'_, DatabaseInstance>,
-    user_config: tauri::State<'_, UserConfigState>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<bool, BError> {
-    let user_id = format!("{}", &user_config.0.lock().await.id);
-    let db = database.0.read().await;
-    let is_enabled = global_db::is_feature_enabled(&db, feature, user_id.as_str()).await;
+    let wombat_api = wombat_api_instance.0.read().await;
+    let is_enabled = wombat_api.is_feature_enabled(feature).await;
 
     return Ok(is_enabled);
 }
 
 #[tauri::command]
-async fn check_dependencies() -> Result<HashMap<String, Result<String, String>>, ()> {
-    return Ok(dependency_check::check_dependencies());
+async fn check_dependencies(
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+) -> Result<HashMap<String, Result<String, String>>, ()> {
+    let mut wombat_api = wombat_api_instance.0.write().await;
+    return Ok(dependency_check::check_dependencies(&mut wombat_api).await);
 }
 
 #[tauri::command]
@@ -1299,7 +1285,7 @@ async fn open_dbeaver(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    database: tauri::State<'_, DatabaseInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
@@ -1334,8 +1320,9 @@ async fn open_dbeaver(
 
     let (aws_profile, aws_config) = aws::use_aws_config(&db.normalized_name).await;
     let override_aws_profile =
-        select_aws_profile(&db.normalized_name, &authorized_user, &database).await;
-    let (override_aws_profile, override_aws_config) = aws::use_aws_config(&override_aws_profile).await;
+        select_aws_profile(&db.normalized_name, &authorized_user, &wombat_api_instance).await;
+    let (override_aws_profile, override_aws_config) =
+        aws::use_aws_config(&override_aws_profile).await;
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -1392,13 +1379,17 @@ async fn open_dbeaver(
 fn app_config() -> AppConfig {
     let _ = dotenv();
     AppConfig {
-        turso_auth_token: env::var("TURSO_AUTH_TOKEN").unwrap_or_else(|_| {
-            debug!("Using default token since TURSO_AUTH_TOKEN was not set");
-            "%%TURSO_AUTH_TOKEN%%".to_string()
+        wombat_api_url: env::var("WOMBAT_API_URL").unwrap_or_else(|_| {
+            debug!("Using default token since WOMBAT_API_URL was not set");
+            "%%WOMBAT_API_URL%%".to_string()
         }),
-        turso_sync_url: env::var("TURSO_SYNC_URL").unwrap_or_else(|_| {
-            debug!("Using default token since TURSO_AUTH_TOKEN was not set");
-            "%%TURSO_AUTH_TOKEN%%".to_string()
+        wombat_api_user: env::var("WOMBAT_API_USER").unwrap_or_else(|_| {
+            debug!("Using default token since WOMBAT_API_USER was not set");
+            "%%WOMBAT_API_USER%%".to_string()
+        }),
+        wombat_api_password: env::var("WOMBAT_API_PASSWORD").unwrap_or_else(|_| {
+            debug!("Using default token since WOMBAT_API_PASSWORD was not set");
+            "%%WOMBAT_API_PASSWORD%%".to_string()
         }),
         logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
         axiom_token: None,
@@ -1410,8 +1401,9 @@ fn app_config() -> AppConfig {
 fn app_config() -> AppConfig {
     AppConfig {
         logger: "file".to_owned(),
-        turso_auth_token: "%%TURSO_AUTH_TOKEN%%".to_string(),
-        turso_sync_url: "%%TURSO_SYNC_URL%%".to_string(),
+        wombat_api_url: "%%WOMBAT_API_URL%%".to_string(),
+        wombat_api_user: "%%WOMBAT_API_USER%%".to_string(),
+        wombat_api_password: "%%WOMBAT_API_PASSWORD%%".to_string(),
         axiom_token: Some("%%AXIOM_TOKEN%%".to_string()),
         axiom_org: "%%AXIOM_ORG%%".to_owned(),
     }
@@ -1420,32 +1412,11 @@ fn app_config() -> AppConfig {
 #[derive(Debug)]
 struct AppConfig {
     logger: String,
-    turso_auth_token: String,
-    turso_sync_url: String,
+    wombat_api_url: String,
+    wombat_api_user: String,
+    wombat_api_password: String,
     axiom_token: Option<String>,
     axiom_org: String,
-}
-
-async fn initialize_database_connection(config: &AppConfig) -> Database {
-    let db_file = env::var("DB_PATH").unwrap_or_else(|_| {
-        debug!("Using default db path since DB_PATH was not set");
-        user::wombat_dir()
-            .join("wombat.db")
-            .to_str()
-            .unwrap_or_log()
-            .to_string()
-    });
-
-    let auth_token = config.turso_auth_token.clone();
-
-    let url = config.turso_sync_url.replace("libsql", "https");
-
-    let db = libsql::Builder::new_remote_replica(db_file, url, auth_token)
-        .build()
-        .await
-        .unwrap();
-
-    return db;
 }
 
 async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientState {
@@ -1505,11 +1476,15 @@ async fn main() {
     };
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
-    let glob_db = Arc::new(RwLock::new(global_db::GlobDatabase::new(
-        initialize_database_connection(&app_config).await,
-    )));
-
     let user = UserConfig::default();
+
+    let api = wombat_api::WombatApi::new(
+        app_config.wombat_api_url.clone(),
+        app_config.wombat_api_user.clone(),
+        app_config.wombat_api_password.clone(),
+        user.id.clone(),
+    );
+
     tauri::Builder::default()
         .manage(initialize_axiom(&user, &app_config).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
@@ -1525,7 +1500,6 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(DatabaseInstance(glob_db))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
             RdsResolver::new(cache_db.clone()),
         ))))
@@ -1535,6 +1509,7 @@ async fn main() {
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
             EcsResolver::new(cache_db.clone()),
         ))))
+        .manage(WombatApiInstance(Arc::new(RwLock::new(api))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
@@ -1559,9 +1534,7 @@ async fn main() {
             log_filters,
             proxy_auth_configs,
             is_feature_enabled,
-            is_user_feature_enabled,
             ping,
-            is_db_synchronized,
             check_dependencies,
             available_infra_profiles,
             available_sso_profiles
@@ -1592,7 +1565,7 @@ struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 
-struct DatabaseInstance(Arc<RwLock<global_db::GlobDatabase>>);
+struct WombatApiInstance(Arc<RwLock<wombat_api::WombatApi>>);
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,

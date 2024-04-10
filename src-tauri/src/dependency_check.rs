@@ -1,6 +1,10 @@
 use std::{collections::HashMap, process::Command};
 
-pub fn check_dependencies() -> HashMap<String, Result<String, String>> {
+use crate::wombat_api::WombatApi;
+
+pub async fn check_dependencies(
+    wombat_api: &mut WombatApi,
+) -> HashMap<String, Result<String, String>> {
     let mut dependecies = HashMap::new();
 
     if let Ok(cmd) = Command::new("aws").arg("--version").output() {
@@ -32,6 +36,10 @@ pub fn check_dependencies() -> HashMap<String, Result<String, String>> {
             Err("Not installed".to_string()),
         );
     }
+
+    let wombat_api_key = "wombat-backend-api".to_string();
+
+    dependecies.insert(wombat_api_key, wombat_api.status().await);
 
     return dependecies;
 }
