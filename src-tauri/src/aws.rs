@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use crate::shared::{self, BError, Env};
-use aws_config::BehaviorVersion;
+use aws_config::{
+    profile::{ProfileFileLoadError, ProfileSet},
+    BehaviorVersion,
+};
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ecs as ecs;
@@ -109,15 +112,18 @@ pub async fn region_provider(profile: &str) -> aws_config::meta::region::RegionP
     .or_else(aws_config::Region::new("eu-west-1"));
 }
 
-async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
-    let cf = aws_config::profile::load(
+async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
+    return aws_config::profile::load(
         &aws_types::os_shim_internal::Fs::real(),
         &aws_types::os_shim_internal::Env::real(),
-        &aws_config::profile::profile_file::ProfileFiles::default(),
+        &aws_runtime::env_config::file::EnvConfigFiles::default(),
         None,
     )
     .await;
-    if let Ok(cf) = cf {
+}
+
+async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
+    if let Ok(cf) = profile_set().await {
         if let Some(profile) = cf.get_profile(profile) {
             if let Some(region) = profile.get("region") {
                 return Some(aws_config::Region::new(region.to_owned()));
@@ -141,20 +147,16 @@ pub async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig
 }
 
 pub async fn available_infra_profiles() -> Vec<String> {
-    let cf = aws_config::profile::load(
-        &aws_types::os_shim_internal::Fs::real(),
-        &aws_types::os_shim_internal::Env::real(),
-        &aws_config::profile::profile_file::ProfileFiles::default(),
-        None,
-    )
-    .await;
-
-    match cf {
-        Ok(cf) => {
-            let mut profiles: Vec<String> =
-                cf.profiles().into_iter().map(|p| p.to_owned()).collect();
+    let profile_set = profile_set().await;
+    match profile_set {
+        Ok(profile_set) => {
+            let mut profiles: Vec<String> = profile_set
+                .profiles()
+                .into_iter()
+                .map(|p| p.to_owned())
+                .collect();
             profiles.retain(|profile| {
-                if let Some(profile_details) = cf.get_profile(profile.as_str()) {
+                if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
                     if let Some(role) = profile_details.get("role_arn") {
                         let valid_role =
                             role.ends_with(format!("/{}-infra", profile.as_str()).as_str());
@@ -174,20 +176,16 @@ pub async fn available_infra_profiles() -> Vec<String> {
 }
 
 pub async fn available_sso_profiles() -> Vec<String> {
-    let cf = aws_config::profile::load(
-        &aws_types::os_shim_internal::Fs::real(),
-        &aws_types::os_shim_internal::Env::real(),
-        &aws_config::profile::profile_file::ProfileFiles::default(),
-        None,
-    )
-    .await;
-
-    match cf {
-        Ok(cf) => {
-            let mut profiles: Vec<String> =
-                cf.profiles().into_iter().map(|p| p.to_owned()).collect();
+    let profile_set = profile_set().await;
+    match profile_set {
+        Ok(profile_set) => {
+            let mut profiles: Vec<String> = profile_set
+                .profiles()
+                .into_iter()
+                .map(|p| p.to_owned())
+                .collect();
             profiles.retain(|profile| {
-                if let Some(profile_details) = cf.get_profile(profile.as_str()) {
+                if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
                     let role_arn = profile_details.get("role_arn");
                     let is_sso_profile = profile_details.get("sso_start_url").is_some();
                     return match role_arn {
