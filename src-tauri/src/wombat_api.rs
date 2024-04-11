@@ -1,3 +1,4 @@
+use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 
 pub static REQUIRED_FEATURE: &'static str = "wombat-2.2.0";
@@ -108,16 +109,18 @@ impl WombatApi {
     pub async fn log_filters(&self) -> Vec<LogFilter> {
         log::info!("getting log filters");
         if let Some(client) = self.client() {
-            let response = client
+            let body = client
                 .get(format!("{}/api/log-filters", self.url))
                 .send()
+                .and_then(|response| response.json::<Vec<LogFilter>>())
                 .await;
-            if let Ok(response) = response {
-                if let Ok(body) = response.json::<Vec<LogFilter>>().await {
-                    log::info!("body ok {:?}", &body);
-                    return body;
+            return match body {
+                Ok(body) => body,
+                Err(e) => {
+                    log::error!("fetching log filters failed, error: {}", e);
+                    vec![]
                 }
-            }
+            };
         }
         return vec![];
     }
@@ -125,15 +128,18 @@ impl WombatApi {
     pub async fn get_proxy_auth_configs(&self) -> Vec<ProxyAuthConfig> {
         log::info!("getting proxy auth configs");
         if let Some(client) = self.client() {
-            let response = client
+            let body = client
                 .get(format!("{}/api/proxy-auth-configs", self.url))
                 .send()
+                .and_then(|response| response.json::<Vec<ProxyAuthConfig>>())
                 .await;
-            if let Ok(response) = response {
-                if let Ok(body) = response.json::<Vec<ProxyAuthConfig>>().await {
-                    return body;
+            return match body {
+                Ok(body) => body,
+                Err(e) => {
+                    log::error!("fetching proxy auth configs failed, error: {}", e);
+                    vec![]
                 }
-            }
+            };
         }
         return vec![];
     }
@@ -148,6 +154,7 @@ pub struct LogFilter {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProxyAuthConfig {
     pub id: i64,
     pub from_app: String,

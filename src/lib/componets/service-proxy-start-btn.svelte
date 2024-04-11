@@ -73,10 +73,10 @@
 						{@const disabled =
 							!$featuresStore.devWay &&
 							!infraProfiles.some(
-								(profile) => profile == config.from_app || config.from_app == '*'
+								(profile) => profile == config.fromApp || config.fromApp == '*'
 							)}
 
-						{#if config.to_app == service.name && config.env == service.env}
+						{#if config.toApp == service.name && config.env == service.env}
 							<li class={disabled ? 'opacity-30 cursor-not-allowed' : ''}>
 								<button
 									{disabled}
@@ -85,7 +85,7 @@
 										start_proxy(config);
 									}}
 								>
-									{config.auth_type}: {config.jepsen_client_id ?? config.basic_user ?? '?'}</button
+									{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}</button
 								>
 							</li>
 						{/if}
