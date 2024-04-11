@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use headers::authorization::Credentials;
 use headers::Authorization;
 use log::{info, warn};
-use reqwest::header::HeaderValue;
 use tracing_unwrap::ResultExt;
 use warp_reverse_proxy::Headers;
 
@@ -102,7 +101,7 @@ impl ProxyInterceptor for JepsenAutheticator {
         if let Ok(token) = self.get_jepsen_token().await {
             headers.insert(
                 "Authorization",
-                HeaderValue::from_str(format!("Bearer {}", &token).as_str()).unwrap(),
+                format!("Bearer {}", &token).parse().unwrap(),
             );
         }
     }
@@ -137,10 +136,7 @@ impl ProxyInterceptor for BasicAutheticator {
         if let Some(password) = self.password.clone() {
             let credentials = Authorization::basic(&self.user, &password).0.encode();
             let credentials_value = credentials.to_str().unwrap();
-            headers.insert(
-                "Authorization",
-                HeaderValue::from_str(credentials_value).unwrap(),
-            );
+            headers.insert("Authorization", credentials_value.parse().unwrap());
         }
     }
 }
