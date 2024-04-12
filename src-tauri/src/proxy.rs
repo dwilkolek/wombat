@@ -10,7 +10,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tauri::Window;
-use tempdir::TempDir;
+use tempfile::TempDir;
 use tokio::time::sleep;
 use tracing_unwrap::{OptionExt, ResultExt};
 use warp::http::{HeaderName, HeaderValue};
@@ -62,7 +62,7 @@ pub async fn start_aws_ssm_proxy(
 
     kill_pid_on_port(local_port).await;
 
-    let tmp_dir = TempDir::new("wombat").unwrap();
+    let tmp_dir = TempDir::new().unwrap();
     let out_log: File =
         File::create(tmp_dir.path().join(format!("out-{}.log", local_port))).unwrap();
     let err_log: File =
