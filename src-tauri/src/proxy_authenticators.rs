@@ -79,13 +79,13 @@ impl JepsenAutheticator {
                     Ok(body) => Ok(body.access_token),
                     Err(e) => {
                         warn!("Failed to deserialize, {}", &e);
-                        return Err(format!("Failed to deserialize, {}", e));
+                        Err(format!("Failed to deserialize, {}", e))
                     }
                 }
             }
             Err(e) => {
                 warn!("Failed to get jepsen secret, {}", &e);
-                return Err(format!("Failed to get jepsen secret, {}", e));
+                Err(format!("Failed to get jepsen secret, {}", e))
             }
         }
     }

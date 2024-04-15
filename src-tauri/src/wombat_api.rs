@@ -1,7 +1,7 @@
 use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 
-pub static REQUIRED_FEATURE: &'static str = "wombat-2.2.0";
+pub static REQUIRED_FEATURE: &str = "wombat-2.2.0";
 
 pub struct WombatApi {
     user_id: uuid::Uuid,
@@ -13,13 +13,13 @@ pub struct WombatApi {
 
 impl WombatApi {
     pub fn new(url: String, user: String, password: String, user_id: uuid::Uuid) -> Self {
-        return WombatApi {
+        WombatApi {
             user_id,
             jwt: None,
             user,
             password,
             url,
-        };
+        }
     }
 
     pub async fn ping(&self) -> bool {
@@ -31,7 +31,7 @@ impl WombatApi {
             return response.status() == reqwest::StatusCode::OK;
         }
 
-        return false;
+        false
     }
 
     pub async fn status(&mut self) -> Result<String, String> {
@@ -45,7 +45,7 @@ impl WombatApi {
                 }
             }
         }
-        return wombat_api_status;
+        wombat_api_status
     }
 
     pub async fn auth(&mut self) -> bool {
@@ -71,7 +71,7 @@ impl WombatApi {
             }
         }
 
-        return false;
+        false
     }
 
     fn client(&self) -> Option<reqwest::Client> {
@@ -86,7 +86,7 @@ impl WombatApi {
                 return Some(client);
             }
         }
-        return None;
+        None
     }
 
     pub async fn is_feature_enabled(&self, feature: &str) -> bool {
@@ -103,7 +103,7 @@ impl WombatApi {
             }
         }
 
-        return false;
+        false
     }
 
     pub async fn log_filters(&self) -> Vec<LogFilter> {
@@ -122,7 +122,7 @@ impl WombatApi {
                 }
             };
         }
-        return vec![];
+        vec![]
     }
 
     pub async fn get_proxy_auth_configs(&self) -> Vec<ProxyAuthConfig> {
@@ -141,7 +141,7 @@ impl WombatApi {
                 }
             };
         }
-        return vec![];
+        vec![]
     }
 }
 

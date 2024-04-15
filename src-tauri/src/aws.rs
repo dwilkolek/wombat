@@ -105,21 +105,19 @@ pub struct LogEntry {
 }
 
 pub async fn region_provider(profile: &str) -> aws_config::meta::region::RegionProviderChain {
-    return aws_config::meta::region::RegionProviderChain::first_try(
-        region_from_profile(profile).await,
-    )
-    .or_default_provider()
-    .or_else(aws_config::Region::new("eu-west-1"));
+    aws_config::meta::region::RegionProviderChain::first_try(region_from_profile(profile).await)
+        .or_default_provider()
+        .or_else(aws_config::Region::new("eu-west-1"))
 }
 
 async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
-    return aws_config::profile::load(
+    aws_config::profile::load(
         &aws_types::os_shim_internal::Fs::real(),
         &aws_types::os_shim_internal::Env::real(),
         &aws_runtime::env_config::file::EnvConfigFiles::default(),
         None,
     )
-    .await;
+    .await
 }
 
 async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
@@ -130,31 +128,27 @@ async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
             }
         }
     }
-    return None;
+    None
 }
 
 pub async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig) {
     let region_provider = region_provider(ssm_profile).await;
 
-    return (
+    (
         ssm_profile.to_owned(),
         aws_config::defaults(BehaviorVersion::latest())
             .profile_name(ssm_profile)
             .region(region_provider)
             .load()
             .await,
-    );
+    )
 }
 
 pub async fn available_infra_profiles() -> Vec<String> {
     let profile_set = profile_set().await;
     match profile_set {
         Ok(profile_set) => {
-            let mut profiles: Vec<String> = profile_set
-                .profiles()
-                .into_iter()
-                .map(|p| p.to_owned())
-                .collect();
+            let mut profiles: Vec<String> = profile_set.profiles().map(|p| p.to_owned()).collect();
             profiles.retain(|profile| {
                 if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
                     if let Some(role) = profile_details.get("role_arn") {
@@ -179,11 +173,7 @@ pub async fn available_sso_profiles() -> Vec<String> {
     let profile_set = profile_set().await;
     match profile_set {
         Ok(profile_set) => {
-            let mut profiles: Vec<String> = profile_set
-                .profiles()
-                .into_iter()
-                .map(|p| p.to_owned())
-                .collect();
+            let mut profiles: Vec<String> = profile_set.profiles().map(|p| p.to_owned()).collect();
             profiles.retain(|profile| {
                 if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
                     let role_arn = profile_details.get("role_arn");
@@ -203,13 +193,13 @@ pub async fn available_sso_profiles() -> Vec<String> {
 }
 
 pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
-    let ecs = ecs::Client::new(&config);
+    let ecs = ecs::Client::new(config);
     let resp = ecs.list_clusters().send().await;
-    return resp.is_ok();
+    resp.is_ok()
 }
 
 pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
-    let ec2_client = ec2::Client::new(&config);
+    let ec2_client = ec2::Client::new(config);
     let filter = Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
@@ -218,17 +208,16 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
 
     let res = res.expect_or_log("Failed to get ec2 bastion instances");
     let res = res.reservations();
-    let res = res
-        .iter()
-        .map(|r| {
+    res.iter()
+        .flat_map(|r| {
             let instances = r.instances();
             instances
-                .into_iter()
+                .iter()
                 .map(|instance| {
                     let env = Env::from_exact(
                         instance
                             .tags()
-                            .into_iter()
+                            .iter()
                             .find(|env_tag_maybe| {
                                 env_tag_maybe.key().unwrap_or("unknown").eq("Environment")
                             })
@@ -243,9 +232,7 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
                 })
                 .collect::<Vec<Bastion>>()
         })
-        .flatten()
-        .collect::<Vec<Bastion>>();
-    res
+        .collect::<Vec<Bastion>>()
 }
 
 pub async fn db_secret(
@@ -275,7 +262,7 @@ pub async fn db_secret(
     possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
     possible_secrets.push(format!("{}-{}/datasource-password", name, env));
 
-    let secret_client = secretsmanager::Client::new(&config);
+    let secret_client = secretsmanager::Client::new(config);
 
     for secret in possible_secrets {
         let filter = secretsmanager::types::Filter::builder()
@@ -339,7 +326,7 @@ pub async fn db_secret(
         name, env
     ));
     possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
-    let ssm_client = ssm::Client::new(&config);
+    let ssm_client = ssm::Client::new(config);
     for secret in possible_secrets {
         let param = ssm_client
             .get_parameter()
@@ -360,14 +347,14 @@ pub async fn db_secret(
         }
     }
 
-    return Err(BError::new("db_secret", "No secret found"));
+    Err(BError::new("db_secret", "No secret found"))
 }
 
 pub async fn get_secret(
     config: &aws_config::SdkConfig,
     secret_name: &str,
 ) -> Result<String, BError> {
-    let ssm_client = ssm::Client::new(&config);
+    let ssm_client = ssm::Client::new(config);
     let param = ssm_client
         .get_parameter()
         .name(secret_name.to_owned())
@@ -381,14 +368,14 @@ pub async fn get_secret(
         }
     }
 
-    return Err(BError::new("secret", "Secret not found"));
+    Err(BError::new("secret", "Secret not found"))
 }
 
 pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
     let mut there_is_more = true;
     let mut marker = None;
     let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
-    let rds_client = rds::Client::new(&config);
+    let rds_client = rds::Client::new(config);
     let mut databases = vec![];
     while there_is_more {
         let resp = rds_client
@@ -401,14 +388,14 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
         marker = resp.marker().map(|m| m.to_owned());
         let rdses = resp.db_instances();
         there_is_more = rdses.len() == 100 && marker.is_some();
-        rdses.into_iter().for_each(|rds| {
-            if let Some(_) = rds.db_name() {
+        rdses.iter().for_each(|rds| {
+            if rds.db_name().is_some() {
                 let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
                 let name = name_regex
                     .captures(&db_instance_arn)
                     .and_then(|c| c.get(2))
-                    .and_then(|c| Some(c.as_str().to_owned()))
-                    .unwrap_or(db_instance_arn.split(":").last().unwrap_or_log().to_owned());
+                    .map(|c| c.as_str().to_owned())
+                    .unwrap_or(db_instance_arn.split(':').last().unwrap_or_log().to_owned());
                 let tags = rds.tag_list();
                 let mut appname_tag = String::from("");
                 let mut environment_tag = String::from("");
@@ -420,7 +407,7 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     })
                     .unwrap_or_log()
                     .clone();
-                let engine: String = format!("{}", rds.engine().unwrap_or("??"));
+                let engine: String = rds.engine().unwrap_or("??").to_owned();
                 let engine_version = format!("v{}", rds.engine_version().unwrap_or("??"));
                 let mut env = Env::DEVNULL;
                 for t in tags {
@@ -449,11 +436,11 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
         });
     }
     databases.sort_by(|a, b| a.name.cmp(&b.name));
-    return databases;
+    databases
 }
 
 pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
-    let ecs_client = ecs::Client::new(&config);
+    let ecs_client = ecs::Client::new(config);
 
     info!("Fetching clusters!");
     let cluster_resp = &ecs_client
@@ -474,7 +461,7 @@ pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
         });
     }
 
-    return clusters;
+    clusters
 }
 
 pub async fn services(config: &aws_config::SdkConfig, clusters: Vec<Cluster>) -> Vec<EcsService> {
@@ -493,7 +480,7 @@ pub async fn services(config: &aws_config::SdkConfig, clusters: Vec<Cluster>) ->
         results.extend(res);
     }
 
-    return results;
+    results
 }
 
 pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<EcsService> {
@@ -517,7 +504,7 @@ pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<Ec
 
         services_resp.service_arns().iter().for_each(|service_arn| {
             values.push(EcsService {
-                name: service_arn.split("/").last().unwrap_or_log().to_owned(),
+                name: service_arn.split('/').last().unwrap_or_log().to_owned(),
                 arn: service_arn.to_owned(),
                 cluster_arn: cluster.arn.to_owned(),
                 env: cluster.env.clone(),
@@ -526,7 +513,7 @@ pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<Ec
     }
     values.sort_by(|a, b| a.name.cmp(&b.name));
 
-    return values;
+    values
 }
 
 pub async fn service_details(
@@ -556,7 +543,7 @@ pub async fn service_detail(
     info!("Fetching service details for {}", service_arn);
 
     let ecs_client = ecs::Client::new(config);
-    let cluster = service_arn.split("/").collect::<Vec<&str>>()[1];
+    let cluster = service_arn.split('/').collect::<Vec<&str>>()[1];
     let service = ecs_client
         .describe_services()
         .services(&service_arn)
@@ -598,7 +585,7 @@ pub async fn service_detail(
     let version = container_def
         .image()
         .unwrap_or_log()
-        .split(":")
+        .split(':')
         .last()
         .unwrap_or("missing")
         .to_owned();
@@ -608,7 +595,7 @@ pub async fn service_detail(
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
-        version: version,
+        version,
         env: Env::from_any(&service_arn),
     });
 }
@@ -619,6 +606,7 @@ pub trait OnLogFound: Send {
     fn error(&mut self, msg: String);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn find_logs(
     config: &aws_config::SdkConfig,
     env: Env,
@@ -670,7 +658,7 @@ pub async fn find_logs(
                         notifier.error(format!("Error: {}", &message).to_owned());
 
                         return Result::Err(BError {
-                            message: message,
+                            message,
                             command: "find_logs".to_owned(),
                         });
                     }
@@ -715,7 +703,7 @@ pub async fn find_logs(
                 return Result::Ok(0);
             }
 
-            while marker.as_ref().is_some() == true || first {
+            while marker.as_ref().is_some() || first {
                 first = false;
                 let logs_response = client
                     .filter_log_events()
@@ -741,7 +729,7 @@ pub async fn find_logs(
                     notifier.error(format!("Error: {}", &message).to_owned());
 
                     return Result::Err(BError {
-                        message: message,
+                        message,
                         command: "find_logs".to_owned(),
                     });
                 }
@@ -750,7 +738,7 @@ pub async fn find_logs(
                 marker = log_response_data.next_token().map(|m| m.to_owned());
                 let events = log_response_data.events.unwrap_or_default();
                 info!("LOGS Found: {}", &events.len());
-                log_count = log_count + events.len();
+                log_count += events.len();
                 let mut notifier = on_log_found.lock().await;
                 notifier.notify(
                     events
@@ -783,5 +771,5 @@ pub async fn find_logs(
 
     let mut notifier = on_log_found.lock().await;
     notifier.success();
-    return Result::Ok(log_count);
+    Result::Ok(log_count)
 }

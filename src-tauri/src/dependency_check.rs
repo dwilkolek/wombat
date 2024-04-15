@@ -41,5 +41,5 @@ pub async fn check_dependencies(
 
     dependecies.insert(wombat_api_key, wombat_api.status().await);
 
-    return dependecies;
+    dependecies
 }

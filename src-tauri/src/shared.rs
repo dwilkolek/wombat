@@ -7,6 +7,7 @@ use tracing_unwrap::{OptionExt, ResultExt};
 
 pub type TrackedName = String;
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ResourceType {
     RDS,
@@ -27,6 +28,7 @@ impl BError {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum Env {
     DEVNULL,
@@ -65,7 +67,7 @@ impl Env {
         let captures = env_regex.captures(str);
         let env = captures
             .and_then(|c| c.get(1))
-            .and_then(|e| Some(e.as_str().to_owned()))
+            .map(|e| e.as_str().to_owned())
             .unwrap_or("".to_owned());
 
         Env::from_exact(&env)
@@ -73,24 +75,21 @@ impl Env {
 }
 
 pub fn ecs_arn_to_name(arn: &str) -> TrackedName {
-    arn.split("/").last().unwrap_or_log().to_owned()
+    arn.split('/').last().unwrap_or_log().to_owned()
 }
 
 pub fn rds_arn_to_name(arn: &str) -> TrackedName {
-    arn.split(":")
+    arn.split(':')
         .last()
         .unwrap_or_log()
-        .split("-")
-        .filter(|part| {
-            part != &"dsi" && !(vec!["play", "lab", "dev", "demo", "prod"].contains(part))
-        })
-        .into_iter()
+        .split('-')
+        .filter(|part| part != &"dsi" && !(["play", "lab", "dev", "demo", "prod"].contains(part)))
         .collect::<Vec<&str>>()
         .join("-")
 }
 
 pub fn cluster_arn_to_name(arn: &str) -> TrackedName {
-    arn.split("/").last().unwrap_or_log().to_owned()
+    arn.split('/').last().unwrap_or_log().to_owned()
 }
 
 pub fn arn_to_name(arn: &str) -> TrackedName {
@@ -100,7 +99,7 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
     if arn.starts_with("arn:aws:rds") {
         return rds_arn_to_name(arn);
     }
-    return format!("unknown!#{}", arn);
+    format!("unknown!#{}", arn)
 }
 pub fn arn_resource_type(arn: &str) -> Option<ResourceType> {
     if arn.starts_with("arn:aws:ecs") {
