@@ -53,7 +53,7 @@ impl RdsResolver {
             let db = self.db.read().await;
             clear_databases(&db.connect().unwrap()).await;
         }
-        return self.databases(config).await;
+        self.databases(config).await
     }
 
     pub async fn databases(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::RdsInstance> {
@@ -61,7 +61,7 @@ impl RdsResolver {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let rdses = fetch_databases(&conn).await;
-        if rdses.len() > 0 {
+        if !rdses.is_empty() {
             info!("Returning databases from cache");
             return rdses.clone();
         }
@@ -73,13 +73,13 @@ impl RdsResolver {
             "Returning databases from aws and persisting, count: {}",
             fresh_databases.len()
         );
-        return fresh_databases;
+        fresh_databases
     }
 
     pub async fn read_databases(&self) -> Vec<aws::RdsInstance> {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        return fetch_databases(&conn).await;
+        fetch_databases(&conn).await
     }
 }
 
@@ -137,10 +137,10 @@ async fn clear_databases(conn: &libsql::Connection) {
     conn.execute("DELETE FROM databases", ()).await.unwrap();
 }
 
-async fn store_databases(conn: &libsql::Connection, databases: &Vec<aws::RdsInstance>) {
-    clear_databases(&conn).await;
+async fn store_databases(conn: &libsql::Connection, databases: &[aws::RdsInstance]) {
+    clear_databases(conn).await;
 
-    for db in databases.into_iter() {
+    for db in databases.iter() {
         conn.execute(
                 "INSERT INTO
                     databases(arn, name, engine, engine_version, endpoint, environment_tag, env, appname_tag)

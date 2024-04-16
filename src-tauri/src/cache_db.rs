@@ -16,7 +16,7 @@ pub async fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
         )
         .await;
 
-    return match result {
+    match result {
         Ok(mut rows) => {
             let first_row = rows.next().await.unwrap();
             let version = first_row
@@ -30,7 +30,7 @@ pub async fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
             log::info!("{} cache version not found, reason: {}", cache, e);
             0
         }
-    };
+    }
 }
 
 pub async fn set_cache_version(conn: &Connection, cache: &str, version: u64) {

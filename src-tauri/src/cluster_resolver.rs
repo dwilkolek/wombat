@@ -45,7 +45,7 @@ impl ClusterResolver {
             let db = self.db.read().await;
             clear_clusters(&db.connect().unwrap()).await;
         }
-        return self.clusters(config).await.clone();
+        self.clusters(config).await.clone()
     }
 
     pub async fn clusters(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::Cluster> {
@@ -53,7 +53,7 @@ impl ClusterResolver {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let rdses = fetch_clusters(&conn).await;
-        if rdses.len() > 0 {
+        if !rdses.is_empty() {
             info!("Returning clusters from cache");
             return rdses.clone();
         }
@@ -65,14 +65,14 @@ impl ClusterResolver {
             "Returning clusters from aws and persisting, count: {}",
             fresh_clusters.len()
         );
-        return fresh_clusters;
+        fresh_clusters
     }
 
     pub async fn read_clusters(&self) -> Vec<aws::Cluster> {
         info!("Resolving clusters");
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        return fetch_clusters(&conn).await;
+        fetch_clusters(&conn).await
     }
 }
 
@@ -109,10 +109,10 @@ async fn clear_clusters(conn: &libsql::Connection) {
     conn.execute("DELETE FROM clusters", ()).await.unwrap();
 }
 
-async fn store_clusters(conn: &libsql::Connection, clusters: &Vec<aws::Cluster>) {
-    clear_clusters(&conn).await;
+async fn store_clusters(conn: &libsql::Connection, clusters: &[aws::Cluster]) {
+    clear_clusters(conn).await;
 
-    for db in clusters.into_iter() {
+    for db in clusters.iter() {
         conn.execute(
             "INSERT INTO
                     clusters(arn, name, env)

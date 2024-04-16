@@ -119,12 +119,7 @@ impl UserConfig {
             }
         }
 
-        let used_ports: Vec<u16> = map
-            .values()
-            .map(|e| e.values())
-            .flatten()
-            .copied()
-            .collect();
+        let used_ports: Vec<u16> = map.values().flat_map(|e| e.values()).copied().collect();
 
         let mut possible_port = rand::thread_rng().gen_range(52000..53000);
         while used_ports.iter().any(|p| *p == possible_port) {
@@ -147,7 +142,7 @@ impl UserConfig {
         if port.1 {
             self.save()
         }
-        return port.0;
+        port.0
     }
 
     pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {
@@ -157,7 +152,7 @@ impl UserConfig {
         if port.1 {
             self.save()
         }
-        return port.0;
+        port.0
     }
 
     pub fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
@@ -171,7 +166,7 @@ impl UserConfig {
     }
     pub fn set_logs_path(&mut self, logs_dir_path: &str) -> Result<UserConfig, BError> {
         let path = std::path::Path::new(logs_dir_path);
-        let res = fs::create_dir_all(&path);
+        let res = fs::create_dir_all(path);
         match res {
             Err(msg) => Err(BError::new(
                 "set_logs_path",

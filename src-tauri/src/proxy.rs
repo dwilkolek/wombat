@@ -19,6 +19,7 @@ use warp::hyper::Method;
 use warp::Filter as WarpFilter;
 use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_response, Headers};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn start_aws_ssm_proxy(
     arn: String,
     window: Window,
@@ -167,7 +168,7 @@ pub struct StaticHeadersInterceptor {
 #[async_trait]
 impl ProxyInterceptor for StaticHeadersInterceptor {
     fn applies(&self, uri: &str) -> bool {
-        return uri.starts_with(&self.path_prefix);
+        uri.starts_with(&self.path_prefix)
     }
     async fn modify_headers(&self, headers: &mut Headers) {
         let h = self.headers.clone();
@@ -191,7 +192,7 @@ async fn handle(
     info!("Handling request, {}", &uri);
     let handler = handler.read().await;
     let interceptors_ref = &handler.interceptors;
-    for interceptor in interceptors_ref.into_iter() {
+    for interceptor in interceptors_ref.iter() {
         if interceptor.applies(uri) {
             interceptor.modify_headers(headers).await;
         }
@@ -216,7 +217,7 @@ pub async fn start_proxy_to_aws_proxy(
             let request_handler = request_handler.clone();
             async move {
                 handle(uri.as_str(), &mut headers, request_handler).await;
-                let result = proxy_to_and_forward_response(
+                proxy_to_and_forward_response(
                     format!("http://localhost:{}/", aws_local_port).to_owned(),
                     "".to_owned(),
                     uri,
@@ -225,8 +226,7 @@ pub async fn start_proxy_to_aws_proxy(
                     headers,
                     body,
                 )
-                .await;
-                return result;
+                .await
             }
         },
     );
@@ -237,7 +237,7 @@ pub async fn start_proxy_to_aws_proxy(
         });
     tokio::task::spawn(server);
 
-    return tx;
+    tx
 }
 
 #[cfg(target_os = "windows")]
@@ -306,7 +306,7 @@ async fn kill_pid_on_port(port: u16) {
 async fn kill_pid_on_port(port: u16) {
     // lsof -X -i -n | grep :62809 | cut -d' ' -f 2 | xargs kill
     let lsof = Command::new("lsof")
-        .args(&["-X", "-i", "-n"])
+        .args(["-X", "-i", "-n"])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_log();
