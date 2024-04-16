@@ -51,7 +51,7 @@ impl EcsResolver {
             let db = self.db.read().await;
             clear_services(&db.connect().unwrap()).await;
         }
-        return self.services(config, clusters).await;
+        self.services(config, clusters).await
     }
 
     pub async fn services(
@@ -63,7 +63,7 @@ impl EcsResolver {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let ecses = fetch_services(&conn).await;
-        if ecses.len() > 0 {
+        if !ecses.is_empty() {
             info!("Returning services from cache");
             return ecses.clone();
         }
@@ -75,13 +75,13 @@ impl EcsResolver {
             "Returning services from aws and persisting, count: {}",
             fresh_services.len()
         );
-        return fresh_services;
+        fresh_services
     }
 
     pub async fn read_services(&self) -> Vec<aws::EcsService> {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        return fetch_services(&conn).await;
+        fetch_services(&conn).await
     }
 }
 
@@ -126,10 +126,10 @@ async fn clear_services(conn: &libsql::Connection) {
     conn.execute("DELETE FROM services", ()).await.unwrap();
 }
 
-async fn store_services(conn: &libsql::Connection, services: &Vec<aws::EcsService>) {
-    clear_services(&conn).await;
+async fn store_services(conn: &libsql::Connection, services: &[aws::EcsService]) {
+    clear_services(conn).await;
 
-    for ecs in services.into_iter() {
+    for ecs in services.iter() {
         conn.execute(
             "INSERT INTO
                     services(arn, name, cluster_arn, env)

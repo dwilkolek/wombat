@@ -94,7 +94,7 @@ async fn get_authorized(
 ) -> Result<AuthorizedUser, String> {
     let mut app_ctx = app_state.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
-    let user_id = app_ctx.user_id.clone();
+    let user_id = app_ctx.user_id;
     let last_check = app_ctx.last_auth_check;
 
     let now = chrono::Local::now().timestamp_millis();
@@ -102,7 +102,7 @@ async fn get_authorized(
         info!("Checking authentication");
         let config = app_ctx.sdk_config.as_ref().unwrap_or_log().clone();
         {
-            let login_check = check_login_and_trigger(&user_id, &profile, &config, &axiom).await;
+            let login_check = check_login_and_trigger(user_id, &profile, &config, axiom).await;
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
                 if app_ctx.no_of_failed_logins == 2 {
@@ -117,7 +117,7 @@ async fn get_authorized(
 
     return Ok(AuthorizedUser {
         profile: profile.to_owned(),
-        id: app_ctx.user_id.clone(),
+        id: app_ctx.user_id,
         sdk_config: app_ctx
             .sdk_config
             .as_ref()
@@ -148,7 +148,7 @@ async fn favorite(
 
     ingest_log(
         &axiom.0,
-        &user_config.id,
+        user_config.id,
         Action::UpdateTrackedNames(name.to_owned()),
         None,
         None,
@@ -158,6 +158,7 @@ async fn favorite(
     user_config.favorite(name.to_owned())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn login(
     profile: &str,
@@ -194,7 +195,7 @@ async fn login(
 
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::Login(profile.to_owned()),
         None,
         None,
@@ -216,7 +217,7 @@ async fn login(
             .await;
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::RefreshRdsList,
             None,
             Some(databases.len()),
@@ -234,7 +235,7 @@ async fn login(
             .await;
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::RefreshClusterList,
             None,
             Some(clusters.len()),
@@ -252,7 +253,7 @@ async fn login(
 
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::RefreshEcsList,
             None,
             Some(services.len()),
@@ -271,7 +272,7 @@ async fn login(
     }
 
     let refresher_axiom = Arc::clone(&axiom.0);
-    let refresher_user_id = authorized_user.id.clone();
+    let refresher_user_id = authorized_user.id;
     let authorized_user = authorized_user.clone();
 
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
@@ -291,7 +292,7 @@ async fn login(
             if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                 ingest_log_with_client(
                     axiom,
-                    &refresher_user_id,
+                    refresher_user_id,
                     Action::RefreshRdsList,
                     None,
                     Some(databases.len()),
@@ -312,7 +313,7 @@ async fn login(
             if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                 ingest_log_with_client(
                     axiom,
-                    &authorized_user.id,
+                    authorized_user.id,
                     Action::RefreshClusterList,
                     None,
                     Some(clusters.len()),
@@ -329,7 +330,7 @@ async fn login(
             if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                 ingest_log_with_client(
                     axiom,
-                    &authorized_user.id,
+                    authorized_user.id,
                     Action::RefreshEcsList,
                     None,
                     Some(services.len()),
@@ -353,7 +354,7 @@ async fn set_dbeaver_path(
     let mut user_config = user_config.0.lock().await;
     ingest_log(
         &axiom.0,
-        &user_config.id,
+        user_config.id,
         Action::SetDbeaverPath(dbeaver_path.to_owned()),
         None,
         None,
@@ -371,7 +372,7 @@ async fn set_logs_dir_path(
     let mut user_config = user_config.0.lock().await;
     ingest_log(
         &axiom.0,
-        &user_config.id,
+        user_config.id,
         Action::SetLogsDirPath(logs_dir.to_owned()),
         None,
         None,
@@ -389,7 +390,7 @@ async fn save_preffered_envs(
     let mut user_config = user_config.0.lock().await;
     ingest_log(
         &axiom.0,
-        &user_config.id,
+        user_config.id,
         Action::SetPrefferedEnvs(envs.clone()),
         None,
         None,
@@ -405,12 +406,11 @@ async fn select_aws_profile(
 ) -> String {
     let wombat_api = wombat_api_instance.0.read().await;
     let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
-    let ssm_profile_override = if is_enabled {
+    if is_enabled {
         authorized_user.profile.clone()
     } else {
         profile.to_owned()
-    };
-    return ssm_profile_override;
+    }
 }
 
 #[tauri::command]
@@ -452,7 +452,7 @@ async fn credentials(
         Ok(_) => {
             ingest_log(
                 &axiom.0,
-                &authorized_user.id,
+                authorized_user.id,
                 Action::FetchCredentials(db.name, db.env),
                 None,
                 None,
@@ -462,7 +462,7 @@ async fn credentials(
         Err(err) => {
             ingest_log(
                 &axiom.0,
-                &authorized_user.id,
+                authorized_user.id,
                 Action::FetchCredentials(db.name, db.env),
                 Some(err.message.clone()),
                 None,
@@ -470,7 +470,7 @@ async fn credentials(
             .await
         }
     };
-    return secret;
+    secret
 }
 
 #[tauri::command]
@@ -494,7 +494,7 @@ async fn stop_job(
     {
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
                 Env::from_any(arn).to_owned(),
@@ -517,7 +517,7 @@ async fn stop_job(
                     let captures = session_regex.captures(&line);
                     let found_session_id = captures
                         .and_then(|c| c.get(1))
-                        .and_then(|e| Some(e.as_str().to_owned()));
+                        .map(|e| e.as_str().to_owned());
                     if found_session_id.is_some() {
                         session_id = found_session_id;
                         break;
@@ -546,7 +546,7 @@ async fn stop_job(
     } else {
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::StopJob(
                 shared::arn_to_name(arn).to_owned(),
                 Env::from_any(arn).to_owned(),
@@ -572,7 +572,7 @@ async fn logout(
     if let Some(profile) = app_state.active_profile.as_ref() {
         ingest_log(
             &axiom.0,
-            &user_state.0.lock().await.id,
+            user_state.0.lock().await.id,
             Action::Logout(profile.clone()),
             None,
             None,
@@ -626,7 +626,7 @@ impl aws::OnLogFound for FileNotifier {
         for log in logs.iter() {
             let log_str = serde_json::to_string(log).unwrap_or_log();
             data.push_str(&log_str);
-            data.push_str("\n")
+            data.push('\n')
         }
         let _ = writer.write(data.as_bytes());
         if let Some(log) = logs.first() {
@@ -675,6 +675,7 @@ impl aws::OnLogFound for FileNotifier {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn find_logs(
     window: Window,
@@ -699,7 +700,7 @@ async fn find_logs(
         if let Some(handler) = handler {
             ingest_log(
                 &axiom.0,
-                &authorized_user.id,
+                authorized_user.id,
                 Action::AbortSearchLogs("new-search-request".to_owned()),
                 None,
                 None,
@@ -714,7 +715,7 @@ async fn find_logs(
 
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::StartSearchLogs(
             apps.to_owned(),
             env.clone(),
@@ -778,11 +779,11 @@ async fn find_logs(
         .await;
 
         match &result {
-            Ok(cnt) => ingest_log(&axiom, &authorized_user.id, action, None, Some(*cnt)).await,
+            Ok(cnt) => ingest_log(&axiom, authorized_user.id, action, None, Some(*cnt)).await,
             Err(err) => {
                 ingest_log(
                     &axiom,
-                    &authorized_user.id,
+                    authorized_user.id,
                     action,
                     Some(err.message.to_owned()),
                     None,
@@ -792,7 +793,7 @@ async fn find_logs(
         }
     }));
 
-    return Ok(());
+    Ok(())
 }
 
 #[tauri::command]
@@ -808,7 +809,7 @@ async fn abort_find_logs(
         handler.abort();
         ingest_log(
             &axiom.0,
-            &user_config.0.lock().await.id,
+            user_config.0.lock().await.id,
             Action::AbortSearchLogs(reason),
             None,
             None,
@@ -874,10 +875,10 @@ async fn discover(
     }
 
     let mut found_names = HashSet::new();
-    if name.len() < 1 {
+    if name.is_empty() {
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::Discover(name.to_owned()),
             None,
             Some(0),
@@ -916,7 +917,7 @@ async fn discover(
 
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::Discover(name.to_owned()),
         None,
         Some(found_names.len()),
@@ -950,7 +951,7 @@ async fn start_db_proxy(
     window
         .emit(
             "proxy-starting",
-            ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port.clone(), None),
+            ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port, None),
         )
         .unwrap_or_log();
 
@@ -962,7 +963,7 @@ async fn start_db_proxy(
 
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
         None,
         None,
@@ -1020,14 +1021,7 @@ async fn refresh_cache(
             .await;
     }
 
-    ingest_log(
-        &axiom.0,
-        &authorized_user.id,
-        Action::ClearCache,
-        None,
-        None,
-    )
-    .await;
+    ingest_log(&axiom.0, authorized_user.id, Action::ClearCache, None, None).await;
 
     window.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
@@ -1049,7 +1043,7 @@ async fn service_details(
 
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::ServiceDetails(app.to_owned()),
         None,
         None,
@@ -1101,6 +1095,7 @@ async fn service_details(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn start_service_proxy(
     window: Window,
@@ -1147,7 +1142,7 @@ async fn start_service_proxy(
     let host = format!("{}.service", service.name);
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::StartEcsProxy(service.name.to_owned(), service.env.clone()),
         None,
         None,
@@ -1234,7 +1229,7 @@ async fn log_filters(
 ) -> Result<Vec<wombat_api::LogFilter>, BError> {
     let wombat_api = wombat_api_instance.0.read().await;
     let filters = wombat_api.log_filters().await;
-    return Ok(filters);
+    Ok(filters)
 }
 #[tauri::command]
 async fn proxy_auth_configs(
@@ -1243,7 +1238,7 @@ async fn proxy_auth_configs(
     let wombat_api = wombat_api_instance.0.read().await;
     let configs = wombat_api.get_proxy_auth_configs().await;
 
-    return Ok(configs);
+    Ok(configs)
 }
 
 #[tauri::command]
@@ -1254,7 +1249,7 @@ async fn is_feature_enabled(
     let wombat_api = wombat_api_instance.0.read().await;
     let is_enabled = wombat_api.is_feature_enabled(feature).await;
 
-    return Ok(is_enabled);
+    Ok(is_enabled)
 }
 
 #[tauri::command]
@@ -1262,19 +1257,19 @@ async fn check_dependencies(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<HashMap<String, Result<String, String>>, ()> {
     let mut wombat_api = wombat_api_instance.0.write().await;
-    return Ok(dependency_check::check_dependencies(&mut wombat_api).await);
+    Ok(dependency_check::check_dependencies(&mut wombat_api).await)
 }
 
 #[tauri::command]
 async fn available_infra_profiles() -> Result<Vec<String>, BError> {
     let profiles = aws::available_infra_profiles().await;
-    return Ok(profiles);
+    Ok(profiles)
 }
 
 #[tauri::command]
 async fn available_sso_profiles() -> Result<Vec<String>, BError> {
     let profiles = aws::available_sso_profiles().await;
-    return Ok(profiles);
+    Ok(profiles)
 }
 
 #[tauri::command]
@@ -1343,7 +1338,7 @@ async fn open_dbeaver(
     if let Err(err) = secret {
         ingest_log(
             &axiom.0,
-            &authorized_user.id,
+            authorized_user.id,
             Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
             Some(err.message.clone()),
             None,
@@ -1354,7 +1349,7 @@ async fn open_dbeaver(
     let db_secret = secret.unwrap_or_log();
     ingest_log(
         &axiom.0,
-        &authorized_user.id,
+        authorized_user.id,
         Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
         None,
         None,
@@ -1364,7 +1359,7 @@ async fn open_dbeaver(
         .args([
             "-con",
             &db_beaver_con_parma(
-                &db.arn.split(":").last().unwrap_or_log(),
+                db.arn.split(':').last().unwrap_or_log(),
                 "localhost",
                 port,
                 &db_secret,
@@ -1372,7 +1367,7 @@ async fn open_dbeaver(
         ])
         .output()
         .expect("failed to execute process");
-    return Ok(());
+    Ok(())
 }
 
 #[cfg(debug_assertions)]
@@ -1429,7 +1424,7 @@ async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientS
                 .build();
             return AxiomClientState(Arc::new(Mutex::new(match client {
                 Ok(client) => {
-                    ingest_log_with_client(&client, &user.id, Action::Start, None, None).await;
+                    ingest_log_with_client(&client, user.id, Action::Start, None, None).await;
                     Some(client)
                 }
                 Err(_) => None,
@@ -1439,16 +1434,15 @@ async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientS
 }
 
 async fn initialize_cache_db(profile: &str) -> libsql::Database {
-    return libsql::Builder::new_local(
+    libsql::Builder::new_local(
         user::wombat_dir()
             .join(format!("cache-{}.db", profile))
             .to_str()
-            .unwrap_or_log()
-            .to_string(),
+            .unwrap_or_log(),
     )
     .build()
     .await
-    .unwrap();
+    .unwrap()
 }
 
 #[tokio::main]
@@ -1482,14 +1476,14 @@ async fn main() {
         app_config.wombat_api_url.clone(),
         app_config.wombat_api_user.clone(),
         app_config.wombat_api_password.clone(),
-        user.id.clone(),
+        user.id,
     );
 
     tauri::Builder::default()
         .manage(initialize_axiom(&user, &app_config).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
-            user_id: user.id.clone(),
+            user_id: user.id,
             last_auth_check: 0,
             sdk_config: None,
             no_of_failed_logins: 0,
@@ -1619,12 +1613,12 @@ enum Action {
 }
 
 async fn check_login_and_trigger(
-    user_id: &uuid::Uuid,
+    user_id: uuid::Uuid,
     profile: &str,
     config: &aws_config::SdkConfig,
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<(), BError> {
-    if !aws::is_logged(&config).await {
+    if !aws::is_logged(config).await {
         info!("Trigger log in into AWS");
         let mut child = Command::new("aws")
             .args(["sso", "login", "--profile", profile])
@@ -1640,9 +1634,9 @@ async fn check_login_and_trigger(
             }
         };
 
-        if !aws::is_logged(&config).await {
+        if !aws::is_logged(config).await {
             ingest_log(
-                &axiom,
+                axiom,
                 user_id,
                 Action::LoginCheck(profile.to_owned()),
                 Some(String::from("Failed to log in.")),
@@ -1652,7 +1646,7 @@ async fn check_login_and_trigger(
             return Err(BError::new("login", "Failed to log in"));
         } else {
             ingest_log(
-                &axiom,
+                axiom,
                 user_id,
                 Action::LoginCheck(profile.to_owned()),
                 None,
@@ -1667,7 +1661,7 @@ async fn check_login_and_trigger(
 
 async fn ingest_log(
     client: &Arc<Mutex<Option<Client>>>,
-    user_id: &uuid::Uuid,
+    user_id: uuid::Uuid,
     action: Action,
     error_message: Option<String>,
     record_count: Option<usize>,
@@ -1677,13 +1671,13 @@ async fn ingest_log(
         &action, &error_message, &record_count
     );
     if let Some(client) = client.lock().await.as_ref() {
-        ingest_log_with_client(&client, user_id, action, error_message, record_count).await;
+        ingest_log_with_client(client, user_id, action, error_message, record_count).await;
     }
 }
 
 async fn ingest_log_with_client(
     client: &Client,
-    user_id: &uuid::Uuid,
+    user_id: uuid::Uuid,
     action: Action,
     error_message: Option<String>,
     record_count: Option<usize>,
@@ -1692,7 +1686,7 @@ async fn ingest_log_with_client(
         .ingest(
             "wombat",
             vec![json!(ActionLog {
-                user_id: user_id.clone(),
+                user_id,
                 action,
                 error_message,
                 record_count,
