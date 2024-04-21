@@ -6,7 +6,6 @@
 
 	$: user = $userStore;
 
-	console.log(user);
 	$: selectedClusters = $userStore.preffered_environments;
 
 	$: columnToggleHandler = (env: AwsEnv, e: any) => {
@@ -29,7 +28,6 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
-	
 	<form
 		class="flex flex-row gap-1 mb-2"
 		on:submit|preventDefault={async () => {
