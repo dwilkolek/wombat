@@ -845,6 +845,30 @@ async fn services(
 }
 
 #[tauri::command]
+async fn restart_service(
+    cluster_arn: String,
+    service_name: String,
+    window: Window,
+    app_state: tauri::State<'_, AppContextState>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+) -> Result<String, BError> {
+    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+        Err(msg) => return Err(BError::new("restart_service", msg)),
+        Ok(authorized_user) => authorized_user,
+    };
+    let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
+    ecs_resolver_instance
+        .restart_service(
+            window,
+            authorized_user.sdk_config,
+            cluster_arn,
+            service_name,
+        )
+        .await
+}
+
+#[tauri::command]
 async fn databases(
     env: shared::Env,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
@@ -1231,6 +1255,7 @@ async fn log_filters(
     let filters = wombat_api.log_filters().await;
     Ok(filters)
 }
+
 #[tauri::command]
 async fn proxy_auth_configs(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
@@ -1513,6 +1538,7 @@ async fn main() {
             logout,
             clusters,
             services,
+            restart_service,
             databases,
             service_details,
             favorite,
