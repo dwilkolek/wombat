@@ -67,6 +67,6 @@ jobs:
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.settings.platform }}-${{matrix.settings.platform-name}}-${{ github.sha }}
+          name: ${{ matrix.platform }}-${{matrix.platform-name}}-${{ github.sha }}
           path: |
             src-tauri/target/
