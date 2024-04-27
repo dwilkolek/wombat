@@ -69,3 +69,4 @@ jobs:
           path: |
             src-tauri/target/release/bundle
             src-tauri/target/release/**/Wombat*
+            src-tauri/target/universal-apple-darwin/**/release/**/Wombat*
