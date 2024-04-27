@@ -1579,8 +1579,8 @@ async fn main() {
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
 
-    app.run(|_app_handle, event| match event {
-        tauri::RunEvent::Updater(updater_event) => {
+    app.run(|_app_handle, event| {
+        if let tauri::RunEvent::Updater(updater_event) = event {
             match updater_event {
                 tauri::UpdaterEvent::UpdateAvailable {
                     body,
@@ -1593,12 +1593,12 @@ async fn main() {
                 tauri::UpdaterEvent::Pending => {
                     info!("update is pending!");
                 }
-                tauri::UpdaterEvent::DownloadProgress {
-                    chunk_length,
-                    content_length,
-                } => {
-                    info!("downloaded {} of {:?}", chunk_length, content_length);
-                }
+                // tauri::UpdaterEvent::DownloadProgress {
+                //     chunk_length,
+                //     content_length,
+                // } => {
+                //     info!("downloaded {} of {:?}", chunk_length, content_length);
+                // }
                 // Emitted when the download has finished and the update is about to be installed.
                 tauri::UpdaterEvent::Downloaded => {
                     info!("update has been downloaded!");
@@ -1615,9 +1615,9 @@ async fn main() {
                 tauri::UpdaterEvent::Error(error) => {
                     info!("failed to update: {}", error);
                 }
+                _ => {}
             }
         }
-        _ => {}
     });
 }
 
