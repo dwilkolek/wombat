@@ -19,7 +19,7 @@ jobs:
           - platform: 'windows-latest'
             args: ''
             platform-name: 'Windows'
-    runs-on: ${{ matrix.settings.platform }}
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
       - uses: bluwy/substitute-string-action@v3
@@ -37,7 +37,7 @@ jobs:
           WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
           WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
       - name: archive name
-        run: echo ${{ matrix.settings.platform }}-${{matrix.settings.platform-name}}-${{ github.sha }}
+        run: echo ${{ matrix.platform }}-${{matrix.platform-name}}-${{ github.sha }}
       - name: setup node
         uses: actions/setup-node@v4
         with:
@@ -46,9 +46,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.settings.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: install dependencies (ubuntu only)
-        if: matrix.settings.platform == 'ubuntu-latest'
+        if: matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
@@ -60,7 +60,7 @@ jobs:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: ${{ matrix.settings.args }}
+          args: ${{ matrix.args }}
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
