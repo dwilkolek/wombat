@@ -13,7 +13,7 @@ use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
 use chrono::prelude::*;
 use ec2::types::Filter;
-use log::{info, warn};
+use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tracing_unwrap::{OptionExt, ResultExt};
@@ -462,6 +462,98 @@ pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
     }
 
     clusters
+}
+
+pub async fn get_deploment_status(
+    config: &aws_config::SdkConfig,
+    cluster_arn: &str,
+    service_name: &str,
+    deployment_id: &str,
+) -> Result<aws_sdk_ecs::types::DeploymentRolloutState, BError> {
+    let ecs_client = ecs::Client::new(config);
+    let result = ecs_client
+        .describe_services()
+        .cluster(cluster_arn)
+        .services(service_name)
+        .send()
+        .await;
+
+    let rollout_state = result.map(|result| {
+        result.services.and_then(|services| {
+            services
+                .into_iter()
+                .find(|service| service.service_name().unwrap_or("") == service_name)
+                .and_then(|service| {
+                    service
+                        .deployments()
+                        .into_iter()
+                        .find(|deployment| deployment.id().unwrap_or("-") == deployment_id)
+                        .and_then(|deployment| deployment.rollout_state().cloned())
+                })
+        })
+    });
+
+    match rollout_state {
+        Err(err) => Err(shared::BError::new("deployment_status", err.to_string())),
+        Ok(rollout_state) => {
+            rollout_state.ok_or(BError::new("deployment_status", "missing deployment"))
+        }
+    }
+    // if let Ok(result) = result {
+    //     if let Some(services) = result.services {
+    //         let rollout_state = services
+    //             .into_iter()
+    //             .find(|service| service.service_name().unwrap_or("") == service_name)
+    //             .and_then(|service| {
+    //                 service
+    //                     .deployments()
+    //                     .into_iter()
+    //                     .find(|deployment| deployment.id().unwrap_or("-") == deployment_id)
+    //                     .and_then(|deployment| deployment.rollout_state().cloned())
+    //             });
+    //     }
+    // }
+    // Ok("PENDING".to_owned())
+}
+
+pub async fn restart_service(
+    config: &aws_config::SdkConfig,
+    cluster_arn: &str,
+    service_name: &str,
+) -> Result<String, BError> {
+    let ecs_client = ecs::Client::new(config);
+    let result = ecs_client
+        .update_service()
+        .cluster(cluster_arn)
+        .service(service_name)
+        .force_new_deployment(true)
+        .send()
+        .await;
+    match result {
+        Ok(output) => {
+            let service = output.service.unwrap_or_log();
+            let deployments = &service.deployments;
+            let deployment_id = deployments
+                .as_ref()
+                .and_then(|dpls| dpls.first())
+                .and_then(|deployment| deployment.id());
+            match deployment_id {
+                Some(deployment_id) => Ok(deployment_id.to_owned()),
+                None => Err(shared::BError::new(
+                    "restart_service",
+                    "missing deployment id",
+                )),
+            }
+        }
+        Err(err) => {
+            let error_msg = format!(
+                "failed to restart service {}, cluster: {}. Reason: {}",
+                service_name, cluster_arn, err
+            );
+            error!("Error: {error_msg}");
+            Err(shared::BError::new("restart_service", error_msg))
+        }
+    }
 }
 
 pub async fn services(config: &aws_config::SdkConfig, clusters: Vec<Cluster>) -> Vec<EcsService> {

@@ -7,31 +7,36 @@ const createFeatureStore = () => {
 		ecsTab: false,
 		rdsTab: false,
 		devWay: false,
+		restartEcsService: false
 	});
 
 	Promise.all([
 		invoke<boolean>('is_feature_enabled', { feature: 'ecs-tab' }),
 		invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
 		invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
-	]).then(([ecsTab, rdsTab, devWay ]) => {
+		invoke<boolean>('is_feature_enabled', { feature: 'restart-ecs-service' })
+	]).then(([ecsTab, rdsTab, devWay, restartEcsService]) => {
 		features.set({
 			ecsTab,
 			rdsTab,
 			devWay,
+			restartEcsService
 		});
 	});
 	listen('cache-refreshed', () => {
 		Promise.all([
-            invoke<boolean>('is_feature_enabled', { feature: 'ecs-tab' }),
-            invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
-            invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
-        ]).then(([ecsTab, rdsTab, devWay ]) => {
-            features.set({
-                ecsTab,
-                rdsTab,
-                devWay,
-            });
-        });
+			invoke<boolean>('is_feature_enabled', { feature: 'ecs-tab' }),
+			invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
+			invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
+			invoke<boolean>('is_feature_enabled', { feature: 'restart-ecs-service' })
+		]).then(([ecsTab, rdsTab, devWay, restartEcsService]) => {
+			features.set({
+				ecsTab,
+				rdsTab,
+				devWay,
+				restartEcsService
+			});
+		});
 	});
 	return features;
 };
