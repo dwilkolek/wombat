@@ -852,19 +852,22 @@ async fn restart_service(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<String, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("restart_service", msg)),
         Ok(authorized_user) => authorized_user,
     };
+    let ssm_profile =
+        select_aws_profile(&service_name, &authorized_user, &wombat_api_instance).await;
+    let (aws_profile, aws_config) = aws::use_aws_config(&ssm_profile).await;
+    info!(
+        "Attemping to restart service {} on {} with profile {}",
+        &service_name, &cluster_arn, &aws_profile
+    );
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     ecs_resolver_instance
-        .restart_service(
-            window,
-            authorized_user.sdk_config,
-            cluster_arn,
-            service_name,
-        )
+        .restart_service(window, aws_config, cluster_arn, service_name)
         .await
 }
 

@@ -486,7 +486,7 @@ pub async fn get_deploment_status(
                 .and_then(|service| {
                     service
                         .deployments()
-                        .into_iter()
+                        .iter()
                         .find(|deployment| deployment.id().unwrap_or("-") == deployment_id)
                         .and_then(|deployment| deployment.rollout_state().cloned())
                 })
@@ -499,21 +499,6 @@ pub async fn get_deploment_status(
             rollout_state.ok_or(BError::new("deployment_status", "missing deployment"))
         }
     }
-    // if let Ok(result) = result {
-    //     if let Some(services) = result.services {
-    //         let rollout_state = services
-    //             .into_iter()
-    //             .find(|service| service.service_name().unwrap_or("") == service_name)
-    //             .and_then(|service| {
-    //                 service
-    //                     .deployments()
-    //                     .into_iter()
-    //                     .find(|deployment| deployment.id().unwrap_or("-") == deployment_id)
-    //                     .and_then(|deployment| deployment.rollout_state().cloned())
-    //             });
-    //     }
-    // }
-    // Ok("PENDING".to_owned())
 }
 
 pub async fn restart_service(
