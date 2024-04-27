@@ -36,6 +36,8 @@ jobs:
           WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
           WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
           WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
+      - name: archive name
+        run: echo ${{ matrix.platform }}-${{matrix.platform-name}}-${{ github.sha }}
       - name: setup node
         uses: actions/setup-node@v4
         with:
@@ -52,7 +54,7 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
       - name: install frontend dependencies
         run: npm ci
-      - uses: tauri-apps/tauri-action@v0.5.1
+      - uses: tauri-apps/tauri-action@v0.5.2
         env:
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
