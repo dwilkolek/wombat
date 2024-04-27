@@ -6,7 +6,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          # - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          #   args: '--verbose --target aarch64-apple-darwin'
+          #   platform-name: 'Macos-M1'
+          # - platform: 'macos-latest' # for Intel based macs.
+          #   args: '--verbose --target x86_64-apple-darwin'
+          #   platform-name: 'Macos-Intel'
+          - platform: 'macos-latest' # for Univrsal based macs.
+            args: '--verbose --target universal-apple-darwin'
+            platform-name: 'Macos-Universal'
+          - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
+            args: '--verbose'
+            platform-name: 'Linux'
+          - platform: 'windows-latest'
+            args: '--verbose'
+            platform-name: 'Windows'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +45,9 @@ jobs:
           node-version: 20
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-latest'
         run: |
@@ -42,10 +60,12 @@ jobs:
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ github.sha }}
+          name: ${{matrix.platform-name}}-${{ matrix.platform }}-${{ github.sha }}
           path: |
             src-tauri/target/release/bundle
-            src-tauri/target/release/bundle/Wombat*
+            src-tauri/target/release/**/Wombat*

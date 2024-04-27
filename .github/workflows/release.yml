@@ -11,7 +11,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, windows-latest, ubuntu-latest]
+        include:
+          # - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          #   args: '--verbose --target aarch64-apple-darwin'
+          #   platform-name: 'Macos-M1'
+          # - platform: 'macos-latest' # for Intel based macs.
+          #   args: '--verbose --target x86_64-apple-darwin'
+          #   platform-name: 'Macos-Intel'
+          - platform: 'macos-latest' # for Univrsal based macs.
+            args: '--verbose --target universal-apple-darwin'
+            platform-name: 'Macos-Universal'
+          - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
+            args: '--verbose'
+            platform-name: 'Linux'
+          - platform: 'windows-latest'
+            args: '--verbose'
+            platform-name: 'Windows'
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -55,3 +70,4 @@ jobs:
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true
+          args: ${{ matrix.args }}
