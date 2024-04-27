@@ -16,7 +16,7 @@
 </script>
 
 {#if $featuresStore.restartEcsService && ($featuresStore.devWay || $infraProfiles.some((profile) => profile == service.name))}
-	<div class="tooltip" data-tip={deployment?.rollout_status ?? 'Restart service'}>
+	<span class="tooltip flex" data-tip={deployment?.rollout_status ?? 'Restart service'}>
 		{#if deployment != null}
 			{#if deployment.rollout_status == 'In Progress'}
 				<span class="text-amber-300">
@@ -103,5 +103,5 @@
 				</svg>
 			</button>
 		{/if}
-	</div>
+	</span>
 {/if}
