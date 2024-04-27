@@ -9,12 +9,16 @@ jobs:
         include:
           - platform: 'macos-latest' # for Arm based macs (M1 and above).
             args: '--target aarch64-apple-darwin'
+            platform-name: 'Macos-M1'
           - platform: 'macos-latest' # for Intel based macs.
             args: '--target x86_64-apple-darwin'
+            platform-name: 'Macos-Intel'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
             args: ''
+            platform-name: 'Linux'
           - platform: 'windows-latest'
             args: ''
+            platform-name: 'Windows'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -56,7 +60,7 @@ jobs:
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-${{ github.sha }}
+          name: ${{ matrix.platform }}-${{matrix.platform-name}}-${{ github.sha }}
           path: |
             src-tauri/target/release/bundle
             src-tauri/target/release/bundle/Wombat*
