@@ -66,5 +66,4 @@ jobs:
         with:
           name: ${{ matrix.settings.platform }}-${{matrix.settings.platform-name}}-${{ github.sha }}
           path: |
-            src-tauri/target/release/bundle
-            src-tauri/target/release/bundle/Wombat*
+            src-tauri/target/
