@@ -1504,7 +1504,24 @@ async fn main() {
         user.id,
     );
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        .setup(|app| {
+            let handle = app.handle();
+            tauri::async_runtime::spawn(async move {
+                match tauri::updater::builder(handle).check().await {
+                    Ok(update) => {
+                        // if update.is_update_available() {
+                        //     update.download_and_install().await.unwrap();
+                        // }
+                        info!("update available: {}", update.is_update_available());
+                    }
+                    Err(e) => {
+                        warn!("failed to get update: {}", e);
+                    }
+                }
+            });
+            Ok(())
+        })
         .manage(initialize_axiom(&user, &app_config).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
@@ -1559,8 +1576,49 @@ async fn main() {
             available_infra_profiles,
             available_sso_profiles
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("Error while running tauri application");
+
+    app.run(|_app_handle, event| match event {
+        tauri::RunEvent::Updater(updater_event) => {
+            match updater_event {
+                tauri::UpdaterEvent::UpdateAvailable {
+                    body,
+                    date,
+                    version,
+                } => {
+                    info!("update available {} {:?} {}", body, date, version);
+                }
+                // Emitted when the download is about to be started.
+                tauri::UpdaterEvent::Pending => {
+                    info!("update is pending!");
+                }
+                tauri::UpdaterEvent::DownloadProgress {
+                    chunk_length,
+                    content_length,
+                } => {
+                    info!("downloaded {} of {:?}", chunk_length, content_length);
+                }
+                // Emitted when the download has finished and the update is about to be installed.
+                tauri::UpdaterEvent::Downloaded => {
+                    info!("update has been downloaded!");
+                }
+                // Emitted when the update was installed. You can then ask to restart the app.
+                tauri::UpdaterEvent::Updated => {
+                    info!("app has been updated");
+                }
+                // Emitted when the app already has the latest version installed and an update is not needed.
+                tauri::UpdaterEvent::AlreadyUpToDate => {
+                    info!("app is already up to date");
+                }
+                // Emitted when there is an error with the updater. We suggest to listen to this event even if the default dialog is enabled.
+                tauri::UpdaterEvent::Error(error) => {
+                    info!("failed to update: {}", error);
+                }
+            }
+        }
+        _ => {}
+    });
 }
 
 #[derive(Clone)]

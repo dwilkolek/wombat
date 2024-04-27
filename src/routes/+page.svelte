@@ -8,9 +8,15 @@
 	import { exit } from '@tauri-apps/api/process';
 	import { invoke } from '@tauri-apps/api';
 	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
-	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
+
+	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest', {
+		method: 'GET',
+		headers: { 'user-agent': 'wombat' }
+	}).then((r) => {
+		console.log('fetching latest: ', r);
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
+
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
 	};
@@ -95,11 +101,9 @@
 							<span class="label-text">AWS profile</span>
 						</label>
 						<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
-							{#await $ssoProfiles then ssoProfiles}
-								{#each ssoProfiles as ssoProfile}
-									<option value={ssoProfile}>{ssoProfile}</option>
-								{/each}
-							{/await}
+							{#each $ssoProfiles as ssoProfile}
+								<option value={ssoProfile}>{ssoProfile}</option>
+							{/each}
 						</select>
 					</div>
 					{#await dependenciesPromise then deps}
@@ -145,8 +149,9 @@
 						openGithubPage();
 					}}
 					target="_blank"
-					>https://github.com/dwilkolek/wombat v{version}
+					>https://github.com/dwilkolek/wombat
 				</a>
+				<span class="text-gray-600">v{version}</span>
 			</div>
 			<div class="flex gap-1">
 				<span>User Id:</span>
