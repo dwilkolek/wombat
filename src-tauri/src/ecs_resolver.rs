@@ -1,6 +1,7 @@
-use crate::{aws, cache_db};
+use crate::{aws, cache_db, shared::BError};
 use log::info;
 use std::sync::Arc;
+use tauri::Window;
 use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "ecs";
@@ -52,6 +53,57 @@ impl EcsResolver {
             clear_services(&db.connect().unwrap()).await;
         }
         self.services(config, clusters).await
+    }
+
+    pub async fn restart_service(
+        &self,
+        window: Window,
+        config: aws_config::SdkConfig,
+        cluster_arn: String,
+        service_name: String,
+    ) -> Result<String, BError> {
+        let deplyoment_res = aws::restart_service(&config, &cluster_arn, &service_name).await;
+
+        if deplyoment_res.is_ok() {
+            let deployment_res_clone = deplyoment_res.clone();
+            let deployment_id = deployment_res_clone.unwrap().clone();
+            tokio::task::spawn(async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_millis(5000));
+                let mut continue_checking = true;
+                while continue_checking {
+                    interval.tick().await;
+                    let status = aws::get_deploment_status(
+                        &config,
+                        &cluster_arn,
+                        &service_name,
+                        &deployment_id,
+                    )
+                    .await;
+                    let mut status_str = "Unknown";
+                    if let Ok(status) = status {
+                        status_str = match status {
+                            aws_sdk_ecs::types::DeploymentRolloutState::Completed => "Completed",
+                            aws_sdk_ecs::types::DeploymentRolloutState::Failed => "Failed",
+                            aws_sdk_ecs::types::DeploymentRolloutState::InProgress => "In Progress",
+                            _ => "Unknown",
+                        };
+                    }
+
+                    let _ = window.emit(
+                        "deployment",
+                        DeplyomentStatus {
+                            deployment_id: deployment_id.to_owned(),
+                            cluster_arn: cluster_arn.clone(),
+                            service_name: service_name.clone(),
+                            rollout_status: status_str.to_owned(),
+                        },
+                    );
+                    continue_checking = status_str == "In Progress";
+                }
+            });
+        }
+
+        deplyoment_res
     }
 
     pub async fn services(
@@ -147,4 +199,12 @@ async fn store_services(conn: &libsql::Connection, services: &[aws::EcsService])
     }
 
     info!("stored {} ecs instances in cache", services.len());
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct DeplyomentStatus {
+    deployment_id: String,
+    service_name: String,
+    cluster_arn: String,
+    rollout_status: String,
 }
