@@ -12,10 +12,10 @@ jobs:
             platform-name: 'Macos-M1'
           - platform: 'macos-latest' # for Intel based macs.
             args: '--verbose --target x86_64-apple-darwin'
-            platform-name: 'Macos-Universal'
+            platform-name: 'Macos-Intel'
           - platform: 'macos-latest' # for Intel based macs.
             args: '--verbose --target universal-apple-darwin'
-            platform-name: 'Macos-Intel'
+            platform-name: 'Macos-Universal'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
             args: '--verbose'
             platform-name: 'Linux'

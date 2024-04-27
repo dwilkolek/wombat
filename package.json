@@ -14,7 +14,7 @@
 		"bump-version": "node bump-version.js"
 	},
 	"dependencies": {
-		"@tauri-apps/api": "1.5.3",
+		"@tauri-apps/api": "1.5.4",
 		"@zerodevx/svelte-json-view": "1.0.9",
 		"daisyui": "4.10.1",
 		"date-fns": "3.6.0"
