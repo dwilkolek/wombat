@@ -628,6 +628,8 @@ pub async fn service_detail(
         .send()
         .await;
     if service.is_err() {
+        let err = service.unwrap_err();
+        error!("Failed to describe service, reason {}", err);
         return Err(ServiceDetailsMissing {
             name: shared::ecs_arn_to_name(&service_arn),
             timestamp: Utc::now(),
@@ -647,6 +649,8 @@ pub async fn service_detail(
         .await;
 
     if task_def.is_err() {
+        let err = task_def.unwrap_err();
+        error!("Failed to fetch task definition, reason {}", err);
         return Err(ServiceDetailsMissing {
             name: shared::ecs_arn_to_name(&service_arn),
             timestamp: Utc::now(),
