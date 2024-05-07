@@ -48,11 +48,13 @@ const refresh = () => {
 		() => {
 			const apps = get(allServiceDetailsStore);
 			apps.forEach((app) => {
-				invoke('service_details', { app: app.app });
+				if (!to[app.app]) {
+					to[app.app] = invoke('service_details', { app: app.app });
+				}
 			});
 			refresh();
 		},
-		5 * 60 * 1000
+		15 * 60 * 1000
 	);
 };
 refresh();
