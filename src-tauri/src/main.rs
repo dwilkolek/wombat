@@ -281,8 +281,7 @@ async fn login(
 
     let _ = window.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
-        let initial_wait = tokio::time::sleep(Duration::from_secs(20));
-        initial_wait.await;
+        tokio::time::sleep(Duration::from_secs(120)).await;
         {
             let mut rds_resolver_instance = rds_resolver_instance.write().await;
             let databases = rds_resolver_instance
@@ -301,6 +300,7 @@ async fn login(
             }
         }
 
+        tokio::time::sleep(Duration::from_secs(30)).await;
         let clusters;
         {
             {
@@ -321,6 +321,8 @@ async fn login(
                 .await;
             }
         }
+
+        tokio::time::sleep(Duration::from_secs(30)).await;
         {
             let mut ecs_resolver_instance = ecs_resolver_instance.write().await;
             let services = ecs_resolver_instance
@@ -1062,6 +1064,7 @@ async fn service_details(
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+    rate_limitter: tauri::State<'_, ServiceDetailsRateLimiter>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("service_details", msg)),
@@ -1076,49 +1079,86 @@ async fn service_details(
         None,
     )
     .await;
+
     info!(
         "Called for service_details: {}, profile: {}",
         &app, &authorized_user.profile
     );
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
-    tokio::task::spawn(async move {
-        let mut dbs_list: Vec<aws::RdsInstance> = Vec::new();
-        {
-            let rds_resolver_instance = rds_resolver_instance.read().await;
-            let all_databases = rds_resolver_instance.read_databases().await;
-            dbs_list.extend(
-                all_databases
-                    .into_iter()
-                    .filter(|rds| rds.appname_tag == app),
-            );
-        }
 
-        let service_arns: Vec<String>;
-        {
-            let ecs_resolver_instance = ecs_resolver_instance.read().await;
-            let services = ecs_resolver_instance.read_services().await;
-            service_arns = services
+    let mut dbs_list: Vec<aws::RdsInstance> = Vec::new();
+    {
+        let rds_resolver_instance = rds_resolver_instance.read().await;
+        let all_databases = rds_resolver_instance.read_databases().await;
+        dbs_list.extend(
+            all_databases
                 .into_iter()
-                .filter(|service| app.eq(&service.name))
-                .map(|service| service.arn.clone())
-                .collect()
-        }
+                .filter(|rds| rds.appname_tag == app),
+        );
+    }
 
-        let services = aws::service_details(authorized_user.sdk_config, service_arns).await;
+    let service_arns: Vec<String>;
+    {
+        let ecs_resolver_instance = ecs_resolver_instance.read().await;
+        let services = ecs_resolver_instance.read_services().await;
+        service_arns = services
+            .into_iter()
+            .filter(|service| app.eq(&service.name))
+            .map(|service| service.arn.clone())
+            .collect()
+    }
+    let mut counter = rate_limitter.0.lock().await;
+    let mut services =
+        aws::service_details(authorized_user.sdk_config.clone(), service_arns.clone()).await;
+    let mut retry_count = 3;
+    while services.iter().any(|s| s.is_err()) && retry_count > 0 {
+        retry_count -= 1;
+        counter.inc();
 
-        window
-            .emit(
-                "new-service-details",
-                ServiceDetailsPayload {
-                    app,
-                    services,
-                    dbs: dbs_list,
-                    timestamp: Utc::now(),
-                },
-            )
-            .unwrap_or_log();
-    });
+        let err_service_arns: Vec<String> = services
+            .iter()
+            .filter(|s| s.is_err())
+            .map(|s| {
+                let e = s.as_ref().unwrap_err();
+                e.arn.clone()
+            })
+            .collect();
+        warn!(
+            "Calling service details for app {} resulted in {} errors. Backing off for 5s. Retries left: {}. Total back offs: {}",
+           &app, err_service_arns.len(), &retry_count, &counter.count
+        );
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        let services_refetched =
+            aws::service_details(authorized_user.sdk_config.clone(), err_service_arns).await;
+
+        services = services
+            .into_iter()
+            .map(|s| match s {
+                Ok(s) => Ok(s),
+                Err(s) => services_refetched
+                    .iter()
+                    .find(|rs| match rs {
+                        Ok(rs) => rs.arn == s.arn,
+                        Err(rs) => rs.arn == s.arn,
+                    })
+                    .cloned()
+                    .unwrap(),
+            })
+            .collect();
+    }
+
+    window
+        .emit(
+            "new-service-details",
+            ServiceDetailsPayload {
+                app,
+                services,
+                dbs: dbs_list,
+                timestamp: Utc::now(),
+            },
+        )
+        .unwrap_or_log();
     Ok(())
 }
 
@@ -1542,6 +1582,9 @@ async fn main() {
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
             RdsResolver::new(cache_db.clone()),
         ))))
+        .manage(ServiceDetailsRateLimiter(Arc::new(Mutex::new(LockCount {
+            count: 0,
+        }))))
         .manage(ClusterResolverInstance(Arc::new(RwLock::new(
             ClusterResolver::new(cache_db.clone()),
         ))))
@@ -1642,6 +1685,15 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 
 pub struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
+struct ServiceDetailsRateLimiter(Arc<Mutex<LockCount>>);
+struct LockCount {
+    count: i64,
+}
+impl LockCount {
+    fn inc(&mut self) {
+        self.count += 1;
+    }
+}
 struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);

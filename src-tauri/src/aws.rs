@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{error::Error, sync::Arc};
 
 use crate::shared::{self, BError, Env};
 use aws_config::{
@@ -629,7 +629,14 @@ pub async fn service_detail(
         .await;
     if service.is_err() {
         let err = service.unwrap_err();
-        error!("Failed to describe service, reason {}", err);
+        let error_str = err
+            .source()
+            .map(|s| s.to_string())
+            .unwrap_or(err.to_string());
+        error!(
+            "Failed to describe service for {}, reason {}",
+            &service_arn, error_str
+        );
         return Err(ServiceDetailsMissing {
             name: shared::ecs_arn_to_name(&service_arn),
             timestamp: Utc::now(),
@@ -650,7 +657,14 @@ pub async fn service_detail(
 
     if task_def.is_err() {
         let err = task_def.unwrap_err();
-        error!("Failed to fetch task definition, reason {}", err);
+        let error_str = err
+            .source()
+            .map(|s| s.to_string())
+            .unwrap_or(err.to_string());
+        error!(
+            "Failed to fetch task definition for {}, reason {}",
+            &service_arn, error_str
+        );
         return Err(ServiceDetailsMissing {
             name: shared::ecs_arn_to_name(&service_arn),
             timestamp: Utc::now(),
@@ -671,14 +685,14 @@ pub async fn service_detail(
         .unwrap_or("missing")
         .to_owned();
 
-    return Ok(ServiceDetails {
+    Ok(ServiceDetails {
         name: shared::ecs_arn_to_name(&service_arn),
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
         version,
         env: Env::from_any(&service_arn),
-    });
+    })
 }
 
 pub trait OnLogFound: Send {
