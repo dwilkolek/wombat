@@ -9,7 +9,7 @@
 	let { infraProfiles } = availableProfilesStore;
 </script>
 
-{#if $featuresStore.devWay || $infraProfiles.some((profile) => profile == database.normalized_name)}
+{#if $featuresStore.devWay || $infraProfiles.some(([app, env]) => app == database.normalized_name && env == database.env)}
 	<div class="tooltip tooltip-left" data-tip="Start proxy">
 		<button
 			class="flex flex-row gap-1"

@@ -28,7 +28,7 @@
 	};
 </script>
 
-{#if $featuresStore.devWay || $infraProfiles.some((profile) => profile == service.name)}
+{#if $featuresStore.devWay || $infraProfiles.some(([app, env]) => app == service.name && env == service.env)}
 	<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
 		<div class="dropdown">
 			<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">

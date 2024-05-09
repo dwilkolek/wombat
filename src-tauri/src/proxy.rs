@@ -25,6 +25,7 @@ pub async fn start_aws_ssm_proxy(
     window: Window,
     bastion: String,
     profile: String,
+    region: String,
     target: String,
     target_port: u16,
     local_port: u16,
@@ -36,8 +37,7 @@ pub async fn start_aws_ssm_proxy(
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
 ) {
     let mut command = Command::new("aws");
-    let region_provider = aws::region_provider(profile.as_str()).await;
-    let region = region_provider.region().await.unwrap_or_log();
+
     command.args([
         "ssm",
         "start-session",
@@ -46,7 +46,7 @@ pub async fn start_aws_ssm_proxy(
         "--profile",
         &profile,
         "--region",
-        region.to_string().as_str(),
+        region.as_str(),
         "--document-name",
         "AWS-StartPortForwardingSessionToRemoteHost",
         "--parameters",

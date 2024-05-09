@@ -81,6 +81,7 @@
 			<button
 				on:click|preventDefault={(e) => {
 					invoke('restart_service', {
+						env: service.env,
 						clusterArn: service.cluster_arn,
 						serviceName: service.name
 					});
