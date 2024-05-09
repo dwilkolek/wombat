@@ -1,4 +1,4 @@
-use crate::{aws, wombat_api, AsyncTaskManager, ProxyEventMessage};
+use crate::{wombat_api, AsyncTaskManager, ProxyEventMessage};
 use async_trait::async_trait;
 use filepath::FilePath;
 use log::{error, info, warn};
@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime};
 use tauri::Window;
 use tempfile::TempDir;
 use tokio::time::sleep;
-use tracing_unwrap::{OptionExt, ResultExt};
+use tracing_unwrap::ResultExt;
 use warp::http::{HeaderName, HeaderValue};
 use warp::hyper::body::Bytes;
 use warp::hyper::Method;

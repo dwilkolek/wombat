@@ -68,7 +68,9 @@
 				{#each $proxyAuthConfigsStore as config}
 					{@const disabled =
 						!$featuresStore.devWay &&
-						!$infraProfiles.some((profile) => profile == config.fromApp || config.fromApp == '*')}
+						!$infraProfiles.some(
+							([app, env]) => env == service.env && (app == config.fromApp || config.fromApp == '*')
+						)}
 
 					{#if config.toApp == service.name && config.env == service.env}
 						<li class={disabled ? 'opacity-30 cursor-not-allowed' : ''}>

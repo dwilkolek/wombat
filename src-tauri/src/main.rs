@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{AwsConfigProvider, Cluster, DbSecret, LogEntry, RdsInstance};
-use aws_config::BehaviorVersion;
+use aws::{Cluster, DbSecret, LogEntry, RdsInstance};
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
@@ -168,7 +167,7 @@ async fn login(
     axiom: tauri::State<'_, AxiomClientState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
 
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
@@ -421,15 +420,14 @@ async fn credentials(
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<DbSecret, BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
     let mut aws_config_provider = aws_config_provider.0.write().await;
-    let (aws_profile, aws_config) = aws_config_provider
+    let (_, aws_config) = aws_config_provider
         .get_app_config(&db.normalized_name, &db.env)
         .await;
 
@@ -847,6 +845,7 @@ async fn services(
         .collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn restart_service(
     cluster_arn: String,
@@ -856,7 +855,7 @@ async fn restart_service(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<String, BError> {
     let _authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("restart_service", msg)),
@@ -965,7 +964,7 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_db_proxy", msg)),
@@ -1174,7 +1173,7 @@ async fn start_service_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
     let local_port;
     {
@@ -1336,7 +1335,7 @@ async fn check_dependencies(
 
 #[tauri::command]
 async fn available_infra_profiles(
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<(String, Env)>, BError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider.app_env_to_infra_profile.keys().cloned().collect())
@@ -1344,7 +1343,7 @@ async fn available_infra_profiles(
 
 #[tauri::command]
 async fn available_sso_profiles(
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<String>, BError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider.sso_profiles.clone())
@@ -1358,8 +1357,7 @@ async fn open_dbeaver(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
-    aws_config_provider: tauri::State<'_, AwsConfigResolverInstance>,
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
@@ -1392,7 +1390,7 @@ async fn open_dbeaver(
             .clone();
     }
     let mut aws_config_provider = aws_config_provider.0.write().await;
-    let (aws_profile, aws_config) = aws_config_provider
+    let (_, aws_config) = aws_config_provider
         .get_config(&db.normalized_name, &db.env)
         .await;
 
@@ -1590,7 +1588,7 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(AwsConfigResolverInstance(Arc::new(RwLock::new(
+        .manage(AwsConfigProviderInstance(Arc::new(RwLock::new(
             aws::AwsConfigProvider::new().await,
         ))))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
@@ -1709,7 +1707,7 @@ impl LockCount {
     }
 }
 
-struct AwsConfigResolverInstance(Arc<RwLock<aws::AwsConfigProvider>>);
+struct AwsConfigProviderInstance(Arc<RwLock<aws::AwsConfigProvider>>);
 struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
