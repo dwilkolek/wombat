@@ -15,7 +15,7 @@
 	);
 </script>
 
-{#if $featuresStore.restartEcsService && ($featuresStore.devWay || $infraProfiles.some((profile) => profile == service.name))}
+{#if $featuresStore.restartEcsService && ($featuresStore.devWay || $infraProfiles.some(([app, env]) => app == service.name && env == service.env))}
 	<span class="tooltip flex" data-tip={deployment?.rollout_status ?? 'Restart service'}>
 		{#if deployment != null}
 			{#if deployment.rollout_status == 'In Progress'}
@@ -81,6 +81,7 @@
 			<button
 				on:click|preventDefault={(e) => {
 					invoke('restart_service', {
+						env: service.env,
 						clusterArn: service.cluster_arn,
 						serviceName: service.name
 					});

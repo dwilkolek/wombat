@@ -1,30 +1,30 @@
+import type { AwsEnv } from '$lib/types';
 import { invoke } from '@tauri-apps/api';
 import { writable } from 'svelte/store';
-
+type InfraProfile = [string, AwsEnv];
 const createAvailableProfilesStore = () => {
-	const infraProfiles = writable<string[]>([]);
-    const ssoProfiles = writable<string[]>([]);
+	const infraProfiles = writable<InfraProfile[]>([]);
+	const ssoProfiles = writable<string[]>([]);
 
-	invoke<string[]>('available_infra_profiles').then((resp) => {
+	invoke<InfraProfile[]>('available_infra_profiles').then((resp) => {
 		infraProfiles.set(resp);
 	});
-    invoke<string[]>('available_sso_profiles').then((resp) => {
+	invoke<string[]>('available_sso_profiles').then((resp) => {
 		ssoProfiles.set(resp);
 	});
 	const refresh = () => {
-		invoke<string[]>('available_infra_profiles').then((resp) => {
+		invoke<InfraProfile[]>('available_infra_profiles').then((resp) => {
 			infraProfiles.set(resp);
 		});
-        invoke<string[]>('available_sso_profiles').then((resp) => {
+		invoke<string[]>('available_sso_profiles').then((resp) => {
 			ssoProfiles.set(resp);
 		});
-    }
-   
-	
+	};
+
 	return {
 		refresh,
 		infraProfiles,
-        ssoProfiles
+		ssoProfiles
 	};
 };
 
