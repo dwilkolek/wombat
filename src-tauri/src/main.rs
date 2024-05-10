@@ -400,20 +400,6 @@ async fn save_preffered_envs(
     user_config.save_preffered_envs(envs)
 }
 
-// async fn select_aws_profile(
-//     profile: &str,
-//     authorized_user: &AuthorizedUser,
-//     wombat_api_instance: &tauri::State<'_, WombatApiInstance>,
-// ) -> String {
-//     let wombat_api = wombat_api_instance.0.read().await;
-//     let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
-//     if is_enabled {
-//         authorized_user.profile.clone()
-//     } else {
-//         profile.to_owned()
-//     }
-// }
-
 #[tauri::command]
 async fn credentials(
     window: Window,
