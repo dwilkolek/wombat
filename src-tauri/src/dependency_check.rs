@@ -1,9 +1,10 @@
 use std::{collections::HashMap, process::Command};
 
-use crate::wombat_api::WombatApi;
+use crate::{aws, wombat_api::WombatApi};
 
 pub async fn check_dependencies(
     wombat_api: &mut WombatApi,
+    aws_config_provider: &mut aws::AwsConfigProvider,
 ) -> HashMap<String, Result<String, String>> {
     let mut dependecies = HashMap::new();
 
@@ -36,6 +37,15 @@ pub async fn check_dependencies(
             Err("Not installed".to_string()),
         );
     }
+    dependecies.insert(
+        "aws-profiles".to_string(),
+        Ok(format!(
+            "sso: {}, infra: {}, total: {}",
+            &aws_config_provider.sso_profiles.len(),
+            &aws_config_provider.infra_profile_count,
+            &aws_config_provider.profile_count,
+        )),
+    );
 
     let wombat_api_key = "wombat-backend-api".to_string();
 
