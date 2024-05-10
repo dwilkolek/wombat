@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use crate::shared::{self, BError, Env};
 use aws_config::{
@@ -104,10 +104,211 @@ pub struct LogEntry {
     pub message: String,
 }
 
-pub async fn region_provider(profile: &str) -> aws_config::meta::region::RegionProviderChain {
-    aws_config::meta::region::RegionProviderChain::first_try(region_from_profile(profile).await)
+pub struct AwsConfigProvider {
+    pub dev_way: bool,
+    profile_set: ProfileSet,
+    profile: String,
+    pub sso_profiles: Vec<String>,
+    pub app_env_to_infra_profile: HashMap<(String, Env), String>,
+    profile_to_config: HashMap<String, aws_config::SdkConfig>,
+}
+
+impl AwsConfigProvider {
+    pub async fn new() -> Self {
+        let profiles = profile_set().await.unwrap_or_log();
+        let app_env_to_infra_profile = Self::get_app_env_to_profile_mapping(&profiles);
+        let sso_profiles = Self::available_sso_profiles(&profiles);
+        Self {
+            dev_way: false,
+            profile_set: profiles,
+            profile: "default".to_owned(),
+            app_env_to_infra_profile,
+            profile_to_config: HashMap::new(),
+            sso_profiles,
+        }
+    }
+
+    pub fn login(&mut self, profile: String, dev_way: bool) {
+        self.profile = profile;
+        self.dev_way = dev_way;
+        self.profile_to_config.clear();
+    }
+    pub async fn get_user_config(&mut self) -> (String, aws_config::SdkConfig) {
+        let profile_config = self.profile_to_config.get(&self.profile);
+
+        match profile_config {
+            Some(config) => {
+                info!("returning cached user config");
+                (self.profile.clone(), config.clone())
+            }
+            None => {
+                info!("creating user config");
+                let config = self.use_aws_config(&self.profile).await;
+                self.profile_to_config
+                    .insert(config.0.clone(), config.1.clone());
+                config
+            }
+        }
+    }
+    pub async fn get_app_config(
+        &mut self,
+        app: &str,
+        env: &Env,
+    ) -> (String, aws_config::SdkConfig) {
+        match self
+            .app_env_to_infra_profile
+            .get(&(app.to_owned(), env.to_owned()))
+        {
+            Some(profile) => {
+                let config = self.profile_to_config.get(profile);
+                match config {
+                    Some(config) => {
+                        info!("returning cached {profile} config");
+                        Some((profile.clone(), config.clone()))
+                    }
+                    None => {
+                        info!("creating {profile} config");
+                        let config = self.use_aws_config(profile).await;
+                        self.profile_to_config
+                            .insert(config.0.clone(), config.1.clone());
+                        Some(config)
+                    }
+                }
+            }
+            None => None,
+        }
+        .expect_or_log("Config doesn't exist")
+    }
+    pub async fn get_config(&mut self, app: &str, env: &Env) -> (String, aws_config::SdkConfig) {
+        if self.dev_way {
+            return self.get_user_config().await;
+        }
+        self.get_app_config(app, env).await
+    }
+
+    fn available_sso_profiles(profile_set: &ProfileSet) -> Vec<String> {
+        let mut profiles: Vec<String> = profile_set.profiles().map(|p| p.to_owned()).collect();
+        profiles.retain(|profile| {
+            if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
+                let role_arn = profile_details.get("role_arn");
+                let is_sso_profile = profile_details.get("sso_start_url").is_some();
+                return match role_arn {
+                    Some(role) => !role.ends_with("-infra") && is_sso_profile,
+                    None => is_sso_profile,
+                };
+            }
+            false
+        });
+
+        profiles
+    }
+
+    fn get_app_env_to_profile_mapping(profile_set: &ProfileSet) -> HashMap<(String, Env), String> {
+        let mut app_env_to_profile_mapping: HashMap<(String, Env), String> = HashMap::new();
+
+        profile_set.profiles().for_each(|profile| {
+            info!("analyzing profile: {profile}");
+            if let Some(profile_details) = profile_set.get_profile(profile) {
+                if let Some(role) = profile_details.get("role_arn") {
+                    info!("\t role: {role}");
+                    let app_regex = Regex::new(r".*/(.*)-infra").unwrap();
+                    match app_regex.captures(role) {
+                        None => {
+                            warn!("failed to find app")
+                        }
+                        Some(caps) => {
+                            let app = &caps[1];
+                            info!("\t app: {app}");
+                            let mut matched_env = false;
+                            if profile.ends_with("-play") {
+                                info!("\t adding for play");
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::PLAY), profile.to_owned());
+                                matched_env = true;
+                            }
+                            if profile.ends_with("-lab") {
+                                info!("\t adding for lab");
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::LAB), profile.to_owned());
+                                matched_env = true;
+                            }
+                            if profile.ends_with("-dev") {
+                                info!("\t adding for dev");
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::DEV), profile.to_owned());
+                                matched_env = true;
+                            }
+                            if profile.ends_with("-demo") {
+                                info!("\t adding for demo");
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::DEMO), profile.to_owned());
+                                matched_env = true;
+                            }
+                            if profile.ends_with("-prod") {
+                                info!("\t adding for prod");
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::PROD), profile.to_owned());
+                                matched_env = true;
+                            }
+                            if !matched_env {
+                                info!("\t didn't match any env, adding as default for all envs");
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::PLAY), profile.to_owned());
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::LAB), profile.to_owned());
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::DEV), profile.to_owned());
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::DEMO), profile.to_owned());
+                                app_env_to_profile_mapping
+                                    .insert((app.to_owned(), Env::PROD), profile.to_owned());
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        app_env_to_profile_mapping
+    }
+
+    pub async fn get_region(&self, profile: &str) -> String {
+        let region_provider = self.region_provider(profile).await;
+        region_provider.region().await.unwrap_or_log().to_string()
+    }
+
+    async fn region_provider(
+        &self,
+        profile: &str,
+    ) -> aws_config::meta::region::RegionProviderChain {
+        aws_config::meta::region::RegionProviderChain::first_try(
+            self.region_from_profile(profile).await,
+        )
         .or_default_provider()
         .or_else(aws_config::Region::new("eu-west-1"))
+    }
+
+    async fn region_from_profile(&self, profile: &str) -> Option<aws_config::Region> {
+        if let Some(profile) = self.profile_set.get_profile(profile) {
+            if let Some(region) = profile.get("region") {
+                return Some(aws_config::Region::new(region.to_owned()));
+            }
+        }
+        None
+    }
+
+    async fn use_aws_config(&self, ssm_profile: &str) -> (String, aws_config::SdkConfig) {
+        let region_provider = self.region_provider(ssm_profile).await;
+
+        (
+            ssm_profile.to_owned(),
+            aws_config::defaults(BehaviorVersion::latest())
+                .profile_name(ssm_profile)
+                .region(region_provider)
+                .load()
+                .await,
+        )
+    }
 }
 
 async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
@@ -118,78 +319,6 @@ async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
         None,
     )
     .await
-}
-
-async fn region_from_profile(profile: &str) -> Option<aws_config::Region> {
-    if let Ok(cf) = profile_set().await {
-        if let Some(profile) = cf.get_profile(profile) {
-            if let Some(region) = profile.get("region") {
-                return Some(aws_config::Region::new(region.to_owned()));
-            }
-        }
-    }
-    None
-}
-
-pub async fn use_aws_config(ssm_profile: &str) -> (String, aws_config::SdkConfig) {
-    let region_provider = region_provider(ssm_profile).await;
-
-    (
-        ssm_profile.to_owned(),
-        aws_config::defaults(BehaviorVersion::latest())
-            .profile_name(ssm_profile)
-            .region(region_provider)
-            .load()
-            .await,
-    )
-}
-
-pub async fn available_infra_profiles() -> Vec<String> {
-    let profile_set = profile_set().await;
-    match profile_set {
-        Ok(profile_set) => {
-            let mut profiles: Vec<String> = profile_set.profiles().map(|p| p.to_owned()).collect();
-            profiles.retain(|profile| {
-                if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
-                    if let Some(role) = profile_details.get("role_arn") {
-                        let valid_role =
-                            role.ends_with(format!("/{}-infra", profile.as_str()).as_str());
-                        if !valid_role {
-                            warn!("Profile {} has invalid role: {}", profile, role);
-                        }
-                        return valid_role;
-                    }
-                }
-                false
-            });
-
-            profiles
-        }
-        Err(_) => vec![],
-    }
-}
-
-pub async fn available_sso_profiles() -> Vec<String> {
-    let profile_set = profile_set().await;
-    match profile_set {
-        Ok(profile_set) => {
-            let mut profiles: Vec<String> = profile_set.profiles().map(|p| p.to_owned()).collect();
-            profiles.retain(|profile| {
-                if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
-                    let role_arn = profile_details.get("role_arn");
-                    let is_sso_profile = profile_details.get("sso_start_url").is_some();
-                    return match role_arn {
-                        Some(role) => !role.ends_with("-infra") && is_sso_profile,
-                        None => is_sso_profile,
-                    };
-                }
-                false
-            });
-
-            profiles
-        }
-        Err(_) => vec![],
-    }
 }
 
 pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
