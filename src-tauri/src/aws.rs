@@ -103,7 +103,11 @@ pub struct LogEntry {
     pub ingestion_time: i64,
     pub message: String,
 }
-
+struct InfraProfiles {
+    infra_profile_mapping: HashMap<(String, Env), String>,
+    total_profiles: i64,
+    total_infra_profiles: i64,
+}
 pub struct AwsConfigProvider {
     pub dev_way: bool,
     profile_set: ProfileSet,
@@ -111,6 +115,8 @@ pub struct AwsConfigProvider {
     pub sso_profiles: Vec<String>,
     pub app_env_to_infra_profile: HashMap<(String, Env), String>,
     profile_to_config: HashMap<String, aws_config::SdkConfig>,
+    pub infra_profile_count: i64,
+    pub profile_count: i64,
 }
 
 impl AwsConfigProvider {
@@ -122,7 +128,9 @@ impl AwsConfigProvider {
             dev_way: false,
             profile_set: profiles,
             profile: "default".to_owned(),
-            app_env_to_infra_profile,
+            app_env_to_infra_profile: app_env_to_infra_profile.infra_profile_mapping,
+            infra_profile_count: app_env_to_infra_profile.total_infra_profiles,
+            profile_count: app_env_to_infra_profile.total_profiles,
             profile_to_config: HashMap::new(),
             sso_profiles,
         }
@@ -203,10 +211,12 @@ impl AwsConfigProvider {
         profiles
     }
 
-    fn get_app_env_to_profile_mapping(profile_set: &ProfileSet) -> HashMap<(String, Env), String> {
+    fn get_app_env_to_profile_mapping(profile_set: &ProfileSet) -> InfraProfiles {
         let mut app_env_to_profile_mapping: HashMap<(String, Env), String> = HashMap::new();
-
+        let mut infra_profile_count = 0;
+        let mut total_profile_count = 0;
         profile_set.profiles().for_each(|profile| {
+            total_profile_count += 1;
             info!("analyzing profile: {profile}");
             if let Some(profile_details) = profile_set.get_profile(profile) {
                 if let Some(role) = profile_details.get("role_arn") {
@@ -219,6 +229,7 @@ impl AwsConfigProvider {
                         Some(caps) => {
                             let app = &caps[1];
                             info!("\t app: {app}");
+                            infra_profile_count += 1;
                             let mut matched_env = false;
                             if profile.ends_with("-play") {
                                 info!("\t adding for play");
@@ -268,8 +279,11 @@ impl AwsConfigProvider {
                 }
             }
         });
-
-        app_env_to_profile_mapping
+        InfraProfiles {
+            infra_profile_mapping: app_env_to_profile_mapping,
+            total_profiles: total_profile_count,
+            total_infra_profiles: infra_profile_count,
+        }
     }
 
     pub async fn get_region(&self, profile: &str) -> String {

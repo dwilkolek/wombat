@@ -1314,9 +1314,11 @@ async fn is_feature_enabled(
 #[tauri::command]
 async fn check_dependencies(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<HashMap<String, Result<String, String>>, ()> {
     let mut wombat_api = wombat_api_instance.0.write().await;
-    Ok(dependency_check::check_dependencies(&mut wombat_api).await)
+    let mut aws_config_provider = aws_config_provider.0.write().await;
+    Ok(dependency_check::check_dependencies(&mut wombat_api, &mut aws_config_provider).await)
 }
 
 #[tauri::command]
