@@ -1324,15 +1324,15 @@ async fn check_dependencies(
 #[tauri::command]
 async fn available_infra_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<(String, Env)>, BError> {
+) -> Result<Vec<aws::InfraProfile>, BError> {
     let provider = aws_config_provider.0.read().await;
-    Ok(provider.app_env_to_infra_profile.keys().cloned().collect())
+    Ok(provider.active_sso_profile.infra_profiles.clone())
 }
 
 #[tauri::command]
 async fn available_sso_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<String>, BError> {
+) -> Result<Vec<aws::SsoProfile>, BError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider.sso_profiles.clone())
 }
