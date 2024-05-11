@@ -1,4 +1,7 @@
-use std::{collections::HashMap, process::Command};
+use std::{
+    collections::{HashMap, HashSet},
+    process::Command,
+};
 
 use crate::{aws, wombat_api::WombatApi};
 
@@ -40,10 +43,19 @@ pub async fn check_dependencies(
     dependecies.insert(
         "aws-profiles".to_string(),
         Ok(format!(
-            "sso: {}, infra: {}, total: {}",
+            "sso: {}, infra: {}",
             &aws_config_provider.sso_profiles.len(),
-            &aws_config_provider.infra_profile_count,
-            &aws_config_provider.profile_count,
+            &aws_config_provider
+                .sso_profiles
+                .iter()
+                .map(|sso| {
+                    sso.infra_profiles
+                        .iter()
+                        .map(|infra| infra.profile_name.as_ref())
+                        .collect::<HashSet<&str>>()
+                        .len()
+                })
+                .sum::<usize>()
         )),
     );
 

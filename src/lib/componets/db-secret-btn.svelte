@@ -40,7 +40,7 @@
 </script>
 
 {#if database}
-	{#if $featuresStore.devWay || $infraProfiles.some(([app, env]) => app == database?.normalized_name && env == database?.env)}
+	{#if $featuresStore.devWay || $infraProfiles.some(({ app, env }) => app == database?.normalized_name && env == database?.env)}
 		<div class="tooltip tooltip-left" data-tip="Search for secret">
 			<button>
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
