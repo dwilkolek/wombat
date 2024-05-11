@@ -1,5 +1,3 @@
-use std::{collections::HashMap, error::Error, sync::Arc};
-
 use crate::shared::{self, BError, Env};
 use aws_config::{
     profile::{ProfileFileLoadError, ProfileSet},
@@ -16,6 +14,7 @@ use ec2::types::Filter;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, error::Error, sync::Arc};
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,80 +102,110 @@ pub struct LogEntry {
     pub ingestion_time: i64,
     pub message: String,
 }
-struct InfraProfiles {
-    infra_profile_mapping: HashMap<(String, Env), String>,
-    total_profiles: i64,
-    total_infra_profiles: i64,
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SsoProfile {
+    pub profile_name: String,
+    pub region: Option<String>,
+    pub infra_profiles: Vec<InfraProfile>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InfraProfile {
+    pub source_profile: String,
+    pub profile_name: String,
+    pub region: Option<String>,
+    pub app: String,
+    pub env: Env,
+}
+
+impl InfraProfile {
+    fn for_env(&self, env: Env) -> Self {
+        let mut clone = self.clone();
+        clone.env = env;
+        clone
+    }
+}
+
 pub struct AwsConfigProvider {
     pub dev_way: bool,
     profile_set: ProfileSet,
-    profile: String,
-    pub sso_profiles: Vec<String>,
-    pub app_env_to_infra_profile: HashMap<(String, Env), String>,
+    pub sso_profiles: Vec<SsoProfile>,
+    pub active_sso_profile: SsoProfile,
     profile_to_config: HashMap<String, aws_config::SdkConfig>,
-    pub infra_profile_count: i64,
-    pub profile_count: i64,
 }
 
 impl AwsConfigProvider {
     pub async fn new() -> Self {
         let profiles = profile_set().await.unwrap_or_log();
-        let app_env_to_infra_profile = Self::get_app_env_to_profile_mapping(&profiles);
-        let sso_profiles = Self::available_sso_profiles(&profiles);
+        let sso_profiles = Self::load_aws_profile_configuration(&profiles);
         Self {
             dev_way: false,
             profile_set: profiles,
-            profile: "default".to_owned(),
-            app_env_to_infra_profile: app_env_to_infra_profile.infra_profile_mapping,
-            infra_profile_count: app_env_to_infra_profile.total_infra_profiles,
-            profile_count: app_env_to_infra_profile.total_profiles,
+            active_sso_profile: SsoProfile {
+                infra_profiles: Vec::new(),
+                profile_name: "default".to_owned(),
+                region: None,
+            },
             profile_to_config: HashMap::new(),
             sso_profiles,
         }
     }
 
     pub fn login(&mut self, profile: String, dev_way: bool) {
-        self.profile = profile;
         self.dev_way = dev_way;
-        self.profile_to_config.clear();
+        self.active_sso_profile = self
+            .sso_profiles
+            .iter()
+            .find(|sso| sso.profile_name == profile)
+            .unwrap_or_log()
+            .clone();
     }
+
     pub async fn get_user_config(&mut self) -> (String, aws_config::SdkConfig) {
-        let profile_config = self.profile_to_config.get(&self.profile);
+        let profile_config = self
+            .profile_to_config
+            .get(&self.active_sso_profile.profile_name);
 
         match profile_config {
             Some(config) => {
                 info!("returning cached user config");
-                (self.profile.clone(), config.clone())
+                (self.active_sso_profile.profile_name.clone(), config.clone())
             }
             None => {
                 info!("creating user config");
-                let config = self.use_aws_config(&self.profile).await;
+                let config = self
+                    .use_aws_config(&self.active_sso_profile.profile_name)
+                    .await;
                 self.profile_to_config
                     .insert(config.0.clone(), config.1.clone());
                 config
             }
         }
     }
+
     pub async fn get_app_config(
         &mut self,
         app: &str,
         env: &Env,
     ) -> (String, aws_config::SdkConfig) {
-        match self
-            .app_env_to_infra_profile
-            .get(&(app.to_owned(), env.to_owned()))
-        {
+        let matching_infra_profile = self
+            .active_sso_profile
+            .infra_profiles
+            .iter()
+            .find(|infra_profile| &infra_profile.env == env && infra_profile.app == app);
+        match &matching_infra_profile {
             Some(profile) => {
-                let config = self.profile_to_config.get(profile);
+                let profile_name = &profile.profile_name;
+                let config = self.profile_to_config.get(profile_name);
                 match config {
                     Some(config) => {
-                        info!("returning cached {profile} config");
-                        Some((profile.clone(), config.clone()))
+                        info!("returning cached {profile_name} config");
+                        Some((profile_name.clone(), config.clone()))
                     }
                     None => {
-                        info!("creating {profile} config");
-                        let config = self.use_aws_config(profile).await;
+                        info!("creating {profile_name} config");
+                        let config = self.use_aws_config(profile_name).await;
                         self.profile_to_config
                             .insert(config.0.clone(), config.1.clone());
                         Some(config)
@@ -194,96 +223,137 @@ impl AwsConfigProvider {
         self.get_app_config(app, env).await
     }
 
-    fn available_sso_profiles(profile_set: &ProfileSet) -> Vec<String> {
-        let mut profiles: Vec<String> = profile_set.profiles().map(|p| p.to_owned()).collect();
-        profiles.retain(|profile| {
-            if let Some(profile_details) = profile_set.get_profile(profile.as_str()) {
+    fn load_aws_profile_configuration(profile_set: &ProfileSet) -> Vec<SsoProfile> {
+        let mut sso_profiles: Vec<SsoProfile> = Vec::new();
+        let infra_profiles = Self::read_infra_profiles(profile_set);
+        let mut groupped_infra_profiles_by_source_profile: HashMap<String, Vec<InfraProfile>> =
+            HashMap::new();
+        for infra_profile in infra_profiles.into_iter() {
+            if !groupped_infra_profiles_by_source_profile
+                .contains_key(&infra_profile.source_profile)
+            {
+                groupped_infra_profiles_by_source_profile.insert(
+                    infra_profile.source_profile.clone(),
+                    vec![infra_profile.clone()],
+                );
+            } else {
+                let entry = groupped_infra_profiles_by_source_profile
+                    .get_mut(&infra_profile.source_profile)
+                    .unwrap_or_log();
+                entry.push(infra_profile.clone())
+            }
+        }
+
+        for profile in profile_set.profiles() {
+            if let Some(profile_details) = profile_set.get_profile(profile) {
                 let role_arn = profile_details.get("role_arn");
                 let is_sso_profile = profile_details.get("sso_start_url").is_some();
-                return match role_arn {
+                let valid_sso_profile = match role_arn {
                     Some(role) => !role.ends_with("-infra") && is_sso_profile,
                     None => is_sso_profile,
                 };
-            }
-            false
-        });
-
-        profiles
-    }
-
-    fn get_app_env_to_profile_mapping(profile_set: &ProfileSet) -> InfraProfiles {
-        let mut app_env_to_profile_mapping: HashMap<(String, Env), String> = HashMap::new();
-        let mut infra_profile_count = 0;
-        let mut total_profile_count = 0;
-        profile_set.profiles().for_each(|profile| {
-            total_profile_count += 1;
-            info!("analyzing profile: {profile}");
-            if let Some(profile_details) = profile_set.get_profile(profile) {
-                if let Some(role) = profile_details.get("role_arn") {
-                    info!("\t role: {role}");
-                    let app_regex = Regex::new(r".*/(.*)-infra").unwrap();
-                    match app_regex.captures(role) {
-                        None => {
-                            warn!("failed to find app")
-                        }
-                        Some(caps) => {
-                            let app = &caps[1];
-                            info!("\t app: {app}");
-                            infra_profile_count += 1;
-                            let mut matched_env = false;
-                            if profile.ends_with("-play") {
-                                info!("\t adding for play");
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::PLAY), profile.to_owned());
-                                matched_env = true;
-                            }
-                            if profile.ends_with("-lab") {
-                                info!("\t adding for lab");
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::LAB), profile.to_owned());
-                                matched_env = true;
-                            }
-                            if profile.ends_with("-dev") {
-                                info!("\t adding for dev");
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::DEV), profile.to_owned());
-                                matched_env = true;
-                            }
-                            if profile.ends_with("-demo") {
-                                info!("\t adding for demo");
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::DEMO), profile.to_owned());
-                                matched_env = true;
-                            }
-                            if profile.ends_with("-prod") {
-                                info!("\t adding for prod");
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::PROD), profile.to_owned());
-                                matched_env = true;
-                            }
-                            if !matched_env {
-                                info!("\t didn't match any env, adding as default for all envs");
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::PLAY), profile.to_owned());
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::LAB), profile.to_owned());
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::DEV), profile.to_owned());
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::DEMO), profile.to_owned());
-                                app_env_to_profile_mapping
-                                    .insert((app.to_owned(), Env::PROD), profile.to_owned());
-                            }
-                        }
-                    }
+                if valid_sso_profile {
+                    sso_profiles.push(SsoProfile {
+                        profile_name: profile.to_owned(),
+                        region: profile_details.get("region").map(|r| r.to_owned()),
+                        infra_profiles: groupped_infra_profiles_by_source_profile
+                            .get(profile)
+                            .unwrap_or(&Vec::new())
+                            .clone(),
+                    })
                 }
             }
-        });
-        InfraProfiles {
-            infra_profile_mapping: app_env_to_profile_mapping,
-            total_profiles: total_profile_count,
-            total_infra_profiles: infra_profile_count,
         }
+        sso_profiles
+    }
+
+    fn read_infra_profiles(profile_set: &ProfileSet) -> Vec<InfraProfile> {
+        let mut infra_profiles: Vec<InfraProfile> = Vec::new();
+        for profile in profile_set.profiles() {
+            info!("analizying potential infra profile: {profile}");
+            if let Some(profile_details) = profile_set.get_profile(profile) {
+                let source_profile = match profile_details.get("source_profile") {
+                    Some(source_profile) => {
+                        info!("\t source_profile: {source_profile}");
+                        source_profile
+                    }
+                    None => {
+                        warn!("\t missing source_profile");
+                        continue;
+                    }
+                };
+                let role_arn = match profile_details.get("role_arn") {
+                    Some(role_arn) => {
+                        info!("\t role_arn: {role_arn}");
+                        role_arn
+                    }
+                    None => {
+                        warn!("\t missing role_arn");
+                        continue;
+                    }
+                };
+
+                let app_regex = Regex::new(r".*/(.*)-infra").unwrap();
+                let app = match app_regex.captures(role_arn) {
+                    None => {
+                        warn!("\t failed to read app from role");
+                        continue;
+                    }
+                    Some(caps) => {
+                        let app = caps.get(1).map(|app| app.as_str().to_owned()).unwrap();
+                        info!("\t app: {app}");
+                        app
+                    }
+                };
+
+                let region = profile_details.get("region");
+                info!("\t region: {}", region.unwrap_or("none"));
+
+                let mut matched_env = false;
+                let base_infra_profile = InfraProfile {
+                    app: app.to_owned(),
+                    env: Env::DEVNULL,
+                    profile_name: profile.to_owned(),
+                    region: region.map(|r| r.to_owned()),
+                    source_profile: source_profile.to_owned(),
+                };
+
+                if profile.ends_with("-play") {
+                    info!("\t adding for play");
+                    infra_profiles.push(base_infra_profile.for_env(Env::PLAY));
+                    matched_env = true;
+                }
+                if profile.ends_with("-lab") {
+                    info!("\t adding for lab");
+                    infra_profiles.push(base_infra_profile.for_env(Env::LAB));
+                    matched_env = true;
+                }
+                if profile.ends_with("-dev") {
+                    info!("\t adding for dev");
+                    infra_profiles.push(base_infra_profile.for_env(Env::DEV));
+                    matched_env = true;
+                }
+                if profile.ends_with("-demo") {
+                    info!("\t adding for demo");
+                    infra_profiles.push(base_infra_profile.for_env(Env::DEMO));
+                    matched_env = true;
+                }
+                if profile.ends_with("-prod") {
+                    info!("\t adding for prod");
+                    infra_profiles.push(base_infra_profile.for_env(Env::PROD));
+                    matched_env = true;
+                }
+                if !matched_env {
+                    info!("\t didn't match any env, adding as default for all envs");
+                    infra_profiles.push(base_infra_profile.for_env(Env::PLAY));
+                    infra_profiles.push(base_infra_profile.for_env(Env::LAB));
+                    infra_profiles.push(base_infra_profile.for_env(Env::DEV));
+                    infra_profiles.push(base_infra_profile.for_env(Env::DEMO));
+                    infra_profiles.push(base_infra_profile.for_env(Env::PROD));
+                }
+            }
+        }
+        infra_profiles
     }
 
     pub async fn get_region(&self, profile: &str) -> String {

@@ -74,7 +74,7 @@
 			<h1 class="text-5xl font-medium">Hello!</h1>
 			<p class="py-6">Wombat is friendly app that aims to make your life less miserable 😎</p>
 		</div>
-		<div class="card flex-shrink-0 w-full max-w-sm shadow-2xl bg-base-100">
+		<div class="card flex-shrink-0 w-full shadow-2xl bg-base-100">
 			<div class="card-body">
 				<form
 					on:submit|preventDefault={async () => {
@@ -94,12 +94,12 @@
 						<label class="label" for="aws-profile">
 							<span class="label-text">AWS profile</span>
 						</label>
-						<select class="select select-bordered w-full max-w-xs" bind:value={profile}>
-							{#await $ssoProfiles then ssoProfiles}
-								{#each ssoProfiles as ssoProfile}
-									<option value={ssoProfile}>{ssoProfile}</option>
-								{/each}
-							{/await}
+						<select class="select select-bordered w-full" bind:value={profile}>
+							{#each $ssoProfiles as ssoProfile}
+								<option value={ssoProfile.profile_name}
+									>{ssoProfile.profile_name} ({ssoProfile.infra_profiles.length})</option
+								>
+							{/each}
 						</select>
 					</div>
 					{#await dependenciesPromise then deps}

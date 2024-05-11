@@ -28,7 +28,7 @@
 	};
 </script>
 
-{#if $featuresStore.devWay || $infraProfiles.some(([app, env]) => app == service.name && env == service.env)}
+{#if $featuresStore.devWay || $infraProfiles.some(({ app, env }) => app == service.name && env == service.env)}
 	<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
 		<div class="dropdown">
 			<div tabindex="0" role="button" class="flex flex-row gap-1 items-center cursor-pointer">
@@ -69,7 +69,8 @@
 					{@const disabled =
 						!$featuresStore.devWay &&
 						!$infraProfiles.some(
-							([app, env]) => env == service.env && (app == config.fromApp || config.fromApp == '*')
+							({ app, env }) =>
+								env == service.env && (app == config.fromApp || config.fromApp == '*')
 						)}
 
 					{#if config.toApp == service.name && config.env == service.env}
