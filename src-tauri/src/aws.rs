@@ -789,10 +789,10 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                 let mut env = Env::DEVNULL;
                 for t in tags {
                     if t.key().unwrap_or_log() == "AppName" {
-                        appname_tag = t.value().unwrap_or_log().to_owned()
+                        t.value().unwrap_or_log().clone_into(&mut appname_tag)
                     }
                     if t.key().unwrap_or_log() == "Environment" {
-                        environment_tag = t.value().unwrap_or_log().to_owned();
+                        t.value().unwrap_or_log().to_owned().clone_into(&mut environment_tag);
                         env = Env::from_exact(&environment_tag);
                     }
                 }

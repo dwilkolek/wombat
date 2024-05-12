@@ -1530,18 +1530,16 @@ async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientS
 
 async fn initialize_cache_db(profile: &str) -> libsql::Database {
     if let Ok(paths) = user::wombat_dir().read_dir() {
-        for path in paths {
-            if let Ok(path) = path {
-                if let Ok(file_name) = path.file_name().into_string() {
-                    info!("file name: {}", file_name);
-                    if file_name.starts_with("wombat.db") {
-                        info!("deleting wombat db: {}", file_name);
-                        let _ = fs::remove_file(path.path());
-                    }
-                    if file_name.starts_with("cache-") {
-                        info!("deleting cache file: {}", file_name);
-                        let _ = fs::remove_file(path.path());
-                    }
+        for path in paths.flatten() {
+            if let Ok(file_name) = path.file_name().into_string() {
+                info!("file name: {}", file_name);
+                if file_name.starts_with("wombat.db") {
+                    info!("deleting wombat db: {}", file_name);
+                    let _ = fs::remove_file(path.path());
+                }
+                if file_name.starts_with("cache-") {
+                    info!("deleting cache file: {}", file_name);
+                    let _ = fs::remove_file(path.path());
                 }
             }
         }
