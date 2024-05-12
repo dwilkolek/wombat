@@ -1,0 +1,34 @@
+name: 'trigger-release'
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'x.x.x or x.x.x-alpha'
+        required: true
+
+jobs:
+  trigger-release:
+    permissions:
+      contents: write
+    runs-on: 'macos-latest'
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: install frontend dependencies
+        run: npm ci
+      - name: Configure git
+        run: |
+          git config --global user.name 'Wombat'
+          git config --global user.email 'wombat@users.noreply.github.com'
+      - name: bump version
+        run: |
+          npm run bump-version ${{ inputs.version }}
+          git push
