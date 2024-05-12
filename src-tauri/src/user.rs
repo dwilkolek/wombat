@@ -28,7 +28,7 @@ pub struct UserConfig {
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     pub dbeaver_path: Option<String>,
     pub logs_dir: Option<PathBuf>,
-    pub preferences: Option<HashMap<String, WombatAwsProfilePreferences>>
+    pub preferences: Option<HashMap<String, WombatAwsProfilePreferences>>,
 }
 
 impl UserConfig {
@@ -56,12 +56,12 @@ impl UserConfig {
                 id: Uuid::new_v4(),
                 verson: 1,
                 last_used_profile: None,
-                
+
                 db_proxy_port_map: HashMap::new(),
                 service_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
                 logs_dir: Some(UserConfig::logs_path()),
-                preferences: Some(HashMap::new())
+                preferences: Some(HashMap::new()),
             },
         };
 
@@ -71,9 +71,9 @@ impl UserConfig {
         }
         if user_config.logs_dir.is_none() || restored {
             user_config.logs_dir = Some(UserConfig::logs_path());
-        } 
-        if user_config.preferences.is_none(){
-            user_config.preferences =Some(HashMap::new());
+        }
+        if user_config.preferences.is_none() {
+            user_config.preferences = Some(HashMap::new());
         }
 
         user_config
@@ -103,7 +103,11 @@ impl UserConfig {
         None
     }
 
-    pub fn save_preffered_envs(&mut self, profile_name: &str, envs: Vec<Env>) -> Result<UserConfig, BError> {
+    pub fn save_preffered_envs(
+        &mut self,
+        profile_name: &str,
+        envs: Vec<Env>,
+    ) -> Result<UserConfig, BError> {
         let preferences = self.preferences.as_mut().unwrap_or_log();
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
         preference.preffered_environments = envs;
@@ -184,18 +188,26 @@ impl UserConfig {
     }
 
     pub fn use_profile(&mut self, profile: &str, envs: Vec<Env>, tracked_names: HashSet<String>) {
+        info!("Using profile: {profile}, envs={envs:?}, tracked_names={tracked_names:?}");
         self.last_used_profile = Some(profile.to_owned());
         let preferences = self.preferences.as_mut().unwrap_or_log();
         if !preferences.contains_key(profile) {
-            preferences.insert(profile.to_owned(), WombatAwsProfilePreferences {
-                tracked_names: tracked_names,
-                preffered_environments: envs
-            });
+            preferences.insert(
+                profile.to_owned(),
+                WombatAwsProfilePreferences {
+                    tracked_names,
+                    preffered_environments: envs,
+                },
+            );
         }
         self.save()
     }
 
-    pub fn favorite(&mut self, profile_name: &str, tracked_name: TrackedName) -> Result<UserConfig, BError> {
+    pub fn favorite(
+        &mut self,
+        profile_name: &str,
+        tracked_name: TrackedName,
+    ) -> Result<UserConfig, BError> {
         info!("Favorite {} ", &tracked_name);
         let preferences = self.preferences.as_mut().unwrap_or_log();
         let preference = preferences.get_mut(profile_name).unwrap_or_log();

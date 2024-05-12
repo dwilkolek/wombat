@@ -151,7 +151,10 @@ async fn favorite(
     )
     .await;
 
-    user_config.favorite(&aws_config_provider.active_wombat_profile.name, name.to_owned())
+    user_config.favorite(
+        &aws_config_provider.active_wombat_profile.name,
+        name.to_owned(),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -175,15 +178,19 @@ async fn login(
     let tracked_names: HashSet<String>;
     {
         let mut aws_config_provider = aws_config_provider.0.write().await;
-        environments = aws_config_provider.configured_envs();
-        tracked_names = aws_config_provider.active_wombat_profile.sso_profiles
-        .values()
-        .flat_map(|sso| sso.infra_profiles.clone())
-        .map(|infra| infra.app)
-        .collect();
+
         let wombat_api = wombat_api_instance.0.read().await;
         let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
         aws_config_provider.login(profile.to_owned(), is_enabled);
+
+        environments = aws_config_provider.configured_envs();
+        tracked_names = aws_config_provider
+            .active_wombat_profile
+            .sso_profiles
+            .values()
+            .flat_map(|sso| sso.infra_profiles.clone())
+            .map(|infra| infra.app)
+            .collect();
 
         let mut app_state = app_state.0.lock().await;
         app_state.active_profile = Some(aws_config_provider.active_wombat_profile.clone());
@@ -203,11 +210,10 @@ async fn login(
         None,
     )
     .await;
-    
-        let _ = window.emit("message", "Updating profile...");
-        let mut user_config = user_config.0.lock().await;
-        user_config.use_profile(profile, environments, tracked_names);
-    
+
+    let _ = window.emit("message", "Updating profile...");
+    let mut user_config = user_config.0.lock().await;
+    user_config.use_profile(profile, environments, tracked_names);
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
 
@@ -897,13 +903,16 @@ async fn discover(
     };
     let name = &name.to_lowercase();
     let tracked_names: HashSet<String>;
-    {        
+    {
         let user_config = &user_config.0.lock().await;
         let preferences = user_config.preferences.as_ref();
-        tracked_names = preferences.and_then(|prefereces| {
-                        prefereces.get(&authorized_user.profile)
-                        .and_then(|preferences| Some(preferences.tracked_names.clone()))
-                    }).unwrap_or(HashSet::new());
+        tracked_names = preferences
+            .and_then(|prefereces| {
+                prefereces
+                    .get(&authorized_user.profile)
+                    .map(|preferences| preferences.tracked_names.clone())
+            })
+            .unwrap_or(HashSet::new());
     }
 
     let mut found_names = HashSet::new();

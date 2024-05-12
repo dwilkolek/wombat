@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 
 	import { allServiceDetailsStore, serviceDetailStore } from '$lib/stores/service-details-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
@@ -26,7 +26,7 @@
 
 	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
-		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 </script>
 

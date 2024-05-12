@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { derived, writable } from 'svelte/store';
 import { execute } from './error-store';
 import type { AwsEnv, UserConfig, WombatAwsProfile } from '../types';
 import { emit, listen } from '@tauri-apps/api/event';
@@ -18,8 +18,7 @@ const createUserStore = () => {
 		preferences: {}
 	});
 	execute<UserConfig>('user_config').then((config) => {
-		console.log('user_config', config);
-		set({ ...config });
+		set(prepareConfig(config));
 	});
 	listen<ProxyEventMessage>('proxy-start', (event) => {
 		if (event.payload.proxy_type == 'ECS') {
@@ -91,10 +90,19 @@ const createUserStore = () => {
 		savePrefferedEnvs
 	};
 };
-const prepareConfig= (config: UserConfig) => {
-	for (let preference of Object.values(config.preferences)) {
-		preference.tracked_names.sort((a, b) => a.localeCompare(b))
+const prepareConfig = (config: UserConfig) => {
+	for (const preference of Object.values(config.preferences)) {
+		preference.tracked_names.sort((a, b) => a.localeCompare(b));
 	}
-	return config
-}
+	return config;
+};
 export const userStore = createUserStore();
+
+export const activeProfilePreferences = derived([userStore], (stores) => {
+	return (
+		stores[0].preferences[stores[0].last_used_profile ?? ''] ?? {
+			preffered_environments: [],
+			tracked_names: []
+		}
+	);
+});

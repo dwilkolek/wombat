@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { clusterStore } from '$lib/stores/cluster-store';
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences } from '$lib/stores/user-store';
 	import { serviceStore } from '$lib/stores/service-store';
 	import type { EcsService } from '$lib/types';
 
 	let open = false;
 	$: activeCluser = clusterStore.activeCluser;
-	$: tracked_names = $userStore.tracked_names;
+	$: tracked_names = $activeProfilePreferences.tracked_names;
 	$: selectedServices = serviceStore.selectedServices;
 	$: services = serviceStore.getServices($activeCluser).then((services) => {
 		return services

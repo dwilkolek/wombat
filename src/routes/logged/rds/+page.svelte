@@ -1,7 +1,7 @@
 <script lang="ts">
 	import dbeaver from '$lib/images/dbeaver-head.png';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import { envStore } from '$lib/stores/env-store';
 	import { taskStore } from '$lib/stores/task-store';
 	import { execute } from '$lib/stores/error-store';
@@ -12,9 +12,8 @@
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
 	let arnFilter = '';
-	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
-		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 
 	$: databases = dbStore.getDatabases($envStore);
@@ -22,7 +21,6 @@
 	$: matchesFilter = (databse: RdsInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
-	let envs = Object.keys(AwsEnv);
 </script>
 
 <svelte:head>
