@@ -35,9 +35,8 @@ impl RdsResolver {
         let version = cache_db::get_cache_version(conn, CACHE_NAME).await;
         info!("Version {}", &version);
         if version < 1 {
-            let result = conn
-                .execute(
-                    "CREATE TABLE IF NOT EXISTS databases(
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS databases(
                             arn TEXT PRIMARY KEY NOT NULL,
                             name TEXT NOT NULL,
                             engine TEXT NOT NULL,
@@ -47,12 +46,11 @@ impl RdsResolver {
                             env TEXT NOT NULL,
                             appname_tag TEXT NOT NULL
                         )",
-                    (),
-                )
-                .await;
-            info!("Result {:?}", &result);
+                (),
+            )
+            .await
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
-            let _ = conn.execute("DELETE FROM databases", ()).await;
         }
     }
 

@@ -48,8 +48,6 @@ impl EcsResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
-
-        let _ = conn.execute("DELETE FROM services", ()).await;
     }
 
     pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {

@@ -45,7 +45,6 @@ impl ClusterResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
-        let _ = conn.execute("DELETE FROM clusters", ()).await;
     }
 
     pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
