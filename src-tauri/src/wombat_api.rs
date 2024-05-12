@@ -1,7 +1,7 @@
 use futures::TryFutureExt;
 use serde::{Deserialize, Serialize};
 
-pub static REQUIRED_FEATURE: &str = "wombat-3.0.8";
+pub static REQUIRED_FEATURE: &str = "wombat-4.0.0";
 
 pub struct WombatApi {
     user_id: uuid::Uuid,

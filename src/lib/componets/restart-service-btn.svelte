@@ -2,10 +2,8 @@
 	import { invoke } from '@tauri-apps/api';
 	import { deplyomentStore } from '$lib/stores/deployment-store';
 	import type { EcsService } from '$lib/types';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
-
-	let { infraProfiles } = availableProfilesStore;
 
 	export let service: EcsService;
 
@@ -15,7 +13,7 @@
 	);
 </script>
 
-{#if $featuresStore.restartEcsService && ($featuresStore.devWay || $infraProfiles.some(({ app, env }) => app == service.name && env == service.env))}
+{#if $featuresStore.restartEcsService && ($featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == service.name && env == service.env))}
 	<span class="tooltip flex" data-tip={deployment?.rollout_status ?? 'Restart service'}>
 		{#if deployment != null}
 			{#if deployment.rollout_status == 'In Progress'}

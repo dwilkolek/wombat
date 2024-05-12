@@ -43,18 +43,24 @@ pub async fn check_dependencies(
     dependecies.insert(
         "aws-profiles".to_string(),
         Ok(format!(
-            "sso: {}, infra: {}",
-            &aws_config_provider.sso_profiles.len(),
+            "wombat: {}, sso: {}, infra: {}",
+            &aws_config_provider.wombat_profiles.len(),
             &aws_config_provider
-                .sso_profiles
+                .wombat_profiles
                 .iter()
-                .map(|sso| {
-                    sso.infra_profiles
+                .map(|w| w.sso_profiles.len())
+                .sum::<usize>(),
+            &aws_config_provider
+                .wombat_profiles
+                .iter()
+                .flat_map(|w| w.sso_profiles.iter().map(|sso| {
+                    sso.1
+                        .infra_profiles
                         .iter()
                         .map(|infra| infra.profile_name.as_ref())
                         .collect::<HashSet<&str>>()
                         .len()
-                })
+                }))
                 .sum::<usize>()
         )),
     );

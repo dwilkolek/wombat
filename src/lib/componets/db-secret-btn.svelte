@@ -3,11 +3,9 @@
 	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
 	import { ask, message } from '@tauri-apps/api/dialog';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	export let database: RdsInstance | undefined;
-
-	let { infraProfiles } = availableProfilesStore;
 
 	const credentialsHandler = async () => {
 		let answer = await ask(
@@ -40,7 +38,7 @@
 </script>
 
 {#if database}
-	{#if $featuresStore.devWay || $infraProfiles.some(({ app, env }) => app == database?.normalized_name && env == database?.env)}
+	{#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database?.normalized_name && env == database?.env)}
 		<div class="tooltip tooltip-left" data-tip="Search for secret">
 			<button>
 				<!-- svelte-ignore a11y-click-events-have-key-events -->

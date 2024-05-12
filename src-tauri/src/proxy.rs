@@ -61,6 +61,7 @@ pub async fn start_aws_ssm_proxy(
         &local_port, &target_port, &access_port
     );
 
+    warn!("making sure {} is free", &local_port);
     kill_pid_on_port(local_port).await;
 
     let tmp_dir = TempDir::new().unwrap();
@@ -244,7 +245,7 @@ pub async fn start_proxy_to_aws_proxy(
 async fn kill_pid_on_port(port: u16) {
     info!("Killing {} on windows", &port);
     let process = Command::new("powershell")
-        .args(&[
+        .args([
             "-Command",
             "netstat",
             "-ano",
@@ -267,7 +268,7 @@ async fn kill_pid_on_port(port: u16) {
                 if let Ok(pid) = pid {
                     info!("Killing PID: {}", &pid);
                     let _ = Command::new("powershell")
-                        .args(&["-Command", "taskkill", "/PID", &pid.to_string(), "/F"])
+                        .args(["-Command", "taskkill", "/PID", &pid.to_string(), "/F"])
                         .output();
                 }
             }
@@ -278,7 +279,7 @@ async fn kill_pid_on_port(port: u16) {
 #[cfg(target_os = "linux")]
 async fn kill_pid_on_port(port: u16) {
     let lsof = Command::new("lsof")
-        .args(&[format!("-i:{}", port)])
+        .args([format!("-i:{}", port)])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_log();
@@ -333,6 +334,7 @@ async fn kill_pid_on_port(port: u16) {
     }
 }
 
+#[cfg(target_os = "macos")]
 pub fn trim_whitespace_v2(s: &str) -> String {
     let mut result = String::with_capacity(s.len());
     s.split_whitespace().for_each(|w| {

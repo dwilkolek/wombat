@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import AppCard from '$lib/componets/app-card.svelte';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
 	$: user = $userStore;
 
-	$: selectedClusters = $userStore.preffered_environments;
+	$: selectedClusters = $activeProfilePreferences.preffered_environments;
 
 	$: columnToggleHandler = (env: AwsEnv, e: any) => {
 		if (!e.currentTarget.checked) {
@@ -18,7 +19,7 @@
 		}
 	};
 
-	const envs = [AwsEnv.PLAY, AwsEnv.LAB, AwsEnv.DEV, AwsEnv.DEMO, AwsEnv.PROD];
+	$: envs = $wombatProfileStore.environments;
 	let discoverValue: string = '';
 	let discovered: Promise<string[]> | undefined = undefined;
 </script>
@@ -96,7 +97,7 @@
 		{/if}
 	</div>
 	<div class="flex flex-wrap gap-2">
-		{#each user.tracked_names as app}
+		{#each $activeProfilePreferences.tracked_names as app}
 			<AppCard
 				{app}
 				displayConfig={{

@@ -1,6 +1,6 @@
-import { writable } from 'svelte/store';
+import { derived, writable } from 'svelte/store';
 import { execute } from './error-store';
-import type { AwsEnv, UserConfig } from '../types';
+import type { AwsEnv, UserConfig, WombatAwsProfile } from '../types';
 import { emit, listen } from '@tauri-apps/api/event';
 import type { ProxyEventMessage } from './task-store';
 import { invoke } from '@tauri-apps/api';
@@ -10,17 +10,15 @@ const createUserStore = () => {
 	const { subscribe, set, update } = writable<UserConfig>({
 		id: undefined,
 		dbeaver_path: undefined,
-		tracked_names: [],
 		known_profiles: [],
 		last_used_profile: undefined,
-		preffered_environments: [],
 		logs_dir: '',
 		db_proxy_port_map: {},
-		service_proxy_port_map: {}
+		service_proxy_port_map: {},
+		preferences: {}
 	});
 	execute<UserConfig>('user_config').then((config) => {
-		console.log('user_config', config);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	});
 	listen<ProxyEventMessage>('proxy-start', (event) => {
 		if (event.payload.proxy_type == 'ECS') {
@@ -49,18 +47,22 @@ const createUserStore = () => {
 
 	const setDbeaverPath = async (path: string) => {
 		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path }, true);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	};
 
 	const setLogsDir = async (path: string) => {
 		const config = await execute<UserConfig>('set_logs_dir_path', { logsDir: path }, true);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	};
 
-	const login = async (profile: string) => {
-		const config = await execute<UserConfig>('login', { profile });
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+	const login = async (profile: WombatAwsProfile | undefined) => {
+		if (!profile) {
+			return;
+		}
+		const config = await execute<UserConfig>('login', { profile: profile.name });
+		set(prepareConfig(config));
 		loggedIn.set(true);
+		console.log('setting', profile);
 		emit('logged-in');
 	};
 
@@ -68,14 +70,15 @@ const createUserStore = () => {
 		const config = await execute<UserConfig>('favorite', {
 			name
 		});
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	};
 
 	const savePrefferedEnvs = async (envs: AwsEnv[]) => {
 		const config = await execute<UserConfig>('save_preffered_envs', {
 			envs
 		});
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+
+		set(prepareConfig(config));
 	};
 
 	return {
@@ -87,4 +90,19 @@ const createUserStore = () => {
 		savePrefferedEnvs
 	};
 };
+const prepareConfig = (config: UserConfig) => {
+	for (const preference of Object.values(config.preferences)) {
+		preference.tracked_names.sort((a, b) => a.localeCompare(b));
+	}
+	return config;
+};
 export const userStore = createUserStore();
+
+export const activeProfilePreferences = derived([userStore], (stores) => {
+	return (
+		stores[0].preferences[stores[0].last_used_profile ?? ''] ?? {
+			preffered_environments: [],
+			tracked_names: []
+		}
+	);
+});

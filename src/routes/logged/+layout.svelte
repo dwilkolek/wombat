@@ -39,27 +39,26 @@
 					>Logs 🧐</a
 				>
 			</li>
-			{#await $featuresStore then features}
-				<li>
-					{#if features.ecsTab}
-						<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
-							>Services (ECS)
-						</a>
-					{:else}
-						<span class="opacity-30">Services (ECS) </span>
-					{/if}
-				</li>
+			<li>
+				{#if $featuresStore.ecsTab}
+					<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
+						>Services (ECS)
+					</a>
+				{:else}
+					<span class="opacity-30">Services (ECS) </span>
+				{/if}
+			</li>
 
-				<li>
-					{#if features.rdsTab}
-						<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
-							>Databases (RDS)</a
-						>
-					{:else}
-						<span class="opacity-30">Databases (RDS)</span>
-					{/if}
-				</li>
-			{/await}
+			<li>
+				{#if $featuresStore.rdsTab}
+					<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
+						>Databases (RDS)</a
+					>
+				{:else}
+					<span class="opacity-30">Databases (RDS)</span>
+				{/if}
+			</li>
+
 			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a
@@ -74,13 +73,10 @@
 		{:else}
 			<img class="h-8" alt="platform-way" src={PsyduckIcon} />
 		{/if}
-		
 
-		{#await userConfig then { last_used_profile, id }}
-			<div class="flex items-center gap-2">
-				<span>{last_used_profile}</span>
-			</div>
-		{/await}
+		<div class="flex items-center gap-2">
+			<span>{userConfig.last_used_profile}</span>
+		</div>
 		<button
 			on:click={async () => {
 				await execute('refresh_cache', undefined, true);
