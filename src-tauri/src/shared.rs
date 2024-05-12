@@ -29,7 +29,7 @@ impl BError {
 }
 
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Env {
     DEVNULL,
     PLAY,

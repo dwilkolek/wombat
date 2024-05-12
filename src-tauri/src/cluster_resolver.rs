@@ -1,17 +1,24 @@
 use crate::{aws, cache_db};
 use log::info;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "cluster";
 
 pub struct ClusterResolver {
     db: Arc<RwLock<libsql::Database>>,
+    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
 }
 
 impl ClusterResolver {
-    pub fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
-        ClusterResolver { db }
+    pub fn new(
+        db: Arc<RwLock<libsql::Database>>,
+        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    ) -> Self {
+        ClusterResolver {
+            db,
+            aws_config_resolver,
+        }
     }
     pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
         {
@@ -38,41 +45,62 @@ impl ClusterResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
+        let _ = conn.execute("DELETE FROM clusters", ()).await;
     }
 
-    pub async fn refresh(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::Cluster> {
+    pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
         {
             let db = self.db.read().await;
             clear_clusters(&db.connect().unwrap()).await;
         }
-        self.clusters(config).await.clone()
+        self.clusters().await.clone()
     }
 
-    pub async fn clusters(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::Cluster> {
+    pub async fn clusters(&mut self) -> Vec<aws::Cluster> {
+        let mut aws_config_resolver = self.aws_config_resolver.write().await;
+        let environments = aws_config_resolver.configured_envs();
         info!("Resolving clusters");
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        let rdses = fetch_clusters(&conn).await;
-        if !rdses.is_empty() {
+        let clusters = fetch_clusters(&conn).await;
+        if !clusters.is_empty() {
             info!("Returning clusters from cache");
-            return rdses.clone();
+            return clusters
+                .into_iter()
+                .filter(|cluster| environments.iter().any(|env| env == &cluster.env))
+                .collect();
         }
-        info!("Resolving clusters from aws");
-        let fresh_clusters = aws::clusters(config).await;
-        store_clusters(&conn, &fresh_clusters).await;
 
+        let mut unique_clusters_map = HashMap::new();
+        for env in environments.iter() {
+            let (profile, config) = aws_config_resolver.user_config(env).await;
+            info!("Fetching ecs from aws using {profile}");
+            let clusters = aws::clusters(&config).await;
+            for cluster in clusters {
+                unique_clusters_map.insert(cluster.arn.clone(), cluster);
+            }
+        }
+
+        let clusters = unique_clusters_map.values().cloned().collect::<Vec<_>>();
+
+        store_clusters(&conn, &clusters).await;
         info!(
             "Returning clusters from aws and persisting, count: {}",
-            fresh_clusters.len()
+            clusters.len()
         );
-        fresh_clusters
+        clusters
     }
 
     pub async fn read_clusters(&self) -> Vec<aws::Cluster> {
         info!("Resolving clusters");
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        fetch_clusters(&conn).await
+        let clusters = fetch_clusters(&conn).await;
+        let environments = self.aws_config_resolver.read().await.configured_envs();
+        clusters
+            .into_iter()
+            .filter(|cluster| environments.contains(&cluster.env))
+            .collect()
     }
 }
 

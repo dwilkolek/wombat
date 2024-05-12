@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { execute } from './error-store';
-import type { AwsEnv, UserConfig } from '../types';
+import type { AwsEnv, UserConfig, WombatAwsProfile } from '../types';
 import { emit, listen } from '@tauri-apps/api/event';
 import type { ProxyEventMessage } from './task-store';
 import { invoke } from '@tauri-apps/api';
@@ -57,10 +57,14 @@ const createUserStore = () => {
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 	};
 
-	const login = async (profile: string) => {
-		const config = await execute<UserConfig>('login', { profile });
+	const login = async (profile: WombatAwsProfile | undefined) => {
+		if (!profile) {
+			return;
+		}
+		const config = await execute<UserConfig>('login', { profile: profile.name });
 		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
 		loggedIn.set(true);
+		console.log('setting', profile);
 		emit('logged-in');
 	};
 

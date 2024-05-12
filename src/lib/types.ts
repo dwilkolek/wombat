@@ -1,3 +1,30 @@
+export type SupportLevel = 'Full' | 'Partial' | 'None';
+
+export type SsoProfiles = { [key in AwsEnv]?: SsoProfile };
+export type WombatAwsProfile = {
+	name: string;
+	profile_base_name: string;
+	sso_profiles: SsoProfiles;
+	support_level: SupportLevel;
+	single_source_profile: boolean;
+};
+export type SsoProfile = {
+	profile_name: string;
+	region?: string;
+	sso_account_id: string;
+	support_level: SupportLevel;
+	infra_profiles: InfraProfile[];
+	env: AwsEnv;
+};
+
+export type InfraProfile = {
+	source_profile: string;
+	profile_name: string;
+	region?: string;
+	app: string;
+	env: AwsEnv;
+};
+
 export enum AwsEnv {
 	DEVNULL = 'DEVNULL',
 	PLAY = 'PLAY',

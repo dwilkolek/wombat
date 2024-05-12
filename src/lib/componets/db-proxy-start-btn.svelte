@@ -1,15 +1,14 @@
 <script lang="ts">
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { execute } from '$lib/stores/error-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let database: RdsInstance;
-	let { infraProfiles } = availableProfilesStore;
 </script>
 
-{#if $featuresStore.devWay || $infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
+{#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
 	<div class="tooltip tooltip-left" data-tip="Start proxy">
 		<button
 			class="flex flex-row gap-1"

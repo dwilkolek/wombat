@@ -3,6 +3,7 @@
 	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import AppCard from '$lib/componets/app-card.svelte';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
 	$: user = $userStore;
 
@@ -18,7 +19,7 @@
 		}
 	};
 
-	const envs = [AwsEnv.PLAY, AwsEnv.LAB, AwsEnv.DEV, AwsEnv.DEMO, AwsEnv.PROD];
+	$: envs = $wombatProfileStore.environments;
 	let discoverValue: string = '';
 	let discovered: Promise<string[]> | undefined = undefined;
 </script>

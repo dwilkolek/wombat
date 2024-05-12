@@ -1,6 +1,6 @@
 use crate::{aws, cache_db, shared::BError};
 use log::info;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tauri::Window;
 use tokio::sync::RwLock;
 
@@ -8,11 +8,18 @@ const CACHE_NAME: &str = "ecs";
 
 pub struct EcsResolver {
     db: Arc<RwLock<libsql::Database>>,
+    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
 }
 
 impl EcsResolver {
-    pub fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
-        EcsResolver { db }
+    pub fn new(
+        db: Arc<RwLock<libsql::Database>>,
+        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    ) -> Self {
+        EcsResolver {
+            db,
+            aws_config_resolver,
+        }
     }
     pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
         {
@@ -41,18 +48,16 @@ impl EcsResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
+
+        let _ = conn.execute("DELETE FROM services", ()).await;
     }
 
-    pub async fn refresh(
-        &mut self,
-        config: &aws_config::SdkConfig,
-        clusters: Vec<aws::Cluster>,
-    ) -> Vec<aws::EcsService> {
+    pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
         {
             let db = self.db.read().await;
             clear_services(&db.connect().unwrap()).await;
         }
-        self.services(config, clusters).await
+        self.services(clusters).await
     }
 
     pub async fn restart_service(
@@ -106,34 +111,59 @@ impl EcsResolver {
         deplyoment_res
     }
 
-    pub async fn services(
-        &mut self,
-        config: &aws_config::SdkConfig,
-        clusters: Vec<aws::Cluster>,
-    ) -> Vec<aws::EcsService> {
-        info!("Resolving services");
+    pub async fn services(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
+        info!("Resolving services for clusters {clusters:?}");
+        let mut aws_config_resolver = self.aws_config_resolver.write().await;
+        let environments = aws_config_resolver.configured_envs();
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let ecses = fetch_services(&conn).await;
         if !ecses.is_empty() {
             info!("Returning services from cache");
-            return ecses.clone();
+            return ecses
+                .into_iter()
+                .filter(|ecs| {
+                    clusters
+                        .iter()
+                        .any(|cluster| cluster.arn == ecs.cluster_arn)
+                })
+                .collect();
         }
-        info!("Fetching services from aws");
-        let fresh_services = aws::services(config, clusters).await;
-        store_services(&conn, &fresh_services).await;
 
+        let mut unique_services_map = HashMap::new();
+        for env in environments.iter() {
+            let (profile, config) = aws_config_resolver.user_config(env).await;
+            info!("Fetching ecs from aws using {profile}");
+            let services = aws::services(&config, &clusters).await;
+            for service in services {
+                if clusters
+                    .iter()
+                    .any(|cluster| cluster.arn == service.cluster_arn)
+                {
+                    unique_services_map.insert(service.arn.clone(), service);
+                }
+            }
+        }
+
+        let services = unique_services_map.values().cloned().collect::<Vec<_>>();
+
+        store_services(&conn, &services).await;
         info!(
             "Returning services from aws and persisting, count: {}",
-            fresh_services.len()
+            services.len()
         );
-        fresh_services
+        services
     }
 
     pub async fn read_services(&self) -> Vec<aws::EcsService> {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        fetch_services(&conn).await
+        let services = fetch_services(&conn).await;
+        let environments = self.aws_config_resolver.read().await.configured_envs();
+        services
+            .into_iter()
+            .filter(|cluster| environments.contains(&cluster.env))
+            .collect()
     }
 }
 

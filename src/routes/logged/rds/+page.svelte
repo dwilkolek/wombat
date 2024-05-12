@@ -9,6 +9,7 @@
 	import DbSecretBtn from '$lib/componets/db-secret-btn.svelte';
 	import { ask } from '@tauri-apps/api/dialog';
 	import { dbStore } from '$lib/stores/db-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
 	let arnFilter = '';
 	$: user = $userStore;
@@ -30,7 +31,7 @@
 </svelte:head>
 <div class="bg-base-100 sticky top-[68px] z-50 px-2">
 	<select class="select select-bordered" bind:value={$envStore}>
-		{#each envs as env}
+		{#each $wombatProfileStore.environments as env}
 			<option value={env}>{env}</option>
 		{/each}
 	</select>

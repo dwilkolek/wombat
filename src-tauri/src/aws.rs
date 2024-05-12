@@ -15,6 +15,7 @@ use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, error::Error, sync::Arc};
+use tokio::sync::RwLock;
 use tracing_unwrap::{OptionExt, ResultExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,10 +105,75 @@ pub struct LogEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SupportLevel {
+    Full,
+    Partial,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WombatAwsProfile {
+    pub name: String,
+    profile_base_name: String,
+    pub sso_profiles: HashMap<Env, SsoProfile>,
+    pub support_level: SupportLevel,
+    pub single_source_profile: bool,
+}
+impl WombatAwsProfile {
+    fn extend(&mut self, sso_profile: SsoProfile) {
+        let new_sso_profile = sso_profile.profile_name.clone();
+        self.sso_profiles
+            .insert(sso_profile.env.clone(), sso_profile);
+        let mut envs = self.sso_profiles.keys().cloned().collect::<Vec<_>>();
+        envs.sort();
+
+        let mut env_str = "".to_owned();
+        for env in envs.iter() {
+            if env_str.is_empty() {
+                env_str = format!("{env}");
+            } else {
+                env_str = format!("{}|{}", env_str, env);
+            }
+        }
+        self.single_source_profile = self
+            .sso_profiles
+            .iter()
+            .all(|s| s.1.profile_name == new_sso_profile);
+        let support_level_value: usize = self
+            .sso_profiles
+            .iter()
+            .map(|s| match s.1.support_level {
+                SupportLevel::Full => 1,
+                SupportLevel::None => 0,
+                SupportLevel::Partial => 0,
+            })
+            .sum();
+        self.support_level = if support_level_value == self.sso_profiles.len() {
+            SupportLevel::Full
+        } else if support_level_value == 0 {
+            SupportLevel::None
+        } else {
+            SupportLevel::Partial
+        };
+        self.name = format!("{}-({})", self.profile_base_name, env_str);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SsoProfile {
     pub profile_name: String,
     pub region: Option<String>,
     pub infra_profiles: Vec<InfraProfile>,
+    pub sso_account_id: String,
+    pub support_level: SupportLevel,
+    pub env: Env,
+}
+impl SsoProfile {
+    fn for_env(&self, env: Env) -> Self {
+        let mut clone = self.clone();
+        clone.env = env;
+        clone
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -130,53 +196,65 @@ impl InfraProfile {
 pub struct AwsConfigProvider {
     pub dev_way: bool,
     profile_set: ProfileSet,
-    pub sso_profiles: Vec<SsoProfile>,
-    pub active_sso_profile: SsoProfile,
+    pub wombat_profiles: Vec<WombatAwsProfile>,
+    pub active_wombat_profile: WombatAwsProfile,
     profile_to_config: HashMap<String, aws_config::SdkConfig>,
 }
 
 impl AwsConfigProvider {
     pub async fn new() -> Self {
         let profiles = profile_set().await.unwrap_or_log();
-        let sso_profiles = Self::load_aws_profile_configuration(&profiles);
+        let wombat_profiles = Self::load_aws_profile_configuration(&profiles);
         Self {
             dev_way: false,
             profile_set: profiles,
-            active_sso_profile: SsoProfile {
-                infra_profiles: Vec::new(),
-                profile_name: "default".to_owned(),
-                region: None,
+            active_wombat_profile: WombatAwsProfile {
+                name: "default".to_owned(),
+                profile_base_name: "default".to_owned(),
+                sso_profiles: HashMap::new(),
+                support_level: SupportLevel::None,
+                single_source_profile: true,
             },
+            wombat_profiles,
             profile_to_config: HashMap::new(),
-            sso_profiles,
         }
     }
 
-    pub fn login(&mut self, profile: String, dev_way: bool) {
+    pub fn login(&mut self, profile_name: String, dev_way: bool) {
         self.dev_way = dev_way;
-        self.active_sso_profile = self
-            .sso_profiles
+        self.active_wombat_profile = self
+            .wombat_profiles
             .iter()
-            .find(|sso| sso.profile_name == profile)
+            .find(|sso| sso.name == profile_name)
             .unwrap_or_log()
             .clone();
     }
 
-    pub async fn get_user_config(&mut self) -> (String, aws_config::SdkConfig) {
-        let profile_config = self
-            .profile_to_config
-            .get(&self.active_sso_profile.profile_name);
+    pub fn configured_envs(&self) -> Vec<Env> {
+        self.active_wombat_profile
+            .sso_profiles
+            .keys()
+            .cloned()
+            .collect()
+    }
+
+    pub async fn user_config(&mut self, env: &Env) -> (String, aws_config::SdkConfig) {
+        info!("getting sso_profile for env={env}");
+        let sso_profile = self
+            .active_wombat_profile
+            .sso_profiles
+            .get(env)
+            .expect("Failed to get sso_profile");
+        let profile_config = self.profile_to_config.get(&sso_profile.profile_name);
 
         match profile_config {
             Some(config) => {
                 info!("returning cached user config");
-                (self.active_sso_profile.profile_name.clone(), config.clone())
+                (sso_profile.profile_name.to_owned(), config.clone())
             }
             None => {
                 info!("creating user config");
-                let config = self
-                    .use_aws_config(&self.active_sso_profile.profile_name)
-                    .await;
+                let config = self.use_aws_config(&sso_profile.profile_name).await;
                 self.profile_to_config
                     .insert(config.0.clone(), config.1.clone());
                 config
@@ -184,47 +262,75 @@ impl AwsConfigProvider {
         }
     }
 
-    pub async fn get_app_config(
+    async fn get_or_create_app_config(
         &mut self,
         app: &str,
         env: &Env,
-    ) -> (String, aws_config::SdkConfig) {
-        let matching_infra_profile = self
-            .active_sso_profile
-            .infra_profiles
-            .iter()
-            .find(|infra_profile| &infra_profile.env == env && infra_profile.app == app);
-        match &matching_infra_profile {
-            Some(profile) => {
-                let profile_name = &profile.profile_name;
-                let config = self.profile_to_config.get(profile_name);
-                match config {
-                    Some(config) => {
-                        info!("returning cached {profile_name} config");
-                        Some((profile_name.clone(), config.clone()))
-                    }
-                    None => {
-                        info!("creating {profile_name} config");
-                        let config = self.use_aws_config(profile_name).await;
-                        self.profile_to_config
-                            .insert(config.0.clone(), config.1.clone());
-                        Some(config)
-                    }
-                }
-            }
+    ) -> Option<(String, aws_config::SdkConfig)> {
+        let matching_infra_profile =
+            self.active_wombat_profile
+                .sso_profiles
+                .get(env)
+                .and_then(|sso_profile| {
+                    sso_profile
+                        .infra_profiles
+                        .iter()
+                        .find(|infra_profile| &infra_profile.env == env && infra_profile.app == app)
+                        .cloned()
+                });
+
+        match matching_infra_profile {
+            Some(infra_profile) => self.for_infra(&infra_profile).await,
             None => None,
         }
-        .expect_or_log("Config doesn't exist")
     }
-    pub async fn get_config(&mut self, app: &str, env: &Env) -> (String, aws_config::SdkConfig) {
-        if self.dev_way {
-            return self.get_user_config().await;
+    pub async fn for_infra(
+        &mut self,
+        infra_profile: &InfraProfile,
+    ) -> Option<(String, aws_config::SdkConfig)> {
+        let profile_name = &infra_profile.profile_name;
+        let config = self.profile_to_config.get(profile_name);
+        match config {
+            Some(config) => {
+                info!("returning cached {profile_name} config");
+                Some((profile_name.clone(), config.clone()))
+            }
+            None => {
+                info!("creating {profile_name} config");
+                let config = self.use_aws_config(profile_name).await;
+                self.profile_to_config
+                    .insert(config.0.clone(), config.1.clone());
+                Some(config)
+            }
         }
-        self.get_app_config(app, env).await
     }
 
-    fn load_aws_profile_configuration(profile_set: &ProfileSet) -> Vec<SsoProfile> {
-        let mut sso_profiles: Vec<SsoProfile> = Vec::new();
+    pub async fn app_config(
+        &mut self,
+        app: &str,
+        env: &Env,
+    ) -> Option<(String, aws_config::SdkConfig)> {
+        let app_config = self.get_or_create_app_config(app, env).await;
+        if self.dev_way {
+            let user_config = Some(self.user_config(env).await);
+            app_config.or(user_config)
+        } else {
+            app_config
+        }
+    }
+
+    pub async fn app_config_with_fallback(
+        &mut self,
+        app: &str,
+        env: &Env,
+    ) -> Option<(String, aws_config::SdkConfig)> {
+        let app_config = self.app_config(app, env).await;
+        let user_config = Some(self.user_config(env).await);
+        app_config.or(user_config)
+    }
+
+    fn load_aws_profile_configuration(profile_set: &ProfileSet) -> Vec<WombatAwsProfile> {
+        let mut wombat_profiles: HashMap<String, WombatAwsProfile> = HashMap::new();
         let infra_profiles = Self::read_infra_profiles(profile_set);
         let mut groupped_infra_profiles_by_source_profile: HashMap<String, Vec<InfraProfile>> =
             HashMap::new();
@@ -248,23 +354,81 @@ impl AwsConfigProvider {
             if let Some(profile_details) = profile_set.get_profile(profile) {
                 let role_arn = profile_details.get("role_arn");
                 let is_sso_profile = profile_details.get("sso_start_url").is_some();
+                let sso_account_id = profile_details.get("sso_account_id").unwrap_or("0");
                 let valid_sso_profile = match role_arn {
                     Some(role) => !role.ends_with("-infra") && is_sso_profile,
                     None => is_sso_profile,
                 };
+                let infra_profiles = groupped_infra_profiles_by_source_profile
+                    .get(profile)
+                    .unwrap_or(&Vec::new())
+                    .clone();
                 if valid_sso_profile {
-                    sso_profiles.push(SsoProfile {
+                    let sso_profile = SsoProfile {
                         profile_name: profile.to_owned(),
                         region: profile_details.get("region").map(|r| r.to_owned()),
-                        infra_profiles: groupped_infra_profiles_by_source_profile
-                            .get(profile)
-                            .unwrap_or(&Vec::new())
-                            .clone(),
-                    })
+                        infra_profiles,
+                        sso_account_id: sso_account_id.to_owned(),
+                        support_level: match sso_account_id {
+                            "835811189142" => SupportLevel::Full,
+                            "590184069535" => SupportLevel::Partial,
+                            "275464048518" => SupportLevel::Partial,
+                            _ => SupportLevel::None,
+                        },
+                        env: Env::DEVNULL,
+                    };
+                    let provile_env_regex =
+                        Regex::new("^(.*)-(play|lab|dev|demo|prod)$").unwrap_or_log();
+                    match provile_env_regex.captures(profile) {
+                        Some(caps) => {
+                            let base_profile_name = &caps[1];
+                            let env = Env::from_exact(&caps[2]);
+                            let env_sso_profile = sso_profile.for_env(env.clone());
+                            match wombat_profiles.get_mut(base_profile_name) {
+                                Some(existing) => existing.extend(env_sso_profile),
+                                None => {
+                                    let support_level = env_sso_profile.support_level.clone();
+                                    let mut sso_profiles = HashMap::new();
+                                    sso_profiles.insert(env.clone(), env_sso_profile);
+                                    wombat_profiles.insert(
+                                        base_profile_name.to_owned(),
+                                        WombatAwsProfile {
+                                            name: base_profile_name.to_owned(),
+                                            profile_base_name: base_profile_name.to_owned(),
+                                            sso_profiles,
+                                            support_level,
+                                            single_source_profile: true,
+                                        },
+                                    );
+                                }
+                            }
+                        }
+                        None => {
+                            let support_level = sso_profile.support_level.clone();
+                            let mut sso_profiles = HashMap::new();
+                            sso_profiles.insert(Env::DEV, sso_profile.for_env(Env::DEV));
+                            sso_profiles.insert(Env::DEMO, sso_profile.for_env(Env::DEMO));
+                            sso_profiles.insert(Env::PROD, sso_profile.for_env(Env::PROD));
+                            wombat_profiles.insert(
+                                profile.to_owned(),
+                                WombatAwsProfile {
+                                    name: profile.to_owned(),
+                                    profile_base_name: profile.to_owned(),
+                                    sso_profiles,
+                                    support_level,
+                                    single_source_profile: true,
+                                },
+                            );
+                        }
+                    }
                 }
             }
         }
-        sso_profiles
+        wombat_profiles
+            .values()
+            .filter(|w| !w.sso_profiles.is_empty())
+            .cloned()
+            .collect()
     }
 
     fn read_infra_profiles(profile_set: &ProfileSet) -> Vec<InfraProfile> {
@@ -754,10 +918,10 @@ pub async fn restart_service(
     }
 }
 
-pub async fn services(config: &aws_config::SdkConfig, clusters: Vec<Cluster>) -> Vec<EcsService> {
+pub async fn services(config: &aws_config::SdkConfig, clusters: &[Cluster]) -> Vec<EcsService> {
     let mut handles = vec![];
     let mut results = vec![];
-    for cluster in clusters.into_iter() {
+    for cluster in clusters.iter() {
         let config = config.clone();
         let cluster = cluster.clone();
         handles.push(tokio::spawn(async move {
@@ -807,15 +971,20 @@ pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<Ec
 }
 
 pub async fn service_details(
-    config: aws_config::SdkConfig,
-    service_arns: Vec<String>,
+    aws_config_provider: Arc<RwLock<AwsConfigProvider>>,
+    services: Vec<EcsService>,
 ) -> Vec<Result<ServiceDetails, ServiceDetailsMissing>> {
     let mut result = Vec::new();
     let mut tokio_tasks = Vec::new();
-    for service_arn in service_arns {
-        let config = config.clone();
+    for service in services {
+        let mut aws_config_provider = aws_config_provider.write().await;
+        let (profile, config) = aws_config_provider
+            .app_config_with_fallback(&service.name, &service.env)
+            .await
+            .expect_or_log("Config doesn't exist");
+        info!("Using {profile} for {} at {}", service.arn, service.env);
         tokio_tasks.push(tokio::spawn(async move {
-            service_detail(&config, service_arn).await
+            service_detail(&config, service.arn).await
         }))
     }
     for handle in tokio_tasks {
