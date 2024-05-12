@@ -7,7 +7,7 @@ use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use rds_resolver::RdsResolver;
 use serde_json::json;
 use shared::{
@@ -1503,15 +1503,15 @@ fn app_config() -> AppConfig {
     let _ = dotenv();
     AppConfig {
         wombat_api_url: env::var("WOMBAT_API_URL").unwrap_or_else(|_| {
-            debug!("Using default token since WOMBAT_API_URL was not set");
+            warn!("Using default token since WOMBAT_API_URL was not set");
             "%%WOMBAT_API_URL%%".to_string()
         }),
         wombat_api_user: env::var("WOMBAT_API_USER").unwrap_or_else(|_| {
-            debug!("Using default token since WOMBAT_API_USER was not set");
+            warn!("Using default token since WOMBAT_API_USER was not set");
             "%%WOMBAT_API_USER%%".to_string()
         }),
         wombat_api_password: env::var("WOMBAT_API_PASSWORD").unwrap_or_else(|_| {
-            debug!("Using default token since WOMBAT_API_PASSWORD was not set");
+            warn!("Using default token since WOMBAT_API_PASSWORD was not set");
             "%%WOMBAT_API_PASSWORD%%".to_string()
         }),
         logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
