@@ -72,7 +72,7 @@ impl ClusterResolver {
 
         let mut unique_clusters_map = HashMap::new();
         for env in environments.iter() {
-            let (profile, config) = aws_config_resolver.user_config(env).await;
+            let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching ecs from aws using {profile}");
             let clusters = aws::clusters(&config).await;
             for cluster in clusters {

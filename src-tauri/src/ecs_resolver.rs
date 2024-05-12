@@ -130,7 +130,7 @@ impl EcsResolver {
 
         let mut unique_services_map = HashMap::new();
         for env in environments.iter() {
-            let (profile, config) = aws_config_resolver.user_config(env).await;
+            let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching ecs from aws using {profile}");
             let services = aws::services(&config, &clusters).await;
             for service in services {

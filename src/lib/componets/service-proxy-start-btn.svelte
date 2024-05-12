@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { proxyAuthConfigsStore } from '$lib/stores/proxy-auth-configs-store';
-	import { AwsEnv, type ProxyAuthConfig, type ServiceDetails, type InfraProfile } from '$lib/types';
+	import {
+		AwsEnv,
+		type ProxyAuthConfig,
+		type ServiceDetails,
+		type InfraProfile,
+		type SsoProfile
+	} from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
@@ -8,14 +14,24 @@
 
 	export let service: ServiceDetails;
 	let dialog: HTMLDialogElement;
-	let selected_proxy_infra_profile =
+	let selectedInfraProfile =
 		$wombatProfileStore.infraProfiles.find(
 			(infraProfile) => infraProfile.env == service.env && infraProfile.app == service.name
 		) ?? $wombatProfileStore.infraProfiles.at(0);
-	let selected_proxy_auth_interceptor: ProxyAuthConfig | undefined;
+	let selectedSsoProxy =
+		$wombatProfileStore.ssoProfiles.find((ssoProfile) => ssoProfile.env == service.env) ??
+		$wombatProfileStore.ssoProfiles.at(0);
+	let useDevWayFeature = false;
+	let selectedAuthInterceptor: ProxyAuthConfig | undefined;
 
-	const start_proxy = async (
-		infraProfile: InfraProfile,
+	$: matchingInfraProfiles =
+		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
+		[];
+	$: isStartButtonDisabled = matchingInfraProfiles.length === 0;
+
+	const startProxy = async (
+		infraProfile: InfraProfile | null | undefined,
+		ssoProfile: SsoProfile | null | undefined,
 		proxyAuthConfig: ProxyAuthConfig | null | undefined
 	) => {
 		if (service?.env == AwsEnv.PROD) {
@@ -32,12 +48,19 @@
 				return;
 			}
 		}
-		invoke('start_service_proxy', { service, proxyAuthConfig, infraProfile });
+		invoke('start_service_proxy', { service, proxyAuthConfig, infraProfile, ssoProfile });
 	};
 </script>
 
-<div class="tooltip tooltip-left h-[20px]" data-tip="Start proxy">
-	<button class="flex flex-row gap-1 items-center cursor-pointer" on:click={() => dialog.show()}>
+<div
+	class="tooltip tooltip-left h-[20px]"
+	data-tip={isStartButtonDisabled ? 'Missing role allowing to setup proxy' : 'Start proxy'}
+>
+	<button
+		disabled={isStartButtonDisabled}
+		class={`flex flex-row gap-1 items-center cursor-pointer ${isStartButtonDisabled ? 'opacity-30' : ''}`}
+		on:click={() => dialog.show()}
+	>
 		<div class="w-5 h-5 relative">
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -72,36 +95,77 @@
 	class="modal bg-black bg-opacity-60"
 >
 	<div class="modal-box">
-		<div class="flex flex-col gap-2">
-			<div>
-				Using profile:
-				<select
-					class="select select-bordered w-full select-sm"
-					bind:value={selected_proxy_infra_profile}
-				>
-					{#each $wombatProfileStore.infraProfiles as infraProfile}
-						{#if infraProfile.env == service.env}
+		<div class="flex flex-col gap-4">
+			<div class="flex flex-col gap-2">
+				<h1 class="text-lg">Configure proxy</h1>
+				<div class="flex gap-2">
+					<span>App: <b>{service.name}</b></span> | <span>Env: <b>{service.env}</b></span>
+				</div>
+			</div>
+			{#if $featuresStore.devWay}
+				<div class="flex gap-2 items-center">
+					<label class="cursor-pointer flex items-center gap-2">
+						<span class="text-md pr-4">Use dev way feature</span>
+						<input
+							type="checkbox"
+							class="toggle toggle-primary toggle-sm"
+							bind:checked={useDevWayFeature}
+						/>
+					</label>
+				</div>
+			{/if}
+			{#if useDevWayFeature}
+				<div>
+					Using sso profile:
+					<!-- svelte-ignore a11y-autofocus -->
+					<select
+						autofocus
+						class="select select-bordered w-full select-sm"
+						bind:value={selectedSsoProxy}
+					>
+						{#each $wombatProfileStore.ssoProfiles as ssoProfile}
+							{#if ssoProfile.env == service.env}
+								<option value={ssoProfile}>
+									{ssoProfile.profile_name}
+								</option>
+							{/if}
+						{/each}
+					</select>
+				</div>
+			{/if}
+			{#if !useDevWayFeature}
+				<div>
+					Using infra profile:
+					<!-- svelte-ignore a11y-autofocus -->
+					<select
+						autofocus
+						class="select select-bordered w-full select-sm"
+						bind:value={selectedInfraProfile}
+					>
+						{#each matchingInfraProfiles as infraProfile}
 							<option value={infraProfile}>
 								{infraProfile.profile_name}
 							</option>
-						{/if}
-					{/each}
-				</select>
-			</div>
+						{/each}
+					</select>
+				</div>
+			{/if}
 
 			<div>
 				Authentication interceptor:
 				<select
 					class="select select-bordered w-full select-sm"
-					bind:value={selected_proxy_auth_interceptor}
+					bind:value={selectedAuthInterceptor}
 				>
 					<option value={undefined}>None</option>
 
 					{#each $proxyAuthConfigsStore as config}
-						{#if selected_proxy_infra_profile && config.env == service.env && config.toApp == service.name && (config.fromApp == '*' || selected_proxy_infra_profile.app == config.fromApp)}
-							<option value={config}>
-								{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}
-							</option>
+						{#if config.env == service.env && config.toApp == service.name}
+							{#if useDevWayFeature || (selectedInfraProfile && (config.fromApp == '*' || selectedInfraProfile.app == config.fromApp))}
+								<option value={config}>
+									{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}
+								</option>
+							{/if}
 						{/if}
 					{/each}
 				</select>
@@ -109,12 +173,14 @@
 
 			<div class="flex flex-row justify-end gap-2 my-2">
 				<button
-					disabled={!selected_proxy_infra_profile}
+					disabled={!selectedInfraProfile && !selectedSsoProxy}
 					class="btn btn-active btn-accent btn-sm"
 					on:click|preventDefault={() => {
-						console.log('click');
-						selected_proxy_infra_profile &&
-							start_proxy(selected_proxy_infra_profile, selected_proxy_auth_interceptor);
+						startProxy(
+							useDevWayFeature ? null : selectedInfraProfile,
+							useDevWayFeature ? selectedSsoProxy : null,
+							selectedAuthInterceptor
+						);
 					}}
 				>
 					Start proxy</button

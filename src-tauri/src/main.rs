@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance};
+use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance, SsoProfile};
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
@@ -99,7 +99,7 @@ async fn get_authorized(
         info!("Checking authentication");
         for env in profile.sso_profiles.keys() {
             let mut aws_config_provider = aws_config_provider.write().await;
-            let (aws_profile, config) = aws_config_provider.user_config(env).await;
+            let (aws_profile, config) = aws_config_provider.sso_config(env).await;
             let login_check = check_login_and_trigger(user_id, &aws_profile, &config, axiom).await;
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
@@ -427,7 +427,7 @@ async fn credentials(
         Err(err) => {
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
-                    aws_config_provider.user_config(&db.env).await;
+                    aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {
@@ -729,7 +729,7 @@ async fn find_logs(
         let mut aws_config_provider = aws_config_provider.0.write().await;
         //TODO: it will be annoying to do to search logs with different sdk_configs...
         //Let's hope it will keep working.
-        let app_config = aws_config_provider.user_config(&env).await;
+        let app_config = aws_config_provider.sso_config(&env).await;
         sdk_config = app_config.1
     }
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
@@ -1188,7 +1188,8 @@ async fn service_details(
 async fn start_service_proxy(
     window: Window,
     service: aws::EcsService,
-    infra_profile: InfraProfile,
+    infra_profile: Option<InfraProfile>,
+    sso_profile: Option<SsoProfile>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
@@ -1222,7 +1223,7 @@ async fn start_service_proxy(
 
     let mut aws_config_provider = aws_config_provider.0.write().await;
     let (aws_profile, aws_config) = aws_config_provider
-        .for_infra(&infra_profile)
+        .with_dev_way_check(&infra_profile, &sso_profile)
         .await
         .expect("Missing sdk_config to start service proxy");
     let bastions = aws::bastions(&aws_config).await;
@@ -1247,15 +1248,21 @@ async fn start_service_proxy(
         })];
 
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
-        let source_app_profile = proxy_auth_config.from_app.clone();
-        let (mut source_app_profile, mut source_app_config) = aws_config_provider
-            .app_config(&source_app_profile, &service.env)
+        // let source_app_profile = proxy_auth_config.from_app.clone();
+        // let (mut source_app_profile, mut source_app_config) = aws_config_provider
+        //     .app_config(&source_app_profile, &service.env)
+        //     .await
+        //     .expect("Missing sdk_config to setup auth interceptor");
+        // if aws_config_provider.dev_way {
+        //     (source_app_profile, source_app_config) =
+        //         aws_config_provider.sso_config(&service.env).await;
+        // }
+        //
+
+        let (source_app_profile, source_app_config) = aws_config_provider
+            .with_dev_way_check(&infra_profile, &sso_profile)
             .await
             .expect("Missing sdk_config to setup auth interceptor");
-        if aws_config_provider.dev_way {
-            (source_app_profile, source_app_config) =
-                aws_config_provider.user_config(&service.env).await;
-        }
         match proxy_auth_config.auth_type.as_str() {
             "jepsen" => {
                 info!(
@@ -1447,7 +1454,7 @@ async fn open_dbeaver(
         Err(_) => {
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
-                    aws_config_provider.user_config(&db.env).await;
+                    aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {

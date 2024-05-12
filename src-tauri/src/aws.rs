@@ -238,28 +238,15 @@ impl AwsConfigProvider {
             .collect()
     }
 
-    pub async fn user_config(&mut self, env: &Env) -> (String, aws_config::SdkConfig) {
+    pub async fn sso_config(&mut self, env: &Env) -> (String, aws_config::SdkConfig) {
         info!("getting sso_profile for env={env}");
         let sso_profile = self
             .active_wombat_profile
             .sso_profiles
             .get(env)
+            .cloned()
             .expect("Failed to get sso_profile");
-        let profile_config = self.profile_to_config.get(&sso_profile.profile_name);
-
-        match profile_config {
-            Some(config) => {
-                info!("returning cached user config");
-                (sso_profile.profile_name.to_owned(), config.clone())
-            }
-            None => {
-                info!("creating user config");
-                let config = self.use_aws_config(&sso_profile.profile_name).await;
-                self.profile_to_config
-                    .insert(config.0.clone(), config.1.clone());
-                config
-            }
-        }
+        self.for_sso(&sso_profile).await
     }
 
     async fn get_or_create_app_config(
@@ -284,6 +271,25 @@ impl AwsConfigProvider {
             None => None,
         }
     }
+
+    async fn for_sso(&mut self, sso_profile: &SsoProfile) -> (String, aws_config::SdkConfig) {
+        let profile_config = self.profile_to_config.get(&sso_profile.profile_name);
+
+        match profile_config {
+            Some(config) => {
+                info!("returning cached user config");
+                (sso_profile.profile_name.to_owned(), config.clone())
+            }
+            None => {
+                info!("creating user config");
+                let config = self.use_aws_config(&sso_profile.profile_name).await;
+                self.profile_to_config
+                    .insert(config.0.clone(), config.1.clone());
+                config
+            }
+        }
+    }
+
     pub async fn for_infra(
         &mut self,
         infra_profile: &InfraProfile,
@@ -305,6 +311,32 @@ impl AwsConfigProvider {
         }
     }
 
+    pub async fn with_dev_way_check(
+        &mut self,
+        infra_profile: &Option<InfraProfile>,
+        sso_profile: &Option<SsoProfile>,
+    ) -> Option<(String, aws_config::SdkConfig)> {
+        info!(
+            "selecting profile with dev_way check. infra={infra_profile:?}, sso={infra_profile:?}"
+        );
+        if let Some(infra_profile) = infra_profile {
+            let infra_config = self.for_infra(infra_profile).await;
+            if infra_config.is_some() {
+                info!("returing infra sdk_config");
+                return infra_config;
+            }
+        }
+        if self.dev_way {
+            if let Some(sso_profile) = sso_profile {
+                info!("using dev_way, returing sso sdk_config");
+                return Some(self.for_sso(sso_profile).await);
+            }
+        }
+
+        warn!("selecting profile with dev_way check resulted in None");
+        None
+    }
+
     pub async fn app_config(
         &mut self,
         app: &str,
@@ -312,7 +344,7 @@ impl AwsConfigProvider {
     ) -> Option<(String, aws_config::SdkConfig)> {
         let app_config = self.get_or_create_app_config(app, env).await;
         if self.dev_way {
-            let user_config = Some(self.user_config(env).await);
+            let user_config = Some(self.sso_config(env).await);
             app_config.or(user_config)
         } else {
             app_config
@@ -325,7 +357,7 @@ impl AwsConfigProvider {
         env: &Env,
     ) -> Option<(String, aws_config::SdkConfig)> {
         let app_config = self.app_config(app, env).await;
-        let user_config = Some(self.user_config(env).await);
+        let user_config = Some(self.sso_config(env).await);
         app_config.or(user_config)
     }
 
@@ -792,7 +824,10 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                         t.value().unwrap_or_log().clone_into(&mut appname_tag)
                     }
                     if t.key().unwrap_or_log() == "Environment" {
-                        t.value().unwrap_or_log().to_owned().clone_into(&mut environment_tag);
+                        t.value()
+                            .unwrap_or_log()
+                            .to_owned()
+                            .clone_into(&mut environment_tag);
                         env = Env::from_exact(&environment_tag);
                     }
                 }

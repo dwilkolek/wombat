@@ -80,7 +80,7 @@ impl RdsResolver {
         let mut unique_databases_map = HashMap::new();
 
         for env in environments.iter() {
-            let (profile, config) = aws_config_resolver.user_config(env).await;
+            let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching rds from aws using profile {profile}");
             let databases = aws::databases(&config).await;
             for db in databases {
