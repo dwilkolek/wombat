@@ -40,16 +40,19 @@ export type Cluster = {
 	env: AwsEnv;
 };
 type EnvPortMap = { [key: string]: number };
+export type WombatProfilePreferences = {
+	preffered_environments: AwsEnv[],
+	tracked_names: string[],
+}
 export type UserConfig = {
 	id: string | undefined;
 	last_used_profile: string | undefined;
 	known_profiles: string[];
-	tracked_names: string[];
 	dbeaver_path: string | undefined;
-	preffered_environments: AwsEnv[];
 	logs_dir: string;
 	db_proxy_port_map: { [key: string]: EnvPortMap };
 	service_proxy_port_map: { [key: string]: EnvPortMap };
+	preferences: {[key: string]: WombatProfilePreferences}
 };
 
 export type EcsService = {

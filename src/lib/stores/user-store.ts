@@ -10,17 +10,16 @@ const createUserStore = () => {
 	const { subscribe, set, update } = writable<UserConfig>({
 		id: undefined,
 		dbeaver_path: undefined,
-		tracked_names: [],
 		known_profiles: [],
 		last_used_profile: undefined,
-		preffered_environments: [],
 		logs_dir: '',
 		db_proxy_port_map: {},
-		service_proxy_port_map: {}
+		service_proxy_port_map: {},
+		preferences: {}
 	});
 	execute<UserConfig>('user_config').then((config) => {
 		console.log('user_config', config);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set({ ...config });
 	});
 	listen<ProxyEventMessage>('proxy-start', (event) => {
 		if (event.payload.proxy_type == 'ECS') {
@@ -49,12 +48,12 @@ const createUserStore = () => {
 
 	const setDbeaverPath = async (path: string) => {
 		const config = await execute<UserConfig>('set_dbeaver_path', { dbeaverPath: path }, true);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	};
 
 	const setLogsDir = async (path: string) => {
 		const config = await execute<UserConfig>('set_logs_dir_path', { logsDir: path }, true);
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	};
 
 	const login = async (profile: WombatAwsProfile | undefined) => {
@@ -62,7 +61,7 @@ const createUserStore = () => {
 			return;
 		}
 		const config = await execute<UserConfig>('login', { profile: profile.name });
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 		loggedIn.set(true);
 		console.log('setting', profile);
 		emit('logged-in');
@@ -72,14 +71,15 @@ const createUserStore = () => {
 		const config = await execute<UserConfig>('favorite', {
 			name
 		});
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+		set(prepareConfig(config));
 	};
 
 	const savePrefferedEnvs = async (envs: AwsEnv[]) => {
 		const config = await execute<UserConfig>('save_preffered_envs', {
 			envs
 		});
-		set({ ...config, tracked_names: config.tracked_names.sort((a, b) => a.localeCompare(b)) });
+
+		set(prepareConfig(config));
 	};
 
 	return {
@@ -91,4 +91,10 @@ const createUserStore = () => {
 		savePrefferedEnvs
 	};
 };
+const prepareConfig= (config: UserConfig) => {
+	for (let preference of Object.values(config.preferences)) {
+		preference.tracked_names.sort((a, b) => a.localeCompare(b))
+	}
+	return config
+}
 export const userStore = createUserStore();
