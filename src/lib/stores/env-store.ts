@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { AwsEnv } from '../types';
-const envImportance = {
+export const envImportance = {
 	[AwsEnv.DEVNULL]: 0,
 	[AwsEnv.PLAY]: 1,
 	[AwsEnv.LAB]: 2,
@@ -11,4 +11,4 @@ const envImportance = {
 export const ENVIRONMENTS = Object.values(AwsEnv).sort(
 	(a, b) => envImportance[a] - envImportance[b]
 );
-export const envStore = writable<AwsEnv>(AwsEnv.DEV);
+export const envStore = writable<AwsEnv>(AwsEnv.DEVNULL);

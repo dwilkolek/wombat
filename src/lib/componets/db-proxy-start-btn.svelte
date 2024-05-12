@@ -1,15 +1,14 @@
 <script lang="ts">
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { execute } from '$lib/stores/error-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let database: RdsInstance;
-	let { infraProfiles } = availableProfilesStore;
 </script>
 
-{#if $featuresStore.devWay || $infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
+{#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
 	<div class="tooltip tooltip-left" data-tip="Start proxy">
 		<button
 			class="flex flex-row gap-1"
@@ -62,27 +61,7 @@
 	</div>
 {:else}
 	<div class="tooltip tooltip-left" data-tip={`Missing aws profile: ${database.normalized_name}`}>
-		<button
-			class="flex flex-row gap-1 opacity-30"
-			disabled
-			on:click={async () => {
-				if (database?.env == AwsEnv.PROD) {
-					let response = await ask(
-						'Understand the risks before connecting to production database.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
-						{
-							title: 'Access to PRODUCTION database.',
-							okLabel: 'Proceed',
-							cancelLabel: 'Abort',
-							type: 'warning'
-						}
-					);
-					if (!response) {
-						return;
-					}
-				}
-				execute('start_db_proxy', { db: database });
-			}}
-		>
+		<button class="flex flex-row gap-1 opacity-30" disabled>
 			<div class="w-5 h-5 relative">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

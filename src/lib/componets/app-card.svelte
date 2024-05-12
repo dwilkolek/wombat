@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 
 	import { allServiceDetailsStore, serviceDetailStore } from '$lib/stores/service-details-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import StarIcon from './star-icon.svelte';
@@ -25,7 +26,7 @@
 
 	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
-		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 </script>
 
@@ -84,12 +85,13 @@
 		{#if !details}
 			<span class="loading loading-dots loading-lg" />
 		{/if}
+
 		{#if details}
 			<div
 				class={`grid w-full divide-x divide-base-100`}
-				style={`grid-template-columns: repeat(${displayConfig.envs?.length ?? 1}, minmax(0, 1fr));`}
+				style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
 			>
-				{#each ENVIRONMENTS as enabled_env}
+				{#each $wombatProfileStore.environments as enabled_env}
 					{@const value = details.envs?.get(enabled_env)}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(enabled_env)}
 						<div class={`flex flex-col app-env-cell px-2`}>

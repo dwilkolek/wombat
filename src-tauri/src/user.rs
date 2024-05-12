@@ -14,18 +14,21 @@ pub fn wombat_dir() -> PathBuf {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WombatAwsProfilePreferences {
+    pub tracked_names: HashSet<TrackedName>,
+    pub preffered_environments: Vec<Env>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserConfig {
     pub id: Uuid,
     verson: i8,
     last_used_profile: Option<String>,
-    known_profiles: HashSet<String>,
-    pub tracked_names: HashSet<TrackedName>,
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     pub dbeaver_path: Option<String>,
-    pub preffered_environments: Vec<Env>,
     pub logs_dir: Option<PathBuf>,
-    pub ssm_role: Option<HashMap<TrackedName, String>>,
+    pub preferences: Option<HashMap<String, WombatAwsProfilePreferences>>,
 }
 
 impl UserConfig {
@@ -53,14 +56,12 @@ impl UserConfig {
                 id: Uuid::new_v4(),
                 verson: 1,
                 last_used_profile: None,
-                known_profiles: HashSet::new(),
-                tracked_names: HashSet::new(),
+
                 db_proxy_port_map: HashMap::new(),
                 service_proxy_port_map: HashMap::new(),
                 dbeaver_path: None,
-                preffered_environments: vec![Env::DEV, Env::DEMO, Env::PROD],
                 logs_dir: Some(UserConfig::logs_path()),
-                ssm_role: Some(HashMap::new()),
+                preferences: Some(HashMap::new()),
             },
         };
 
@@ -71,8 +72,8 @@ impl UserConfig {
         if user_config.logs_dir.is_none() || restored {
             user_config.logs_dir = Some(UserConfig::logs_path());
         }
-        if user_config.ssm_role.is_none() {
-            user_config.ssm_role = Some(HashMap::new());
+        if user_config.preferences.is_none() {
+            user_config.preferences = Some(HashMap::new());
         }
 
         user_config
@@ -102,8 +103,14 @@ impl UserConfig {
         None
     }
 
-    pub fn save_preffered_envs(&mut self, envs: Vec<Env>) -> Result<UserConfig, BError> {
-        self.preffered_environments = envs;
+    pub fn save_preffered_envs(
+        &mut self,
+        profile_name: &str,
+        envs: Vec<Env>,
+    ) -> Result<UserConfig, BError> {
+        let preferences = self.preferences.as_mut().unwrap_or_log();
+        let preference = preferences.get_mut(profile_name).unwrap_or_log();
+        preference.preffered_environments = envs;
         self.save();
         Ok(self.clone())
     }
@@ -180,17 +187,33 @@ impl UserConfig {
         }
     }
 
-    pub fn use_profile(&mut self, profile: &str) {
+    pub fn use_profile(&mut self, profile: &str, envs: Vec<Env>, tracked_names: HashSet<String>) {
+        info!("Using profile: {profile}, envs={envs:?}, tracked_names={tracked_names:?}");
         self.last_used_profile = Some(profile.to_owned());
-        self.known_profiles.insert(profile.to_owned());
+        let preferences = self.preferences.as_mut().unwrap_or_log();
+        if !preferences.contains_key(profile) {
+            preferences.insert(
+                profile.to_owned(),
+                WombatAwsProfilePreferences {
+                    tracked_names,
+                    preffered_environments: envs,
+                },
+            );
+        }
         self.save()
     }
 
-    pub fn favorite(&mut self, tracked_name: TrackedName) -> Result<UserConfig, BError> {
+    pub fn favorite(
+        &mut self,
+        profile_name: &str,
+        tracked_name: TrackedName,
+    ) -> Result<UserConfig, BError> {
         info!("Favorite {} ", &tracked_name);
-        if !self.tracked_names.remove(&tracked_name) {
+        let preferences = self.preferences.as_mut().unwrap_or_log();
+        let preference = preferences.get_mut(profile_name).unwrap_or_log();
+        if !preference.tracked_names.remove(&tracked_name) {
             info!("Favorite Add {} ", &tracked_name);
-            self.tracked_names.insert(tracked_name);
+            preference.tracked_names.insert(tracked_name);
         }
         self.save();
         Ok(self.clone())

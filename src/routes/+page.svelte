@@ -7,7 +7,9 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/api/process';
 	import { invoke } from '@tauri-apps/api';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { envImportance } from '$lib/stores/env-store';
+	import type { WombatAwsProfile } from '$lib/types';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
@@ -18,16 +20,19 @@
 		open('https://github.com/dwilkolek/wombat/releases/latest');
 	};
 
+	const { wombatAwsProfiles } = availableProfilesStore;
 	let { subscribe, login } = userStore;
-	let profile: string = '';
-	let userId: string = '';
 
-	$: subscribe((userConfig) => {
-		profile = userConfig?.last_used_profile ?? '';
-		userId = userConfig?.id ?? '';
-	});
+	let profile: WombatAwsProfile | undefined;
+	let userId: string = $userStore.id ?? '';
 	let loading = false;
 	let buttonText = 'Start';
+	userStore.subscribe((user) => {
+		wombatAwsProfiles.subscribe((profiles) => {
+			profile = profiles.find((p) => p?.name == user.last_used_profile);
+			userId = user.id ?? '';
+		});
+	});
 	listen<string>('message', (event) => {
 		buttonText = event.payload;
 	});
@@ -39,7 +44,6 @@
 	listen<string>('KILL_ME', () => {
 		exit(1);
 	});
-	const { ssoProfiles } = availableProfilesStore;
 </script>
 
 <svelte:head>
@@ -94,13 +98,46 @@
 						<label class="label" for="aws-profile">
 							<span class="label-text">AWS profile</span>
 						</label>
-						<select class="select select-bordered w-full" bind:value={profile}>
-							{#each $ssoProfiles as ssoProfile}
-								<option value={ssoProfile.profile_name}
-									>{ssoProfile.profile_name} ({ssoProfile.infra_profiles.length})</option
-								>
-							{/each}
-						</select>
+						{#if userId}
+							<select class="select select-bordered w-full" bind:value={profile}>
+								{#each $wombatAwsProfiles as wombatAwsProfile}
+									<option value={wombatAwsProfile}>
+										{wombatAwsProfile.name}
+										{#if wombatAwsProfile.support_level == 'Full'}✅{/if}
+										{#if wombatAwsProfile.support_level == 'Partial'}⚠️{/if}
+										{#if wombatAwsProfile.support_level == 'None'}🚫{/if}
+									</option>
+								{/each}
+							</select>
+						{/if}
+					</div>
+					<div class="mt-2">
+						{#if profile}
+							<div class="flex flex-col gap-1 pl-2 text-sm">
+								{#if profile.single_source_profile}
+									<span class="font-bold">This profile is using single SSO profile.</span>
+									<span
+										>Environments: {Object.values(profile.sso_profiles)
+											.sort((a, b) => envImportance[a.env] - envImportance[b.env])
+											.map((sso) => sso.env)
+											.join(', ')}</span
+									>
+									<span
+										>Infra profiles: {Object.values(profile.sso_profiles)[0].infra_profiles
+											.length}</span
+									>
+								{:else}
+									{#each Object.values(profile.sso_profiles).sort((a, b) => envImportance[a.env] - envImportance[b.env]) as sso_profiles}
+										<div class="flex gap-1">
+											{#if sso_profiles.support_level == 'Full'}✅{/if}
+											{#if sso_profiles.support_level == 'Partial'}⚠️{/if}
+											{#if sso_profiles.support_level == 'None'}🚫{/if}
+											<b>{sso_profiles.profile_name}</b>({sso_profiles.infra_profiles.length} infra profiles)
+										</div>
+									{/each}
+								{/if}
+							</div>
+						{/if}
 					</div>
 					{#await dependenciesPromise then deps}
 						{#if !Object.entries(deps).some((v) => v[1].Err)}

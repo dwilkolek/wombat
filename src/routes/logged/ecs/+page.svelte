@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { AwsEnv, type EcsService } from '$lib/types';
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import { taskStore } from '$lib/stores/task-store';
 	import { open } from '@tauri-apps/api/shell';
 	import StarIcon from '$lib/componets/star-icon.svelte';
@@ -10,9 +10,8 @@
 	import { ask } from '@tauri-apps/api/dialog';
 
 	let arnFilter = '';
-	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
-		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 	$: activeCluser = clusterStore.activeCluser;
 

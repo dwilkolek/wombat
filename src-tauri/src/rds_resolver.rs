@@ -1,17 +1,24 @@
 use crate::{aws, cache_db};
 use log::info;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "rds";
 
 pub struct RdsResolver {
     db: Arc<RwLock<libsql::Database>>,
+    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
 }
 
 impl RdsResolver {
-    pub fn new(db: Arc<RwLock<libsql::Database>>) -> Self {
-        RdsResolver { db }
+    pub fn new(
+        db: Arc<RwLock<libsql::Database>>,
+        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    ) -> Self {
+        RdsResolver {
+            db,
+            aws_config_resolver,
+        }
     }
     pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
         {
@@ -28,9 +35,8 @@ impl RdsResolver {
         let version = cache_db::get_cache_version(conn, CACHE_NAME).await;
         info!("Version {}", &version);
         if version < 1 {
-            let result = conn
-                .execute(
-                    "CREATE TABLE IF NOT EXISTS databases(
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS databases(
                             arn TEXT PRIMARY KEY NOT NULL,
                             name TEXT NOT NULL,
                             engine TEXT NOT NULL,
@@ -40,46 +46,66 @@ impl RdsResolver {
                             env TEXT NOT NULL,
                             appname_tag TEXT NOT NULL
                         )",
-                    (),
-                )
-                .await;
-            info!("Result {:?}", &result);
+                (),
+            )
+            .await
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
     }
 
-    pub async fn refresh(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::RdsInstance> {
+    pub async fn refresh(&mut self) -> Vec<aws::RdsInstance> {
         {
             let db = self.db.read().await;
             clear_databases(&db.connect().unwrap()).await;
         }
-        self.databases(config).await
+        self.databases().await
     }
 
-    pub async fn databases(&mut self, config: &aws_config::SdkConfig) -> Vec<aws::RdsInstance> {
+    pub async fn databases(&mut self) -> Vec<aws::RdsInstance> {
         info!("Resolving databases");
+        let mut aws_config_resolver = self.aws_config_resolver.write().await;
+        let environments = aws_config_resolver.configured_envs();
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let rdses = fetch_databases(&conn).await;
         if !rdses.is_empty() {
             info!("Returning databases from cache");
-            return rdses.clone();
+            return rdses
+                .into_iter()
+                .filter(|rds| environments.iter().any(|env| env == &rds.env))
+                .collect();
         }
-        info!("Fetching rds from aws");
-        let fresh_databases = aws::databases(config).await;
-        store_databases(&conn, &fresh_databases).await;
 
+        let mut unique_databases_map = HashMap::new();
+
+        for env in environments.iter() {
+            let (profile, config) = aws_config_resolver.sso_config(env).await;
+            info!("Fetching rds from aws using profile {profile}");
+            let databases = aws::databases(&config).await;
+            for db in databases {
+                unique_databases_map.insert(db.arn.clone(), db);
+            }
+        }
+        let databases = unique_databases_map.values().cloned().collect::<Vec<_>>();
+
+        store_databases(&conn, &databases).await;
         info!(
             "Returning databases from aws and persisting, count: {}",
-            fresh_databases.len()
+            databases.len()
         );
-        fresh_databases
+        databases
     }
 
     pub async fn read_databases(&self) -> Vec<aws::RdsInstance> {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
-        fetch_databases(&conn).await
+        let databases = fetch_databases(&conn).await;
+        let environments = self.aws_config_resolver.read().await.configured_envs();
+        databases
+            .into_iter()
+            .filter(|cluster| environments.contains(&cluster.env))
+            .collect()
     }
 }
 

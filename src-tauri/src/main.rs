@@ -1,22 +1,21 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, LogEntry, RdsInstance};
+use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance, SsoProfile};
 use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use rds_resolver::RdsResolver;
-use regex::Regex;
 use serde_json::json;
 use shared::{
     arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, BError, Env, ResourceType,
 };
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -81,7 +80,6 @@ struct ServiceDetailsPayload {
 struct AuthorizedUser {
     id: uuid::Uuid,
     profile: String,
-    sdk_config: aws_config::SdkConfig,
 }
 
 const CHECK_AUTH_AFTER: i64 = 45 * 60 * 1000; // every 45 minutes.
@@ -95,34 +93,32 @@ async fn get_authorized(
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
     let user_id = app_ctx.user_id;
     let last_check = app_ctx.last_auth_check;
-
+    let aws_config_provider = app_ctx.aws_config_provider.clone();
     let now = chrono::Local::now().timestamp_millis();
     if now - last_check > CHECK_AUTH_AFTER {
         info!("Checking authentication");
-        let config = app_ctx.sdk_config.as_ref().unwrap_or_log().clone();
-        {
-            let login_check = check_login_and_trigger(user_id, &profile, &config, axiom).await;
+        for env in profile.sso_profiles.keys() {
+            let mut aws_config_provider = aws_config_provider.write().await;
+            let (aws_profile, config) = aws_config_provider.sso_config(env).await;
+            let login_check = check_login_and_trigger(user_id, &aws_profile, &config, axiom).await;
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
                 if app_ctx.no_of_failed_logins == 2 {
                     let _ = window.emit("KILL_ME", "".to_owned());
                 }
                 return Err("Authentication failed".to_owned());
+            } else {
+                app_ctx.no_of_failed_logins = 0;
             }
         }
         app_ctx.no_of_failed_logins = 0;
         app_ctx.last_auth_check = now;
     }
 
-    return Ok(AuthorizedUser {
-        profile: profile.to_owned(),
+    Ok(AuthorizedUser {
+        profile: profile.name.clone(),
         id: app_ctx.user_id,
-        sdk_config: app_ctx
-            .sdk_config
-            .as_ref()
-            .expect("Sdk Config should be initialized at all times")
-            .clone(),
-    });
+    })
 }
 
 #[tauri::command]
@@ -141,10 +137,11 @@ async fn ping() -> Result<(), ()> {
 async fn favorite(
     name: &str,
     user_config: tauri::State<'_, UserConfigState>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-
+    let aws_config_provider = aws_config_provider.0.read().await;
     ingest_log(
         &axiom.0,
         user_config.id,
@@ -154,7 +151,10 @@ async fn favorite(
     )
     .await;
 
-    user_config.favorite(name.to_owned())
+    user_config.favorite(
+        &aws_config_provider.active_wombat_profile.name,
+        name.to_owned(),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -174,16 +174,26 @@ async fn login(
 
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, BError> {
+    let environments: Vec<Env>;
+    let tracked_names: HashSet<String>;
     {
-        let mut aws_config_resolver = aws_config_provider.0.write().await;
+        let mut aws_config_provider = aws_config_provider.0.write().await;
+
         let wombat_api = wombat_api_instance.0.read().await;
         let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
-        aws_config_resolver.login(profile.to_owned(), is_enabled);
+        aws_config_provider.login(profile.to_owned(), is_enabled);
+
+        environments = aws_config_provider.configured_envs();
+        tracked_names = aws_config_provider
+            .active_wombat_profile
+            .sso_profiles
+            .values()
+            .flat_map(|sso| sso.infra_profiles.clone())
+            .map(|infra| infra.app)
+            .collect();
 
         let mut app_state = app_state.0.lock().await;
-        let (active_profile, sdk_config) = aws_config_resolver.get_user_config().await;
-        app_state.active_profile = Some(active_profile);
-        app_state.sdk_config = Some(sdk_config);
+        app_state.active_profile = Some(aws_config_provider.active_wombat_profile.clone());
     }
 
     let _ = window.emit("message", "Authenticating...");
@@ -203,7 +213,7 @@ async fn login(
 
     let _ = window.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
-    user_config.use_profile(profile);
+    user_config.use_profile(profile, environments, tracked_names);
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
 
@@ -211,9 +221,7 @@ async fn login(
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
         rds_resolver_instance.init(cache_db.clone()).await;
-        let databases = rds_resolver_instance
-            .databases(&authorized_user.sdk_config)
-            .await;
+        let databases = rds_resolver_instance.databases().await;
         ingest_log(
             &axiom.0,
             authorized_user.id,
@@ -229,9 +237,7 @@ async fn login(
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
         cluster_resolver_instance.init(cache_db.clone()).await;
-        clusters = cluster_resolver_instance
-            .clusters(&authorized_user.sdk_config)
-            .await;
+        clusters = cluster_resolver_instance.clusters().await;
         ingest_log(
             &axiom.0,
             authorized_user.id,
@@ -246,9 +252,7 @@ async fn login(
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
         ecs_resolver_instance.init(cache_db.clone()).await;
-        let services = ecs_resolver_instance
-            .services(&authorized_user.sdk_config, clusters)
-            .await;
+        let services = ecs_resolver_instance.services(clusters).await;
 
         ingest_log(
             &axiom.0,
@@ -283,9 +287,7 @@ async fn login(
         tokio::time::sleep(Duration::from_secs(120)).await;
         {
             let mut rds_resolver_instance = rds_resolver_instance.write().await;
-            let databases = rds_resolver_instance
-                .refresh(&authorized_user.sdk_config)
-                .await;
+            let databases = rds_resolver_instance.refresh().await;
 
             if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                 ingest_log_with_client(
@@ -305,9 +307,7 @@ async fn login(
             {
                 let mut cluster_resolver_instance = cluster_resolver_instance.write().await;
 
-                clusters = cluster_resolver_instance
-                    .refresh(&authorized_user.sdk_config)
-                    .await;
+                clusters = cluster_resolver_instance.refresh().await;
             }
             if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                 ingest_log_with_client(
@@ -324,9 +324,7 @@ async fn login(
         tokio::time::sleep(Duration::from_secs(30)).await;
         {
             let mut ecs_resolver_instance = ecs_resolver_instance.write().await;
-            let services = ecs_resolver_instance
-                .refresh(&authorized_user.sdk_config, clusters)
-                .await;
+            let services = ecs_resolver_instance.refresh(clusters).await;
 
             if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
                 ingest_log_with_client(
@@ -386,9 +384,11 @@ async fn set_logs_dir_path(
 async fn save_preffered_envs(
     envs: Vec<shared::Env>,
     user_config: tauri::State<'_, UserConfigState>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
+    let aws_config_provider = aws_config_provider.0.read().await;
     ingest_log(
         &axiom.0,
         user_config.id,
@@ -397,7 +397,7 @@ async fn save_preffered_envs(
         None,
     )
     .await;
-    user_config.save_preffered_envs(envs)
+    user_config.save_preffered_envs(&aws_config_provider.active_wombat_profile.name, envs)
 }
 
 #[tauri::command]
@@ -414,8 +414,9 @@ async fn credentials(
     };
     let mut aws_config_provider = aws_config_provider.0.write().await;
     let (_, aws_config) = aws_config_provider
-        .get_app_config(&db.normalized_name, &db.env)
-        .await;
+        .app_config(&db.normalized_name, &db.env)
+        .await
+        .expect_or_log("Config doesn't exist");
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -426,7 +427,7 @@ async fn credentials(
         Err(err) => {
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
-                    aws_config_provider.get_user_config().await;
+                    aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {
@@ -493,43 +494,49 @@ async fn stop_job(
         .await;
         let _ = job.kill();
         let _ = job.wait();
-        let mut out = job.take_stdout();
-        let mut session_id: Option<String> = None;
-        let session_regex = Regex::new("Starting session with SessionId: (.*)").unwrap_or_log();
 
-        if let Some(stdout) = &mut out {
-            let lines = BufReader::new(stdout).lines().enumerate().take(10);
-            for (_counter, line) in lines {
-                if let Ok(line) = line {
-                    let captures = session_regex.captures(&line);
-                    let found_session_id = captures
-                        .and_then(|c| c.get(1))
-                        .map(|e| e.as_str().to_owned());
-                    if found_session_id.is_some() {
-                        session_id = found_session_id;
-                        break;
-                    }
-                }
-            }
-        }
-        if let Some(session_id) = session_id {
-            let app_ctx = app_state.0.lock().await;
-            let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
-            let killed_session_output = Command::new("aws")
-                .args([
-                    "ssm",
-                    "terminate-session",
-                    "--session-id",
-                    &session_id,
-                    "--profile",
-                    &profile,
-                ])
-                .output();
-            match killed_session_output {
-                Ok(output) => info!("Attempted to kill session in SSM: {:?}", output),
-                Err(e) => warn!("Failed to kill session in SSM {}", e),
-            };
-        }
+        // TODO: typically user lack permission to terminate session.
+        // Most importanly we kill session on user side so probably it's fine.
+        // That whole thing bellow is responsible for it.
+
+        // let mut out = job.take_stdout();
+        // let mut session_id: Option<String> = None;
+        // let session_regex = Regex::new("Starting session with SessionId: (.*)").unwrap_or_log();
+        //
+        // if let Some(stdout) = &mut out {
+        //     let lines = BufReader::new(stdout).lines().enumerate().take(10);
+        //     for (_counter, line) in lines {
+        //         if let Ok(line) = line {
+        //             let captures = session_regex.captures(&line);
+        //             let found_session_id = captures
+        //                 .and_then(|c| c.get(1))
+        //                 .map(|e| e.as_str().to_owned());
+        //             if found_session_id.is_some() {
+        //                 session_id = found_session_id;
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
+
+        // if let Some(session_id) = session_id {
+        //     let app_ctx = app_state.0.lock().await;
+        //     let profile = app_ctx.active_profile.as_ref().unwrap_or_log();
+        //     let killed_session_output = Command::new("aws")
+        //         .args([
+        //             "ssm",
+        //             "terminate-session",
+        //             "--session-id",
+        //             &session_id,
+        //             "--profile",
+        //             &profile,
+        //         ])
+        //         .output();
+        //     match killed_session_output {
+        //         Ok(output) => info!("Attempted to kill session in SSM: {:?}", output),
+        //         Err(e) => warn!("Failed to kill session in SSM {}", e),
+        //     };
+        // }
     } else {
         ingest_log(
             &axiom.0,
@@ -560,7 +567,7 @@ async fn logout(
         ingest_log(
             &axiom.0,
             user_state.0.lock().await.id,
-            Action::Logout(profile.clone()),
+            Action::Logout(profile.name.clone()),
             None,
             None,
         )
@@ -578,7 +585,6 @@ async fn logout(
     }
 
     app_state.active_profile = None;
-    app_state.sdk_config = None;
     app_state.last_auth_check = 0;
 
     Ok(())
@@ -676,6 +682,7 @@ async fn find_logs(
     axiom: tauri::State<'_, AxiomClientState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("find_logs", msg)),
@@ -717,6 +724,14 @@ async fn find_logs(
 
     let axiom = Arc::clone(&axiom.0);
     let user_config = Arc::clone(&user_config.0);
+    let sdk_config: aws_config::SdkConfig;
+    {
+        let mut aws_config_provider = aws_config_provider.0.write().await;
+        //TODO: it will be annoying to do to search logs with different sdk_configs...
+        //Let's hope it will keep working.
+        let app_config = aws_config_provider.sso_config(&env).await;
+        sdk_config = app_config.1
+    }
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
         let action = Action::SearchLogs(
             apps.clone(),
@@ -726,7 +741,7 @@ async fn find_logs(
             filename.is_some(),
         );
         let result = aws::find_logs(
-            &authorized_user.sdk_config,
+            &sdk_config,
             env,
             apps,
             start,
@@ -848,7 +863,10 @@ async fn restart_service(
         Ok(authorized_user) => authorized_user,
     };
     let mut aws_config_provider = aws_config_provider.0.write().await;
-    let (aws_profile, aws_config) = aws_config_provider.get_config(&service_name, &env).await;
+    let (aws_profile, aws_config) = aws_config_provider
+        .app_config_with_fallback(&service_name, &env)
+        .await
+        .expect("Missing sdk_config to restart service");
     info!(
         "Attemping to restart service {} on {} with profile {}",
         &service_name, &cluster_arn, &aws_profile
@@ -886,7 +904,15 @@ async fn discover(
     let name = &name.to_lowercase();
     let tracked_names: HashSet<String>;
     {
-        tracked_names = user_config.0.lock().await.tracked_names.clone()
+        let user_config = &user_config.0.lock().await;
+        let preferences = user_config.preferences.as_ref();
+        tracked_names = preferences
+            .and_then(|prefereces| {
+                prefereces
+                    .get(&authorized_user.profile)
+                    .map(|preferences| preferences.tracked_names.clone())
+            })
+            .unwrap_or(HashSet::new());
     }
 
     let mut found_names = HashSet::new();
@@ -958,8 +984,9 @@ async fn start_db_proxy(
     };
     let mut aws_config_provider = aws_config_provider.0.write().await;
     let (aws_profile, aws_config) = aws_config_provider
-        .get_config(&db.normalized_name, &db.env)
-        .await;
+        .app_config(&db.normalized_name, &db.env)
+        .await
+        .expect("Missing sdk_config to start db proxy");
 
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
@@ -1020,21 +1047,15 @@ async fn refresh_cache(
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
-        clusters = cluster_resolver_instance
-            .refresh(&authorized_user.sdk_config)
-            .await;
+        clusters = cluster_resolver_instance.refresh().await;
     }
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
-        ecs_resolver_instance
-            .refresh(&authorized_user.sdk_config, clusters)
-            .await;
+        ecs_resolver_instance.refresh(clusters).await;
     }
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
-        rds_resolver_instance
-            .refresh(&authorized_user.sdk_config)
-            .await;
+        rds_resolver_instance.refresh().await;
     }
 
     ingest_log(&axiom.0, authorized_user.id, Action::ClearCache, None, None).await;
@@ -1043,6 +1064,7 @@ async fn refresh_cache(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn service_details(
     window: Window,
@@ -1052,11 +1074,18 @@ async fn service_details(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     rate_limitter: tauri::State<'_, ServiceDetailsRateLimiter>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("service_details", msg)),
         Ok(authorized_user) => authorized_user,
     };
+
+    let environments: Vec<Env>;
+    {
+        let aws_config_provider = aws_config_provider.0.read().await;
+        environments = aws_config_provider.configured_envs();
+    }
 
     ingest_log(
         &axiom.0,
@@ -1081,23 +1110,23 @@ async fn service_details(
         dbs_list.extend(
             all_databases
                 .into_iter()
-                .filter(|rds| rds.appname_tag == app),
+                .filter(|rds| rds.appname_tag == app && environments.contains(&rds.env)),
         );
     }
 
-    let service_arns: Vec<String>;
+    let services_to_resolve: Vec<aws::EcsService>;
     {
         let ecs_resolver_instance = ecs_resolver_instance.read().await;
         let services = ecs_resolver_instance.read_services().await;
-        service_arns = services
+        services_to_resolve = services
             .into_iter()
-            .filter(|service| app.eq(&service.name))
-            .map(|service| service.arn.clone())
+            .filter(|service| app.eq(&service.name) && environments.contains(&service.env))
             .collect()
     }
     let mut counter = rate_limitter.0.lock().await;
+    dbg!(&services_to_resolve);
     let mut services =
-        aws::service_details(authorized_user.sdk_config.clone(), service_arns.clone()).await;
+        aws::service_details(aws_config_provider.0.clone(), services_to_resolve.clone()).await;
     let mut retry_count = 3;
     while services.iter().any(|s| s.is_err()) && retry_count > 0 {
         retry_count -= 1;
@@ -1116,8 +1145,13 @@ async fn service_details(
            &app, err_service_arns.len(), &retry_count, &counter.count
         );
         tokio::time::sleep(Duration::from_secs(5)).await;
+        let err_services = services_to_resolve
+            .iter()
+            .filter(|s| err_service_arns.contains(&s.arn))
+            .cloned()
+            .collect();
         let services_refetched =
-            aws::service_details(authorized_user.sdk_config.clone(), err_service_arns).await;
+            aws::service_details(aws_config_provider.0.clone(), err_services).await;
 
         services = services
             .into_iter()
@@ -1154,6 +1188,8 @@ async fn service_details(
 async fn start_service_proxy(
     window: Window,
     service: aws::EcsService,
+    infra_profile: Option<InfraProfile>,
+    sso_profile: Option<SsoProfile>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
@@ -1187,8 +1223,9 @@ async fn start_service_proxy(
 
     let mut aws_config_provider = aws_config_provider.0.write().await;
     let (aws_profile, aws_config) = aws_config_provider
-        .get_config(&service.name, &service.env)
-        .await;
+        .with_dev_way_check(&infra_profile, &sso_profile)
+        .await
+        .expect("Missing sdk_config to start service proxy");
     let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
         .into_iter()
@@ -1211,16 +1248,23 @@ async fn start_service_proxy(
         })];
 
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
+        // let source_app_profile = proxy_auth_config.from_app.clone();
+        // let (mut source_app_profile, mut source_app_config) = aws_config_provider
+        //     .app_config(&source_app_profile, &service.env)
+        //     .await
+        //     .expect("Missing sdk_config to setup auth interceptor");
+        // if aws_config_provider.dev_way {
+        //     (source_app_profile, source_app_config) =
+        //         aws_config_provider.sso_config(&service.env).await;
+        // }
+        //
+
+        let (source_app_profile, source_app_config) = aws_config_provider
+            .with_dev_way_check(&infra_profile, &sso_profile)
+            .await
+            .expect("Missing sdk_config to setup auth interceptor");
         match proxy_auth_config.auth_type.as_str() {
             "jepsen" => {
-                let source_app_profile = proxy_auth_config.from_app.clone();
-                let (mut source_app_profile, mut source_app_config) = aws_config_provider
-                    .get_config(&source_app_profile, &service.env)
-                    .await;
-                if aws_config_provider.dev_way {
-                    (source_app_profile, source_app_config) =
-                        aws_config_provider.get_user_config().await;
-                }
                 info!(
                     "Adding jepsen auth interceptor, profile={}",
                     &source_app_profile
@@ -1235,11 +1279,11 @@ async fn start_service_proxy(
             "basic" => {
                 info!(
                     "Adding basic auth interceptor, profile={}",
-                    &authorized_user.profile
+                    &source_app_profile
                 );
                 interceptors.push(Box::new(
                     proxy_authenticators::BasicAutheticator::from_proxy_auth_config(
-                        &authorized_user.sdk_config,
+                        &source_app_config,
                         proxy_auth_config.clone(),
                     )
                     .await,
@@ -1326,7 +1370,12 @@ async fn available_infra_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<aws::InfraProfile>, BError> {
     let provider = aws_config_provider.0.read().await;
-    Ok(provider.active_sso_profile.infra_profiles.clone())
+    Ok(provider
+        .active_wombat_profile
+        .sso_profiles
+        .values()
+        .flat_map(|sso| sso.infra_profiles.clone())
+        .collect())
 }
 
 #[tauri::command]
@@ -1334,7 +1383,20 @@ async fn available_sso_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<aws::SsoProfile>, BError> {
     let provider = aws_config_provider.0.read().await;
-    Ok(provider.sso_profiles.clone())
+    Ok(provider
+        .active_wombat_profile
+        .sso_profiles
+        .values()
+        .cloned()
+        .collect())
+}
+
+#[tauri::command]
+async fn wombat_aws_profiles(
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+) -> Result<Vec<aws::WombatAwsProfile>, BError> {
+    let provider = aws_config_provider.0.read().await;
+    Ok(provider.wombat_profiles.clone())
 }
 
 #[tauri::command]
@@ -1379,8 +1441,9 @@ async fn open_dbeaver(
     }
     let mut aws_config_provider = aws_config_provider.0.write().await;
     let (_, aws_config) = aws_config_provider
-        .get_config(&db.normalized_name, &db.env)
-        .await;
+        .app_config(&db.normalized_name, &db.env)
+        .await
+        .expect("Missing sdk_config to get secreto for dbBeaver");
 
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
@@ -1391,7 +1454,7 @@ async fn open_dbeaver(
         Err(_) => {
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
-                    aws_config_provider.get_user_config().await;
+                    aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {
@@ -1440,15 +1503,15 @@ fn app_config() -> AppConfig {
     let _ = dotenv();
     AppConfig {
         wombat_api_url: env::var("WOMBAT_API_URL").unwrap_or_else(|_| {
-            debug!("Using default token since WOMBAT_API_URL was not set");
+            warn!("Using default token since WOMBAT_API_URL was not set");
             "%%WOMBAT_API_URL%%".to_string()
         }),
         wombat_api_user: env::var("WOMBAT_API_USER").unwrap_or_else(|_| {
-            debug!("Using default token since WOMBAT_API_USER was not set");
+            warn!("Using default token since WOMBAT_API_USER was not set");
             "%%WOMBAT_API_USER%%".to_string()
         }),
         wombat_api_password: env::var("WOMBAT_API_PASSWORD").unwrap_or_else(|_| {
-            debug!("Using default token since WOMBAT_API_PASSWORD was not set");
+            warn!("Using default token since WOMBAT_API_PASSWORD was not set");
             "%%WOMBAT_API_PASSWORD%%".to_string()
         }),
         logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
@@ -1499,9 +1562,25 @@ async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientS
 }
 
 async fn initialize_cache_db(profile: &str) -> libsql::Database {
+    if let Ok(paths) = user::wombat_dir().read_dir() {
+        for path in paths.flatten() {
+            if let Ok(file_name) = path.file_name().into_string() {
+                info!("file name: {}", file_name);
+                if file_name.starts_with("wombat.db") {
+                    info!("deleting wombat db: {}", file_name);
+                    let _ = fs::remove_file(path.path());
+                }
+                if file_name.starts_with("cache-") {
+                    info!("deleting cache file: {}", file_name);
+                    let _ = fs::remove_file(path.path());
+                }
+            }
+        }
+    }
+
     libsql::Builder::new_local(
         user::wombat_dir()
-            .join(format!("cache-{}.db", profile))
+            .join(format!("v1-cache-{}.db", profile))
             .to_str()
             .unwrap_or_log(),
     )
@@ -1543,7 +1622,7 @@ async fn main() {
         app_config.wombat_api_password.clone(),
         user.id,
     );
-
+    let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
     let app = tauri::Builder::default()
         .setup(|app| {
             let handle = app.handle();
@@ -1565,9 +1644,9 @@ async fn main() {
         .manage(initialize_axiom(&user, &app_config).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
+            aws_config_provider: aws_config_provider.clone(),
             user_id: user.id,
             last_auth_check: 0,
-            sdk_config: None,
             no_of_failed_logins: 0,
         }))))
         .manage(UserConfigState(Arc::new(Mutex::new(user))))
@@ -1576,20 +1655,18 @@ async fn main() {
             proxies_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
-        .manage(AwsConfigProviderInstance(Arc::new(RwLock::new(
-            aws::AwsConfigProvider::new().await,
-        ))))
+        .manage(AwsConfigProviderInstance(aws_config_provider.clone()))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
-            RdsResolver::new(cache_db.clone()),
+            RdsResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
         .manage(ServiceDetailsRateLimiter(Arc::new(Mutex::new(LockCount {
             count: 0,
         }))))
         .manage(ClusterResolverInstance(Arc::new(RwLock::new(
-            ClusterResolver::new(cache_db.clone()),
+            ClusterResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
-            EcsResolver::new(cache_db.clone()),
+            EcsResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
         .manage(WombatApiInstance(Arc::new(RwLock::new(api))))
         .invoke_handler(tauri::generate_handler![
@@ -1620,7 +1697,8 @@ async fn main() {
             ping,
             check_dependencies,
             available_infra_profiles,
-            available_sso_profiles
+            available_sso_profiles,
+            wombat_aws_profiles
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1667,16 +1745,14 @@ async fn main() {
     });
 }
 
-#[derive(Clone)]
 struct AppContext {
-    active_profile: Option<String>,
+    active_profile: Option<aws::WombatAwsProfile>,
+    aws_config_provider: Arc<RwLock<aws::AwsConfigProvider>>,
     user_id: uuid::Uuid,
-    sdk_config: Option<aws_config::SdkConfig>,
     last_auth_check: i64,
     no_of_failed_logins: i64,
 }
 
-#[derive(Clone)]
 struct AppContextState(Arc<Mutex<AppContext>>);
 
 struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);

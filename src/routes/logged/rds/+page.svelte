@@ -1,7 +1,7 @@
 <script lang="ts">
 	import dbeaver from '$lib/images/dbeaver-head.png';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import { envStore } from '$lib/stores/env-store';
 	import { taskStore } from '$lib/stores/task-store';
 	import { execute } from '$lib/stores/error-store';
@@ -9,11 +9,11 @@
 	import DbSecretBtn from '$lib/componets/db-secret-btn.svelte';
 	import { ask } from '@tauri-apps/api/dialog';
 	import { dbStore } from '$lib/stores/db-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
 	let arnFilter = '';
-	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
-		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 
 	$: databases = dbStore.getDatabases($envStore);
@@ -21,7 +21,6 @@
 	$: matchesFilter = (databse: RdsInstance): boolean => {
 		return arnFilter === '' || databse.arn.toLowerCase().indexOf(arnFilter.toLowerCase()) > 0;
 	};
-	let envs = Object.keys(AwsEnv);
 </script>
 
 <svelte:head>
@@ -30,7 +29,7 @@
 </svelte:head>
 <div class="bg-base-100 sticky top-[68px] z-50 px-2">
 	<select class="select select-bordered" bind:value={$envStore}>
-		{#each envs as env}
+		{#each $wombatProfileStore.environments as env}
 			<option value={env}>{env}</option>
 		{/each}
 	</select>

@@ -1,44 +1,58 @@
-import type { AwsEnv } from '$lib/types';
+import type { WombatAwsProfile, InfraProfile } from '$lib/types';
 import { invoke } from '@tauri-apps/api';
-import { writable } from 'svelte/store';
-type SsoProfile = {
-	profile_name: string;
-	region?: string;
-	infra_profiles: InfraProfile[];
-};
+import { derived, writable } from 'svelte/store';
+import { userStore } from './user-store';
+import { envImportance, envStore } from './env-store';
 
-type InfraProfile = {
-	source_profile: string;
-	profile_name: string;
-	region?: string;
-	app: string;
-	env: AwsEnv;
-};
 const createAvailableProfilesStore = () => {
-	const infraProfiles = writable<InfraProfile[]>([]);
-	const ssoProfiles = writable<SsoProfile[]>([]);
+	const wombatAwsProfiles = writable<WombatAwsProfile[]>([]);
 
-	invoke<InfraProfile[]>('available_infra_profiles').then((resp) => {
-		infraProfiles.set(resp);
+	invoke<WombatAwsProfile[]>('wombat_aws_profiles').then((resp) => {
+		wombatAwsProfiles.set(resp);
 	});
-	invoke<SsoProfile[]>('available_sso_profiles').then((resp) => {
-		console.log(resp);
-		ssoProfiles.set(resp);
-	});
+
 	const refresh = () => {
-		invoke<InfraProfile[]>('available_infra_profiles').then((resp) => {
-			infraProfiles.set(resp);
-		});
-		invoke<SsoProfile[]>('available_sso_profiles').then((resp) => {
-			ssoProfiles.set(resp);
+		invoke<WombatAwsProfile[]>('wombat_aws_profiles').then((resp) => {
+			wombatAwsProfiles.set(resp);
 		});
 	};
 
 	return {
 		refresh,
-		infraProfiles,
-		ssoProfiles
+		wombatAwsProfiles
 	};
 };
 
 export const availableProfilesStore = createAvailableProfilesStore();
+
+export const wombatProfileStore = derived(
+	[userStore, availableProfilesStore.wombatAwsProfiles],
+	(stores) => {
+		const wombatProfile = stores[1].find((wp) => wp.name == stores[0].last_used_profile);
+		const infraProfiles: InfraProfile[] = [];
+		if (wombatProfile?.sso_profiles) {
+			infraProfiles.push(
+				...Object.values(wombatProfile.sso_profiles)
+					.map((sso) => sso.infra_profiles)
+					.flat()
+			);
+		}
+		const ssoProfiles = wombatProfile?.sso_profiles
+			? Object.values(wombatProfile.sso_profiles)
+			: [];
+		const environments = ssoProfiles
+			.map((sso) => sso.env)
+			.sort((a, b) => envImportance[a] - envImportance[b]);
+
+		envStore.update((oldEnv) =>
+			environments.includes(oldEnv) ? oldEnv : environments[0] ?? oldEnv
+		);
+
+		return {
+			wombatProfile,
+			ssoProfiles,
+			infraProfiles,
+			environments
+		};
+	}
+);
