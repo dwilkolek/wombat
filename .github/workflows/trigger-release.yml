@@ -30,5 +30,4 @@ jobs:
           git config --global user.email 'wombat@users.noreply.github.com'
       - name: bump version
         run: |
-          npm run bump-version ${{ inputs.version }}
-          git push
+          npm run bump-version ${{ inputs.version }} true

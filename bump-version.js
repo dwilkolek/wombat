@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as cp from 'child_process';
 
+const useBranch = Boolean(`${process.argv[3]}`);
 const newVersion = `${process.argv[2]}`;
 const safeNewVersion = newVersion.match(/([0-9]+.[0-9]+.[0-9]+)/)[0];
 
@@ -31,8 +32,15 @@ cp.execSync('npm install');
 cp.execSync('cd src-tauri && cargo generate-lockfile && cd ..');
 
 setTimeout(() => {
+	if (useBranch) {
+		cp.execSync(`git checkout -b "release-v${newVersion}"`);
+	}
 	cp.execSync(`git commit -a -m"Release v${newVersion}"`);
 	cp.execSync(`git tag v${newVersion}`);
 	cp.execSync(`git push origin v${newVersion}`);
+	if (useBranch) {
+		cp.execSync(`git push origin "release-v${newVersion}"`);
+		cp.execSync(`git checkout -`);
+	}
 	console.log(`Done`);
 }, 20000);
