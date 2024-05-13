@@ -33,7 +33,7 @@ jobs:
           npm run bump-version ${{ inputs.version }} true
       - name: open pr
         run: |
-          gh pr create -B main -H release-v${{ inputs.version }} --title 'Release v${{ inputs.version }' --body 'Created by Github action'
+          gh pr create -B main -H release-v${{ inputs.version }} --title 'Release v${{ inputs.version }}' --body 'Created by Github action'
           gh pr merge release-v${{ inputs.version }} --auto
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
