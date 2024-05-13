@@ -1124,7 +1124,6 @@ async fn service_details(
             .collect()
     }
     let mut counter = rate_limitter.0.lock().await;
-    dbg!(&services_to_resolve);
     let mut services =
         aws::service_details(aws_config_provider.0.clone(), services_to_resolve.clone()).await;
     let mut retry_count = 3;
