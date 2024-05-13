@@ -27,8 +27,8 @@ jobs:
         run: npm ci
       - name: Configure git
         run: |
-          git config --global user.name 'Wombat'
-          git config --global user.email 'wombat@users.noreply.github.com'
+          git config --global user.name 'dwilkolek'
+          git config --global user.email 'dwilkolek@users.noreply.github.com'
       - name: bump version and open pr
         run: |
           npm run bump-version ${{ inputs.version }} true
