@@ -171,7 +171,8 @@ pub struct SsoProfile {
 impl SsoProfile {
     fn for_env(&self, env: Env) -> Self {
         let mut clone = self.clone();
-        clone.env = env;
+        clone.env = env.clone();
+        clone.infra_profiles.retain(|infra| infra.env == env);
         clone
     }
 }
@@ -364,23 +365,23 @@ impl AwsConfigProvider {
     fn load_aws_profile_configuration(profile_set: &ProfileSet) -> Vec<WombatAwsProfile> {
         let mut wombat_profiles: HashMap<String, WombatAwsProfile> = HashMap::new();
         let infra_profiles = Self::read_infra_profiles(profile_set);
-        let mut groupped_infra_profiles_by_source_profile: HashMap<String, Vec<InfraProfile>> =
-            HashMap::new();
-        for infra_profile in infra_profiles.into_iter() {
-            if !groupped_infra_profiles_by_source_profile
-                .contains_key(&infra_profile.source_profile)
-            {
-                groupped_infra_profiles_by_source_profile.insert(
-                    infra_profile.source_profile.clone(),
-                    vec![infra_profile.clone()],
-                );
-            } else {
-                let entry = groupped_infra_profiles_by_source_profile
-                    .get_mut(&infra_profile.source_profile)
-                    .unwrap_or_log();
-                entry.push(infra_profile.clone())
-            }
-        }
+        // let mut groupped_infra_profiles_by_source_profile: Vec<InfraProfile>> =
+        //     HashMap::new();
+        // for infra_profile in infra_profiles.into_iter() {
+        //     if !groupped_infra_profiles_by_source_profile
+        //         .contains_key(&infra_profile.source_profile)
+        //     {
+        //         groupped_infra_profiles_by_source_profile.insert(
+        //             infra_profile.source_profile.clone(),
+        //             vec![infra_profile.clone()],
+        //         );
+        //     } else {
+        //         let entry = groupped_infra_profiles_by_source_profile
+        //             .get_mut(&infra_profile.source_profile)
+        //             .unwrap_or_log();
+        //         entry.push(infra_profile.clone())
+        //     }
+        // }
 
         for profile in profile_set.profiles() {
             if let Some(profile_details) = profile_set.get_profile(profile) {
@@ -391,10 +392,11 @@ impl AwsConfigProvider {
                     Some(role) => !role.ends_with("-infra") && is_sso_profile,
                     None => is_sso_profile,
                 };
-                let infra_profiles = groupped_infra_profiles_by_source_profile
-                    .get(profile)
-                    .unwrap_or(&Vec::new())
-                    .clone();
+                let infra_profiles = infra_profiles
+                    .iter()
+                    .filter(|infra| infra.source_profile == profile)
+                    .cloned()
+                    .collect();
                 if valid_sso_profile {
                     let sso_profile = SsoProfile {
                         profile_name: profile.to_owned(),
