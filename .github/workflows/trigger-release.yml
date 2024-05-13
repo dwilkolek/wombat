@@ -38,6 +38,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   publish-tauri:
+    needs: 'trigger-release'
     permissions:
       contents: write
     strategy:
