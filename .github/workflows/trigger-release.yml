@@ -29,11 +29,9 @@ jobs:
         run: |
           git config --global user.name 'Wombat'
           git config --global user.email 'wombat@users.noreply.github.com'
-      - name: bump version
+      - name: bump version and open pr
         run: |
           npm run bump-version ${{ inputs.version }} true
-      - name: open pr
-        run: |
           gh pr create -B main -H release-v${{ inputs.version }} --title 'Release v${{ inputs.version }}' --body 'Created by Github action'
           gh pr merge release-v${{ inputs.version }} --auto
         env:
