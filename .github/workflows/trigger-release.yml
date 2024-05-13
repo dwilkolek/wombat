@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     runs-on: 'macos-latest'
     steps:
       - uses: actions/checkout@v4
