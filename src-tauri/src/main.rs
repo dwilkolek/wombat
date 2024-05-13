@@ -1189,6 +1189,7 @@ async fn start_service_proxy(
     service: aws::EcsService,
     infra_profile: Option<InfraProfile>,
     sso_profile: Option<SsoProfile>,
+    custom_headers: HashMap<String, String>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
@@ -1240,10 +1241,12 @@ async fn start_service_proxy(
     )
     .await;
 
+    let mut headers = HashMap::from([(String::from("Host"), host.clone())]);
+    headers.extend(custom_headers);
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
             path_prefix: String::from(""),
-            headers: HashMap::from([(String::from("Host"), host.clone())]),
+            headers,
         })];
 
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {

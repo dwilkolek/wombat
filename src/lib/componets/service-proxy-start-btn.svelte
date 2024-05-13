@@ -8,9 +8,11 @@
 		type SsoProfile
 	} from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { ask, message } from '@tauri-apps/api/dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import CustomHeaderForm from './custom-header-form.svelte';
+	import { type CustomHeader } from '$lib/types';
 
 	export let service: ServiceDetails;
 	let dialog: HTMLDialogElement;
@@ -23,6 +25,7 @@
 		$wombatProfileStore.ssoProfiles.at(0);
 	let useDevWayFeature = false;
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined;
+	let customHeaders: CustomHeader[] = [];
 
 	$: matchingInfraProfiles =
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
@@ -32,7 +35,8 @@
 	const startProxy = async (
 		infraProfile: InfraProfile | null | undefined,
 		ssoProfile: SsoProfile | null | undefined,
-		proxyAuthConfig: ProxyAuthConfig | null | undefined
+		proxyAuthConfig: ProxyAuthConfig | null | undefined,
+		customHeadersList: CustomHeader[]
 	) => {
 		if (service?.env == AwsEnv.PROD) {
 			let response = await ask(
@@ -48,7 +52,17 @@
 				return;
 			}
 		}
-		invoke('start_service_proxy', { service, proxyAuthConfig, infraProfile, ssoProfile });
+		const customHeaders: { [key: string]: string } = {};
+		customHeadersList.forEach((header) => {
+			customHeaders[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
+		});
+		invoke('start_service_proxy', {
+			service,
+			proxyAuthConfig,
+			infraProfile,
+			ssoProfile,
+			customHeaders
+		});
 	};
 </script>
 
@@ -94,65 +108,88 @@
 	on:close={() => console.log('closed')}
 	class="modal bg-black bg-opacity-60"
 >
-	<div class="modal-box">
+	<div class="modal-box w-11/12 max-w-[960px]">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
-				<h1 class="text-lg">Configure proxy</h1>
-				<div class="flex gap-2">
-					<span>App: <b>{service.name}</b></span> | <span>Env: <b>{service.env}</b></span>
+				<div class="flex gap-2 items-center justify-between">
+					<h2 class="flex items-center gap-2">
+						<span class="text-lg font-h2 font-bold">Setup proxy:</span>
+						<span>App: <b>{service.name}</b></span> | <span>Env: <b>{service.env}</b></span>
+					</h2>
+					<button
+						class="btn btn-circle btn-sm"
+						on:click|preventDefault={() => {
+							dialog.close();
+						}}
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-6 w-6"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							><path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M6 18L18 6M6 6l12 12"
+							/></svg
+						>
+					</button>
 				</div>
 			</div>
-			{#if $featuresStore.devWay}
-				<div class="flex gap-2 items-center">
-					<label class="cursor-pointer flex items-center gap-2">
-						<span class="text-md pr-4">Use dev way feature</span>
-						<input
-							type="checkbox"
-							class="toggle toggle-primary toggle-sm"
-							bind:checked={useDevWayFeature}
-						/>
-					</label>
+			<div class="flex flex-col gap-1">
+				<span>Profile:</span>
+				<div class="flex gap-4 items-end">
+					<div class="w-32">
+						<!-- svelte-ignore a11y-autofocus -->
+						<select
+							autofocus
+							class="select select-bordered w-full select-sm"
+							bind:value={useDevWayFeature}
+						>
+							<option value={false}> Infra </option>
+							<option value={true} disabled={!$featuresStore.devWay}> SSO </option>
+						</select>
+					</div>
+					{#if useDevWayFeature}
+						<div class="grow">
+							<!-- svelte-ignore a11y-autofocus -->
+							<select
+								autofocus
+								class="select select-bordered w-full select-sm"
+								bind:value={selectedSsoProxy}
+							>
+								{#each $wombatProfileStore.ssoProfiles as ssoProfile}
+									{#if ssoProfile.env == service.env}
+										<option value={ssoProfile}>
+											{ssoProfile.profile_name}
+										</option>
+									{/if}
+								{/each}
+							</select>
+						</div>
+					{/if}
+					{#if !useDevWayFeature}
+						<div class="grow">
+							<!-- svelte-ignore a11y-autofocus -->
+							<select
+								autofocus
+								class="select select-bordered w-full select-sm"
+								bind:value={selectedInfraProfile}
+							>
+								{#each matchingInfraProfiles as infraProfile}
+									<option value={infraProfile}>
+										{infraProfile.profile_name}
+									</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
 				</div>
-			{/if}
-			{#if useDevWayFeature}
-				<div>
-					Using sso profile:
-					<!-- svelte-ignore a11y-autofocus -->
-					<select
-						autofocus
-						class="select select-bordered w-full select-sm"
-						bind:value={selectedSsoProxy}
-					>
-						{#each $wombatProfileStore.ssoProfiles as ssoProfile}
-							{#if ssoProfile.env == service.env}
-								<option value={ssoProfile}>
-									{ssoProfile.profile_name}
-								</option>
-							{/if}
-						{/each}
-					</select>
-				</div>
-			{/if}
-			{#if !useDevWayFeature}
-				<div>
-					Using infra profile:
-					<!-- svelte-ignore a11y-autofocus -->
-					<select
-						autofocus
-						class="select select-bordered w-full select-sm"
-						bind:value={selectedInfraProfile}
-					>
-						{#each matchingInfraProfiles as infraProfile}
-							<option value={infraProfile}>
-								{infraProfile.profile_name}
-							</option>
-						{/each}
-					</select>
-				</div>
-			{/if}
-
-			<div>
-				Authentication interceptor:
+			</div>
+			<div class="flex flex-col gap-1">
+				<span>Authentication interceptor:</span>
 				<select
 					class="select select-bordered w-full select-sm"
 					bind:value={selectedAuthInterceptor}
@@ -171,7 +208,73 @@
 				</select>
 			</div>
 
-			<div class="flex flex-row justify-end gap-2 my-2">
+			<div>
+				<div class="flex items-center gap-2 pb-2">
+					Custom headers <button
+						class="btn btn-xs btn-accent"
+						disabled={!$featuresStore.proxyCustomHeaders}
+						on:click={() => {
+							let uuid = 'a77e0899-bb86-4551-b737-f28971f2d943';
+							if (service.env == AwsEnv.DEMO) {
+								uuid = '0a8d41aa-f38d-45fc-852b-6a01f57bbc54';
+							}
+							if (service.env == AwsEnv.PROD) {
+								uuid = 'b0152a54-650e-47eb-87e0-075776ab3860';
+							}
+							customHeaders = [
+								{
+									name: 'USER-UUID',
+									value: uuid,
+									encodeBase64: true
+								},
+								{
+									name: 'USER-EMAIL',
+									value: 'Johnny.Oil@outlook.com',
+									encodeBase64: true
+								},
+								{
+									name: 'USER-NAME',
+									value: 'Johnny Oil',
+									encodeBase64: true
+								},
+								{
+									name: 'USER-ROLES',
+									value: 'ADMIN,USER',
+									encodeBase64: true
+								}
+							];
+						}}>+ example user headers</button
+					>
+				</div>
+				<div class="flex gap-1 flex-col">
+					{#each customHeaders as header}
+						{#key JSON.stringify(header)}
+							<CustomHeaderForm
+								added={true}
+								{header}
+								disabled={!$featuresStore.proxyCustomHeaders}
+								onRemove={(name) => {
+									customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
+								}}
+							/>
+						{/key}
+					{/each}
+					<CustomHeaderForm
+						added={false}
+						disabled={!$featuresStore.proxyCustomHeaders}
+						header={{ encodeBase64: false, name: '', value: '' }}
+						onAdd={(header) => {
+							if (customHeaders.some((ch) => header.name == ch.name)) {
+								message(`Header name needs to be unique`, { title: 'Ooops!', type: 'error' });
+								return;
+							}
+							customHeaders = [...customHeaders, header];
+						}}
+					/>
+				</div>
+			</div>
+
+			<div class="flex flex-row justify-end gap-2 mt-2">
 				<button
 					disabled={!selectedInfraProfile && !selectedSsoProxy}
 					class="btn btn-active btn-accent btn-sm"
@@ -179,20 +282,12 @@
 						startProxy(
 							useDevWayFeature ? null : selectedInfraProfile,
 							useDevWayFeature ? selectedSsoProxy : null,
-							selectedAuthInterceptor
+							selectedAuthInterceptor,
+							customHeaders
 						);
 					}}
 				>
 					Start proxy</button
-				>
-
-				<button
-					class="btn btn-active justify-items-end btn-error btn-sm"
-					on:click|preventDefault={() => {
-						dialog.close();
-					}}
-				>
-					Close</button
 				>
 			</div>
 		</div>
