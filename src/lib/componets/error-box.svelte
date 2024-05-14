@@ -24,15 +24,9 @@
 				>
 			</button>
 			{#if $error === 'No secret found'}
-				<div>
-					Secret to databse not found. See: <a
-						class="text-red-950 underline"
-						target="_blank"
-						href="https://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store"
-					>
-						Configuration: Setup profile to access ssm/parameter store</a
-					>
-				</div>
+				<div>Secret to database not found</div>
+			{:else if $error === 'Access denied'}
+				<div>Access denied when requested secret value</div>
 			{:else}
 				<span>{$error}</span>
 			{/if}
