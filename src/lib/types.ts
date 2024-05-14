@@ -41,9 +41,9 @@ export type Cluster = {
 };
 type EnvPortMap = { [key: string]: number };
 export type WombatProfilePreferences = {
-	preffered_environments: AwsEnv[],
-	tracked_names: string[],
-}
+	preffered_environments: AwsEnv[];
+	tracked_names: string[];
+};
 export type UserConfig = {
 	id: string | undefined;
 	last_used_profile: string | undefined;
@@ -52,7 +52,7 @@ export type UserConfig = {
 	logs_dir: string;
 	db_proxy_port_map: { [key: string]: EnvPortMap };
 	service_proxy_port_map: { [key: string]: EnvPortMap };
-	preferences: {[key: string]: WombatProfilePreferences}
+	preferences: { [key: string]: WombatProfilePreferences };
 };
 
 export type EcsService = {
@@ -129,4 +129,10 @@ export type ProxyAuthConfig = {
 	basicUser: string | null | undefined;
 
 	secretName: string;
+};
+
+export type CustomHeader = {
+	name: string;
+	value: string;
+	encodeBase64: boolean;
 };
