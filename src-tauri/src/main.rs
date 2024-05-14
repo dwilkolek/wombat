@@ -1189,7 +1189,7 @@ async fn start_service_proxy(
     service: aws::EcsService,
     infra_profile: Option<InfraProfile>,
     sso_profile: Option<SsoProfile>,
-    custom_headers: HashMap<String, String>,
+    headers: HashMap<String, String>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
@@ -1231,7 +1231,6 @@ async fn start_service_proxy(
         .into_iter()
         .find(|b| b.env == service.env)
         .expect("No bastion found");
-    let host = format!("{}.service", service.name);
     ingest_log(
         &axiom.0,
         authorized_user.id,
@@ -1241,8 +1240,6 @@ async fn start_service_proxy(
     )
     .await;
 
-    let mut headers = HashMap::from([(String::from("Host"), host.clone())]);
-    headers.extend(custom_headers);
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
             path_prefix: String::from(""),
@@ -1306,6 +1303,7 @@ async fn start_service_proxy(
 
     let region = aws_config_provider.get_region(&aws_profile).await;
 
+    let host = format!("{}.service", service.name);
     proxy::start_aws_ssm_proxy(
         service.arn,
         window,

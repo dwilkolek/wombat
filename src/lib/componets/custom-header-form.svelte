@@ -12,6 +12,10 @@
 	<label class="form-control w-full max-w-xs">
 		<input
 			{disabled}
+			autocomplete="off"
+			autocorrect="off"
+			autocapitalize="off"
+			spellcheck="false"
 			type="text"
 			placeholder="name"
 			bind:value={header.name}
@@ -21,6 +25,10 @@
 	<label class="form-control w-full max-w-xs">
 		<input
 			{disabled}
+			autocomplete="off"
+			autocorrect="off"
+			autocapitalize="off"
+			spellcheck="false"
 			type="text"
 			placeholder="value"
 			bind:value={header.value}

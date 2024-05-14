@@ -25,7 +25,13 @@
 		$wombatProfileStore.ssoProfiles.at(0);
 	let useDevWayFeature = false;
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined;
-	let customHeaders: CustomHeader[] = [];
+	let customHeaders: CustomHeader[] = [
+		{
+			name: 'Host',
+			encodeBase64: false,
+			value: `${service.name}.service`
+		}
+	];
 
 	$: matchingInfraProfiles =
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
@@ -52,16 +58,16 @@
 				return;
 			}
 		}
-		const customHeaders: { [key: string]: string } = {};
+		const headers: { [key: string]: string } = {};
 		customHeadersList.forEach((header) => {
-			customHeaders[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
+			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
 		});
 		invoke('start_service_proxy', {
 			service,
 			proxyAuthConfig,
 			infraProfile,
 			ssoProfile,
-			customHeaders
+			headers
 		});
 	};
 </script>
@@ -210,7 +216,7 @@
 
 			<div>
 				<div class="flex items-center gap-2 pb-2">
-					Custom headers <button
+					Headers <button
 						class="btn btn-xs btn-accent"
 						disabled={!$featuresStore.proxyCustomHeaders}
 						on:click={() => {
@@ -222,6 +228,9 @@
 								uuid = 'b0152a54-650e-47eb-87e0-075776ab3860';
 							}
 							customHeaders = [
+								...customHeaders.filter(
+									(h) => !['USER-UUID', 'USER-EMAIL', 'USER-NAME', 'USER-ROLES'].includes(h.name)
+								),
 								{
 									name: 'USER-UUID',
 									value: uuid,
@@ -243,7 +252,29 @@
 									encodeBase64: true
 								}
 							];
-						}}>+ example user headers</button
+						}}>+ example user</button
+					>
+
+					<button
+						class="btn btn-xs btn-accent"
+						disabled={!$featuresStore.proxyCustomHeaders}
+						on:click={() => {
+							let uuid = 'a77e0899-bb86-4551-b737-f28971f2d943';
+							if (service.env == AwsEnv.DEMO) {
+								uuid = '0a8d41aa-f38d-45fc-852b-6a01f57bbc54';
+							}
+							if (service.env == AwsEnv.PROD) {
+								uuid = 'b0152a54-650e-47eb-87e0-075776ab3860';
+							}
+							customHeaders = [
+								{
+									name: 'Host',
+									encodeBase64: false,
+									value: `${service.name}.service`
+								},
+								...customHeaders.filter((h) => h.name.toLowerCase() !== 'host')
+							];
+						}}>+ host</button
 					>
 				</div>
 				<div class="flex gap-1 flex-col">
@@ -259,18 +290,22 @@
 							/>
 						{/key}
 					{/each}
-					<CustomHeaderForm
-						added={false}
-						disabled={!$featuresStore.proxyCustomHeaders}
-						header={{ encodeBase64: false, name: '', value: '' }}
-						onAdd={(header) => {
-							if (customHeaders.some((ch) => header.name == ch.name)) {
-								message(`Header name needs to be unique`, { title: 'Ooops!', type: 'error' });
-								return;
-							}
-							customHeaders = [...customHeaders, header];
-						}}
-					/>
+					{#if $featuresStore.proxyCustomHeaders}
+						<CustomHeaderForm
+							added={false}
+							disabled={!$featuresStore.proxyCustomHeaders}
+							header={{ encodeBase64: false, name: '', value: '' }}
+							onAdd={(header) => {
+								if (
+									customHeaders.some((ch) => header.name.toLowerCase() == ch.name.toLowerCase())
+								) {
+									message(`Header name needs to be unique`, { title: 'Ooops!', type: 'error' });
+									throw Error('invalid header');
+								}
+								customHeaders = [...customHeaders, header];
+							}}
+						/>
+					{/if}
 				</div>
 			</div>
 
