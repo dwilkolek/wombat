@@ -365,23 +365,6 @@ impl AwsConfigProvider {
     fn load_aws_profile_configuration(profile_set: &ProfileSet) -> Vec<WombatAwsProfile> {
         let mut wombat_profiles: HashMap<String, WombatAwsProfile> = HashMap::new();
         let infra_profiles = Self::read_infra_profiles(profile_set);
-        // let mut groupped_infra_profiles_by_source_profile: Vec<InfraProfile>> =
-        //     HashMap::new();
-        // for infra_profile in infra_profiles.into_iter() {
-        //     if !groupped_infra_profiles_by_source_profile
-        //         .contains_key(&infra_profile.source_profile)
-        //     {
-        //         groupped_infra_profiles_by_source_profile.insert(
-        //             infra_profile.source_profile.clone(),
-        //             vec![infra_profile.clone()],
-        //         );
-        //     } else {
-        //         let entry = groupped_infra_profiles_by_source_profile
-        //             .get_mut(&infra_profile.source_profile)
-        //             .unwrap_or_log();
-        //         entry.push(infra_profile.clone())
-        //     }
-        // }
 
         for profile in profile_set.profiles() {
             if let Some(profile_details) = profile_set.get_profile(profile) {
