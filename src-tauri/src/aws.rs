@@ -676,12 +676,19 @@ pub async fn db_secret(
     let secret_client = secretsmanager::Client::new(config);
 
     for secret in possible_secrets {
+        info!("Looking for db credentials by name: {secret}");
         let filter = secretsmanager::types::Filter::builder()
             .key("name".into())
             .values(&secret)
             .build();
         let secret_arn = secret_client.list_secrets().filters(filter).send().await;
         if secret_arn.is_err() {
+            let err = secret_arn.unwrap_err();
+            let error_str = err
+                .source()
+                .map(|s| s.to_string())
+                .unwrap_or(err.to_string());
+            warn!("failed to fetch secret, reason: {}", error_str);
             return Err(BError::new("db_secret", "Auth error?"));
         }
         let secret_arn = secret_arn.expect("Failed to fetch!");
@@ -697,7 +704,13 @@ pub async fn db_secret(
                 .send()
                 .await;
             if secret.is_err() {
-                return Err(BError::new("db_secret", "No secret found"));
+                let err = secret.unwrap_err();
+                let error_str = err
+                    .source()
+                    .map(|s| s.to_string())
+                    .unwrap_or(err.to_string());
+                warn!("failed to get secret value, reason: {}", error_str);
+                return Err(BError::new("db_secret", "Access denied"));
             }
             let secret = secret.unwrap_or_log();
             let secret = secret.secret_string().expect("There should be a secret");

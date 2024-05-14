@@ -38,6 +38,21 @@
 		[];
 	$: isStartButtonDisabled = matchingInfraProfiles.length === 0;
 
+	$: proxyAuthConfigsForThisService = $proxyAuthConfigsStore.filter(
+		(config) => config.env == service.env && config.toApp == service.name
+	);
+
+	$: filterForInfraProfile = (
+		configs: ProxyAuthConfig[],
+		infraProfile: InfraProfile | undefined
+	) => {
+		return configs.filter(
+			(config) =>
+				useDevWayFeature ||
+				(infraProfile && (config.fromApp == '*' || infraProfile.app == config.fromApp))
+		);
+	};
+
 	const startProxy = async (
 		infraProfile: InfraProfile | null | undefined,
 		ssoProfile: SsoProfile | null | undefined,
@@ -167,9 +182,10 @@
 								bind:value={selectedSsoProxy}
 							>
 								{#each $wombatProfileStore.ssoProfiles as ssoProfile}
-									{#if ssoProfile.env == service.env}
+									{#if ssoProfile.env == service.env}{@const interceptorCount =
+											filterForInfraProfile(proxyAuthConfigsForThisService, undefined).length}
 										<option value={ssoProfile}>
-											{ssoProfile.profile_name}
+											{ssoProfile.profile_name} - {interceptorCount} interceptor(s)
 										</option>
 									{/if}
 								{/each}
@@ -185,8 +201,12 @@
 								bind:value={selectedInfraProfile}
 							>
 								{#each matchingInfraProfiles as infraProfile}
+									{@const interceptorCount = filterForInfraProfile(
+										proxyAuthConfigsForThisService,
+										infraProfile
+									).length}
 									<option value={infraProfile}>
-										{infraProfile.profile_name}
+										{infraProfile.profile_name} - {interceptorCount} interceptor(s)
 									</option>
 								{/each}
 							</select>
@@ -202,14 +222,10 @@
 				>
 					<option value={undefined}>None</option>
 
-					{#each $proxyAuthConfigsStore as config}
-						{#if config.env == service.env && config.toApp == service.name}
-							{#if useDevWayFeature || (selectedInfraProfile && (config.fromApp == '*' || selectedInfraProfile.app == config.fromApp))}
-								<option value={config}>
-									{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}
-								</option>
-							{/if}
-						{/if}
+					{#each filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile) as config}
+						<option value={config}>
+							{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}
+						</option>
 					{/each}
 				</select>
 			</div>
@@ -291,6 +307,7 @@
 						{/key}
 					{/each}
 					{#if $featuresStore.proxyCustomHeaders}
+						<hr class="h-px my-1 bg-gray-200 border-0 dark:bg-gray-700" />
 						<CustomHeaderForm
 							added={false}
 							disabled={!$featuresStore.proxyCustomHeaders}

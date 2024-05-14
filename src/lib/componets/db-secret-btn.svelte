@@ -29,7 +29,7 @@
 				}
 			} catch (e) {
 				message(
-					`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?\n\nhttps://github.com/dwilkolek/wombat/wiki/Configuration#setup-profile-to-access-ssmparameter-store`,
+					`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?`,
 					{ title: 'Ooops!', type: 'error' }
 				);
 			}
