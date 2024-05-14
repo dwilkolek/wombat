@@ -1,4 +1,4 @@
-use log::info;
+use log::{error, info};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -34,20 +34,15 @@ pub struct UserConfig {
 impl UserConfig {
     pub fn default() -> UserConfig {
         let config_file = UserConfig::config_path();
-        let mut restored = false;
-        if !config_file.exists() {
-            let _ = fs::create_dir_all(wombat_dir());
-            let old_config = home::home_dir()
-                .unwrap_or_log()
-                .as_path()
-                .join(".wombat_v1");
-
-            if old_config.exists() {
-                info!("Migrating old config");
-                restored = true;
-                let _ = fs::copy(&old_config, &config_file);
-                let _ = fs::remove_file(&old_config);
-            }
+        let config_file_v3 = UserConfig::config_path_v3();
+        if !config_file.exists() && config_file_v3.exists() {
+            match fs::copy(config_file_v3, &config_file) {
+                Ok(_) => info!("created copy of v3 config file"),
+                Err(e) => error!(
+                    "failed to create copy of v3 config file to use as base for v4, reason: {}",
+                    e,
+                ),
+            };
         }
 
         let mut user_config = match std::fs::read_to_string(config_file) {
@@ -69,7 +64,7 @@ impl UserConfig {
             user_config.dbeaver_path =
                 UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
         }
-        if user_config.logs_dir.is_none() || restored {
+        if user_config.logs_dir.is_none() {
             user_config.logs_dir = Some(UserConfig::logs_path());
         }
         if user_config.preferences.is_none() {
@@ -78,9 +73,11 @@ impl UserConfig {
 
         user_config
     }
-
-    fn config_path() -> PathBuf {
+    fn config_path_v3() -> PathBuf {
         wombat_dir().join("config.json")
+    }
+    fn config_path() -> PathBuf {
+        wombat_dir().join("config-v4.json")
     }
 
     fn logs_path() -> PathBuf {
