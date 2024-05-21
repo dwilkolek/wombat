@@ -1,5 +1,5 @@
 use crate::{aws, cache_db, shared::BError};
-use log::info;
+use log::{info, warn};
 use std::{collections::HashMap, sync::Arc};
 use tauri::Window;
 use tokio::sync::RwLock;
@@ -129,17 +129,22 @@ impl EcsResolver {
         }
 
         let mut unique_services_map = HashMap::new();
-        for env in environments.iter() {
-            let (profile, config) = aws_config_resolver.sso_config(env).await;
-            info!("Fetching ecs from aws using {profile}");
-            let services = aws::services(&config, &clusters).await;
-            for service in services {
-                if clusters
-                    .iter()
-                    .any(|cluster| cluster.arn == service.cluster_arn)
-                {
+        for cluster in clusters {
+            if environments.contains(&cluster.env) {
+                let (profile, config) = aws_config_resolver.sso_config(&cluster.env).await;
+                info!(
+                    "Using profile={} to resolve services for cluster={}",
+                    cluster.arn, profile
+                );
+                let services = aws::services(&config, &cluster).await;
+                for service in services {
                     unique_services_map.insert(service.arn.clone(), service);
                 }
+            } else {
+                warn!(
+                    "Skipping cluster: {} cause not in configured environments",
+                    cluster.arn
+                )
             }
         }
 
