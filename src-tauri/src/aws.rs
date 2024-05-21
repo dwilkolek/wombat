@@ -951,28 +951,9 @@ pub async fn restart_service(
     }
 }
 
-pub async fn services(config: &aws_config::SdkConfig, clusters: &[Cluster]) -> Vec<EcsService> {
-    let mut handles = vec![];
-    let mut results = vec![];
-    for cluster in clusters.iter() {
-        let config = config.clone();
-        let cluster = cluster.clone();
-        handles.push(tokio::spawn(async move {
-            service(&config, cluster.clone()).await
-        }));
-    }
-
-    for handle in handles {
-        let res = handle.await.unwrap_or_log();
-        results.extend(res);
-    }
-
-    results
-}
-
-pub async fn service(config: &aws_config::SdkConfig, cluster: Cluster) -> Vec<EcsService> {
+pub async fn services(config: &aws_config::SdkConfig, cluster: &Cluster) -> Vec<EcsService> {
     let ecs_client = ecs::Client::new(config);
-    info!("Fetching services for {}", &cluster.arn);
+    info!("Fetching services for {}", cluster.arn);
     let mut values = vec![];
     let mut has_more = true;
     let mut next_token = None;
