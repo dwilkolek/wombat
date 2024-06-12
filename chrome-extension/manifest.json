@@ -9,7 +9,8 @@
     "cookies"
   ],
   "host_permissions": [
-    "*://*.services.technipfmc.com/*"
+    "*://*.services.technipfmc.com/*",
+    "http://localhost:6891/*"
   ],
   "background": {
     "service_worker": "background.js"
