@@ -35,6 +35,7 @@ mod ecs_resolver;
 mod proxy;
 mod proxy_authenticators;
 mod rds_resolver;
+mod rest_api;
 mod shared;
 mod user;
 mod wombat_api;
@@ -1592,6 +1593,8 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
+
+    tokio::task::spawn(rest_api::serve());
 
     let app_config = app_config();
     let _guard = match app_config.logger.as_str() {
