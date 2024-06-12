@@ -6,7 +6,6 @@
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import StarIcon from './star-icon.svelte';
-	import { ENVIRONMENTS } from '$lib/stores/env-store';
 	import type { AwsEnv } from '$lib/types';
 	import { taskStore } from '$lib/stores/task-store';
 	import DbTaskStatus from './db-task-status.svelte';
@@ -24,7 +23,6 @@
 
 	$: tasks = $taskStore;
 
-	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
 		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};

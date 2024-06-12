@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api';
 
-	export let service_arn: String;
+	export let service_arn: string;
 </script>
 
 <div class="tooltip tooltip-left flex" data-tip="Stop proxy to service">
