@@ -1,4 +1,3 @@
-console.log('background.js loaded');
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 	if (request.action === 'closeTab') {
 		chrome.tabs.remove(sender.tab.id);
@@ -11,7 +10,6 @@ chrome.runtime.onConnect.addListener(function (port) {
 		popupOpen = true;
 		chrome.runtime.sendMessage({ action: 'desktopApp', alive: wombatOpen });
 		Object.entries(cookies).forEach((entry) => {
-			console.log('Sending ', entry);
 			chrome.runtime.sendMessage({
 				action: 'newCookie',
 				name: entry[0],
@@ -19,7 +17,6 @@ chrome.runtime.onConnect.addListener(function (port) {
 			});
 		});
 		port.onDisconnect.addListener(function () {
-			console.log('popup has been closed');
 			popupOpen = false;
 		});
 	}
@@ -53,10 +50,8 @@ setInterval(async () => {
 
 setInterval(function () {
 	cookiesConfig.forEach(({ name, domain }) => {
-		console.log(`fetching cookie for ${domain} and ${name}`);
 		chrome.cookies.get({ url: domain, name: name }, (cookie) => {
 			const cookieValue = cookie?.value;
-			console.log('cookie value', cookie, cookies[name], cookieValue);
 			if (cookies[name] === cookieValue) {
 				return;
 			}
@@ -81,63 +76,3 @@ setInterval(function () {
 		});
 	});
 }, 1000);
-
-// chrome.webRequest.onCompleted.addListener(
-//   function(details) {
-//     console.log('Request completed:', details.url, details);
-//     details.responseHeaders?.some(function(header) {
-//       if (header.name.includes('Cookie')) {
-//         console.log("New Cookie value:" + header.value);
-//         // return true;
-//       }
-//       // return false;
-//     });
-//   },
-//   {
-//     urls: ["*://*.services.technipfmc.com/*"],
-//     // urls: ['*://*.services.technipfmc.com/*', '*://*.dev.services.technipfmc.com/*'],
-//     types: ['xmlhttprequest']
-//   },
-//   ["responseHeaders", "extraHeaders"]
-// );
-
-// chrome.webRequest.onBeforeSendHeaders.addListener(
-//   //
-//   // details.requestHeaders // check me out
-//   details => console.log(details.url, details.requestHeaders),
-//   { urls: ["*://*.services.technipfmc.com/*"] },
-//   ["requestHeaders"]);
-
-// chrome.webRequest.onHeadersReceived.addListener(
-//   function(details) {
-//     console.log('Request headers received:', details);
-//   },
-//   {
-//     urls: ["*://*.dev.services.technipfmc.com/*"],
-//     // urls: ['*://*.services.technipfmc.com/*', '*://*.dev.services.technipfmc.com/*'],
-//     types: ['xmlhttprequest']
-//   },
-//   ["responseHeaders"]
-// );
-// chrome.webRequest.onErrorOccurred.addListener(
-//   function(details) {
-//     console.log('Request headers err:', details);
-//   },
-//   {
-//     urls: ["*://*.dev.services.technipfmc.com/*"],
-//     // urls: ['*://*.services.technipfmc.com/*', '*://*.dev.services.technipfmc.com/*'],
-//     types: ['xmlhttprequest']
-//   }
-// );
-
-// async function closeTab() {
-//   let queryOptions = { active: true, lastFocusedWindow: true };
-//   // `tab` will either be a `tabs.Tab` instance or `undefined`.
-//   let [tab] = await chrome.tabs.query(queryOptions);
-
-//   if (tab) {
-//     chrome.tabs.remove(
-//       tab,
-//     )
-//   }
-// }

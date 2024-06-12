@@ -189,6 +189,12 @@
 				<span>User Id:</span>
 				<pre>{userId}</pre>
 			</div>
+			<div class="flex gap-1 text-sm">
+				<span>Chrome extension location:</span>
+				{#await invoke('chrome_extension_dir') then dir}
+					<pre>{dir}</pre>
+				{/await}
+			</div>
 		</div>
 	</div>
 </div>
