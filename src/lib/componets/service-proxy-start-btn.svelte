@@ -275,13 +275,6 @@
 						class="btn btn-xs btn-accent"
 						disabled={!$featuresStore.proxyCustomHeaders}
 						on:click={() => {
-							let uuid = 'a77e0899-bb86-4551-b737-f28971f2d943';
-							if (service.env == AwsEnv.DEMO) {
-								uuid = '0a8d41aa-f38d-45fc-852b-6a01f57bbc54';
-							}
-							if (service.env == AwsEnv.PROD) {
-								uuid = 'b0152a54-650e-47eb-87e0-075776ab3860';
-							}
 							customHeaders = [
 								{
 									name: 'Host',

@@ -5,11 +5,9 @@
 	import AppCard from '$lib/componets/app-card.svelte';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
-	$: user = $userStore;
-
 	$: selectedClusters = $activeProfilePreferences.preffered_environments;
 
-	$: columnToggleHandler = (env: AwsEnv, e: any) => {
+	$: columnToggleHandler = (env: AwsEnv, e: { currentTarget: { checked: boolean } }) => {
 		if (!e.currentTarget.checked) {
 			userStore.savePrefferedEnvs([
 				...selectedClusters.filter((selectedEnv) => env != selectedEnv)
@@ -62,7 +60,6 @@
 	<div class="flex flex-row flex-wrap gap-5">
 		{#each envs as env (env)}
 			<div class="form-control">
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
 				<label class="cursor-pointer label flex flex-row gap-2">
 					<input
 						type="checkbox"

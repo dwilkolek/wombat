@@ -59,7 +59,7 @@
 			{#await services}
 				<span class="loading loading-dots loading-lg" />
 			{:then services}
-				{#each services as service, i}
+				{#each services as service}
 					{#if matchesFilter(service)}
 						<tr>
 							<td>
