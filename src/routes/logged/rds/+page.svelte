@@ -61,7 +61,7 @@
 			{#await databases}
 				<span class="loading loading-dots loading-lg" />
 			{:then databases}
-				{#each databases as db, i}
+				{#each databases as db}
 					{#if matchesFilter(db)}
 						<tr>
 							<td>

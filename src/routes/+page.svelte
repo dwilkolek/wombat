@@ -7,7 +7,7 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/api/process';
 	import { invoke } from '@tauri-apps/api';
-	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	import { envImportance } from '$lib/stores/env-store';
 	import type { WombatAwsProfile } from '$lib/types';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
@@ -21,7 +21,7 @@
 	};
 
 	const { wombatAwsProfiles } = availableProfilesStore;
-	let { subscribe, login } = userStore;
+	let { login } = userStore;
 
 	let profile: WombatAwsProfile | undefined;
 	let userId: string = $userStore.id ?? '';
@@ -37,7 +37,7 @@
 		buttonText = event.payload;
 	});
 
-	let dependenciesPromise = invoke<{ [key: string]: { Ok: string } & { Err: String } }>(
+	let dependenciesPromise = invoke<{ [key: string]: { Ok: string } & { Err: string } }>(
 		'check_dependencies'
 	);
 
