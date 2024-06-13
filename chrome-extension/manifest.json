@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Wombat plugin",
+  "description": "Wombat AWS authenicator and Session Cookie interceptor",
+  "version": "1.0",
+  "permissions": [
+    "scripting",
+    "tabs",
+    "cookies"
+  ],
+  "host_permissions": [
+    "*://*.services.technipfmc.com/*",
+    "http://localhost:6891/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "js": [
+        "verify.js"
+      ],
+      "matches": [
+        "*://device.sso.eu-west-1.amazonaws.com/*"
+      ]
+    },
+    {
+      "js": [
+        "allow.js"
+      ],
+      "matches": [
+        "*://technipfmc.awsapps.com/start/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": "32x32.png"
+  }
+}

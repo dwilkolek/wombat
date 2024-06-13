@@ -35,6 +35,7 @@ mod ecs_resolver;
 mod proxy;
 mod proxy_authenticators;
 mod rds_resolver;
+mod rest_api;
 mod shared;
 mod user;
 mod wombat_api;
@@ -131,6 +132,13 @@ async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<U
 async fn ping() -> Result<(), ()> {
     info!("Ping");
     Ok(())
+}
+#[tauri::command]
+async fn chrome_extension_dir() -> Result<String, ()> {
+    Ok(user::chrome_extension_dir()
+        .into_os_string()
+        .into_string()
+        .unwrap())
 }
 
 #[tauri::command]
@@ -1593,6 +1601,8 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
 
+    tokio::task::spawn(rest_api::serve());
+
     let app_config = app_config();
     let _guard = match app_config.logger.as_str() {
         "console" => {
@@ -1625,6 +1635,16 @@ async fn main() {
     let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
     let app = tauri::Builder::default()
         .setup(|app| {
+            let resource_path = app
+                .path_resolver()
+                .resolve_resource("_up_/chrome_extension")
+                .expect("failed to chrome_extension resource");
+            let chrome_extension_dir = user::chrome_extension_dir();
+            if chrome_extension_dir.exists() {
+                let _ = fs::remove_dir(&chrome_extension_dir);
+            }
+            let _ = shared::copy_dir_all(resource_path, chrome_extension_dir);
+
             let handle = app.handle();
             tauri::async_runtime::spawn(async move {
                 match tauri::updater::builder(handle).check().await {
@@ -1698,7 +1718,8 @@ async fn main() {
             check_dependencies,
             available_infra_profiles,
             available_sso_profiles,
-            wombat_aws_profiles
+            wombat_aws_profiles,
+            chrome_extension_dir
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
