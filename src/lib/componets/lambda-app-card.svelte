@@ -13,9 +13,7 @@
 	<div class="flex gap-2 flex-col justify-around">
 		<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
 			<span class="inline text-base">
-				<a class="hover:text-accent underline" href={`/logged/apps/${app}`}>
-					{app}
-				</a>
+				{app}
 			</span>
 		</div>
 	</div>
