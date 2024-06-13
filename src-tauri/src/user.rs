@@ -14,7 +14,7 @@ pub fn wombat_dir() -> PathBuf {
 }
 
 pub fn chrome_extension_dir() -> PathBuf {
-    wombat_dir().join("chrome_extension")
+    wombat_dir().join("chrome-extension")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
