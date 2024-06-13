@@ -1,18 +1,61 @@
+use chrono::{DateTime, Utc};
 use core::fmt;
 use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 use std::{fs, io};
 use tracing_unwrap::{OptionExt, ResultExt};
 
 pub type TrackedName = String;
 
+pub struct CookieJar {
+    pub cookies: HashMap<String, (DateTime<Utc>, String)>,
+    pub last_health_check: DateTime<Utc>,
+}
+
+impl CookieJar {
+    pub fn to_status(&self) -> BrowserExtensionStatus {
+        BrowserExtensionStatus {
+            connected: (Utc::now() - self.last_health_check).num_seconds() < 10,
+            cookie_health: self
+                .cookies
+                .iter()
+                .map(|entry| {
+                    let env = Env::from_any(entry.0);
+                    let cookie_health = match (Utc::now() - entry.1 .0).num_seconds() {
+                        0..=300 => CookieHealth::Ok,
+                        301..=600 => CookieHealth::Stale,
+                        _ => CookieHealth::Old,
+                    };
+
+                    (env, cookie_health)
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BrowserExtensionStatus {
+    pub connected: bool,
+    pub cookie_health: HashMap<Env, CookieHealth>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum CookieHealth {
+    Ok,
+    Stale,
+    Old,
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ResourceType {
     RDS,
     ECS,
+    LambdaApp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -100,6 +143,9 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
     if arn.starts_with("arn:aws:rds") {
         return rds_arn_to_name(arn);
     }
+    if arn.starts_with("lambdaApp::") {
+        return arn.split("::").skip(1).take(1).collect();
+    }
     format!("unknown!#{}", arn)
 }
 pub fn arn_resource_type(arn: &str) -> Option<ResourceType> {
@@ -108,6 +154,9 @@ pub fn arn_resource_type(arn: &str) -> Option<ResourceType> {
     }
     if arn.starts_with("arn:aws:rds") {
         return Some(ResourceType::RDS);
+    }
+    if arn.starts_with("lambdaApp::") {
+        return Some(ResourceType::LambdaApp);
     }
     error!("Unknown resource type given arn {}", arn);
     None

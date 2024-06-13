@@ -8,7 +8,8 @@ const createFeatureStore = () => {
 		rdsTab: false,
 		devWay: false,
 		restartEcsService: false,
-		proxyCustomHeaders: false
+		proxyCustomHeaders: false,
+		lambdaApps: false
 	});
 
 	Promise.all([
@@ -16,14 +17,16 @@ const createFeatureStore = () => {
 		invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
 		invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
 		invoke<boolean>('is_feature_enabled', { feature: 'restart-ecs-service' }),
-		invoke<boolean>('is_feature_enabled', { feature: 'proxy-custom-headers' })
-	]).then(([ecsTab, rdsTab, devWay, restartEcsService, proxyCustomHeaders]) => {
+		invoke<boolean>('is_feature_enabled', { feature: 'proxy-custom-headers' }),
+		invoke<boolean>('is_feature_enabled', { feature: 'lambda-apps' })
+	]).then(([ecsTab, rdsTab, devWay, restartEcsService, proxyCustomHeaders, lambdaApps]) => {
 		features.set({
 			ecsTab,
 			rdsTab,
 			devWay,
 			restartEcsService,
-			proxyCustomHeaders
+			proxyCustomHeaders,
+			lambdaApps
 		});
 	});
 	listen('cache-refreshed', () => {
@@ -32,14 +35,16 @@ const createFeatureStore = () => {
 			invoke<boolean>('is_feature_enabled', { feature: 'rds-tab' }),
 			invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
 			invoke<boolean>('is_feature_enabled', { feature: 'restart-ecs-service' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'proxy-custom-headers' })
-		]).then(([ecsTab, rdsTab, devWay, restartEcsService, proxyCustomHeaders]) => {
+			invoke<boolean>('is_feature_enabled', { feature: 'proxy-custom-headers' }),
+			invoke<boolean>('is_feature_enabled', { feature: 'lambda-apps' })
+		]).then(([ecsTab, rdsTab, devWay, restartEcsService, proxyCustomHeaders, lambdaApps]) => {
 			features.set({
 				ecsTab,
 				rdsTab,
 				devWay,
 				restartEcsService,
-				proxyCustomHeaders
+				proxyCustomHeaders,
+				lambdaApps
 			});
 		});
 	});

@@ -11,7 +11,8 @@ use log::{error, info, warn};
 use rds_resolver::RdsResolver;
 use serde_json::json;
 use shared::{
-    arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, BError, Env, ResourceType,
+    arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, BError, CookieJar, Env,
+    ResourceType,
 };
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
@@ -139,6 +140,14 @@ async fn chrome_extension_dir() -> Result<String, ()> {
         .into_os_string()
         .into_string()
         .unwrap())
+}
+#[tauri::command]
+async fn browser_extension_health(
+    app_state: tauri::State<'_, AppContextState>,
+) -> Result<shared::BrowserExtensionStatus, ()> {
+    let app_state = app_state.0.lock().await;
+    let jar = app_state.cookie_jar.lock().await;
+    Ok(jar.to_status())
 }
 
 #[tauri::command]
@@ -481,13 +490,30 @@ async fn stop_job(
         Err(msg) => return Err(BError::new("stop_job", msg)),
         Ok(authorized_user) => authorized_user,
     };
-    if let Some(job) = async_task_tracker
-        .0
-        .lock()
-        .await
-        .proxies_handlers
-        .remove(arn)
-    {
+    let mut tracker = async_task_tracker.0.lock().await;
+    if let Some(handle) = tracker.task_handlers.remove(arn) {
+        ingest_log(
+            &axiom.0,
+            authorized_user.id,
+            Action::StopJob(
+                shared::arn_to_name(arn).to_owned(),
+                Env::from_any(arn).to_owned(),
+                shared::arn_resource_type(arn).unwrap_or_log(),
+            ),
+            None,
+            None,
+        )
+        .await;
+        let kill_result = handle.send(());
+        if kill_result.is_ok() {
+            info!("Killing dependant job, success: {}", kill_result.is_ok());
+            let _ = window.emit(
+                "proxy-end",
+                ProxyEventMessage::new(arn.to_owned(), "END".into(), 0, None),
+            );
+        }
+    }
+    if let Some(job) = tracker.proxies_handlers.remove(arn) {
         ingest_log(
             &axiom.0,
             authorized_user.id,
@@ -1302,9 +1328,9 @@ async fn start_service_proxy(
         }
     }
 
-    let handle = proxy::start_proxy_to_aws_proxy(
+    let handle = proxy::start_proxy_to_adress(
         local_port,
-        aws_local_port,
+        format!("http://localhost:{}/", aws_local_port).to_owned(),
         Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
     )
     .await;
@@ -1330,6 +1356,84 @@ async fn start_service_proxy(
 
     info!("Started proxy to {}", &service.name);
 
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+async fn start_lambda_app_proxy(
+    window: Window,
+    app: String,
+    env: shared::Env,
+    address: String,
+    headers: HashMap<String, String>,
+    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
+    user_config: tauri::State<'_, UserConfigState>,
+    app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+) -> Result<(), BError> {
+    let local_port;
+    {
+        let mut user_config = user_config.0.lock().await;
+        local_port = user_config.get_lambda_app_port(&app, &env);
+    }
+    let lambda_arn = format!("lambdaApp::{app}::{env}");
+
+    window
+        .emit(
+            "proxy-starting",
+            ProxyEventMessage::new(
+                lambda_arn.clone(),
+                "STARTING".into(),
+                local_port,
+                proxy_auth_config.clone(),
+            ),
+        )
+        .unwrap_or_log();
+
+    let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
+        vec![Box::new(proxy::StaticHeadersInterceptor {
+            path_prefix: String::from(""),
+            headers,
+        })];
+
+    let jar;
+    {
+        let app_state = app_state.0.lock().await;
+        jar = app_state.cookie_jar.clone();
+    }
+
+    interceptors.push(Box::new(proxy_authenticators::CookieAutheticator {
+        cookie_name: format!("session-v1-{}", env.to_string().to_lowercase()),
+        jar,
+    }));
+
+    let handle = proxy::start_proxy_to_adress(
+        local_port,
+        address.clone(),
+        Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
+    )
+    .await;
+
+    async_task_tracker
+        .0
+        .lock()
+        .await
+        .task_handlers
+        .insert(lambda_arn.clone(), handle);
+
+    info!("Started lambda proxy to {}", &address);
+    window
+        .emit(
+            "proxy-start",
+            ProxyEventMessage::new(
+                lambda_arn.clone(),
+                "STARTED".into(),
+                local_port,
+                proxy_auth_config.clone(),
+            ),
+        )
+        .unwrap_or_log();
     Ok(())
 }
 
@@ -1600,8 +1704,11 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
-
-    tokio::task::spawn(rest_api::serve());
+    let cookie_jar = Arc::new(Mutex::new(CookieJar {
+        cookies: HashMap::new(),
+        last_health_check: Utc::now() - chrono::Duration::days(100),
+    }));
+    tokio::task::spawn(rest_api::serve(cookie_jar.clone()));
 
     let app_config = app_config();
     let _guard = match app_config.logger.as_str() {
@@ -1637,13 +1744,19 @@ async fn main() {
         .setup(|app| {
             let resource_path = app
                 .path_resolver()
-                .resolve_resource("_up_/chrome_extension")
+                .resolve_resource("../chrome-extension")
                 .expect("failed to chrome_extension resource");
             let chrome_extension_dir = user::chrome_extension_dir();
             if chrome_extension_dir.exists() {
                 let _ = fs::remove_dir(&chrome_extension_dir);
             }
-            let _ = shared::copy_dir_all(resource_path, chrome_extension_dir);
+
+            let cope_result = shared::copy_dir_all(resource_path, chrome_extension_dir);
+            if cope_result.is_err() {
+                warn!("Chrome extension copy failed, reason: {:?}", cope_result)
+            } else {
+                info!("Chrome extension copy sucessful")
+            }
 
             let handle = app.handle();
             tauri::async_runtime::spawn(async move {
@@ -1668,11 +1781,13 @@ async fn main() {
             user_id: user.id,
             last_auth_check: 0,
             no_of_failed_logins: 0,
+            cookie_jar,
         }))))
         .manage(UserConfigState(Arc::new(Mutex::new(user))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             aws_resource_refresher: None,
             proxies_handlers: HashMap::new(),
+            task_handlers: HashMap::new(),
             search_log_handler: None,
         }))))
         .manage(AwsConfigProviderInstance(aws_config_provider.clone()))
@@ -1719,7 +1834,9 @@ async fn main() {
             available_infra_profiles,
             available_sso_profiles,
             wombat_aws_profiles,
-            chrome_extension_dir
+            start_lambda_app_proxy,
+            chrome_extension_dir,
+            browser_extension_health
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1772,6 +1889,7 @@ struct AppContext {
     user_id: uuid::Uuid,
     last_auth_check: i64,
     no_of_failed_logins: i64,
+    cookie_jar: Arc<Mutex<CookieJar>>,
 }
 
 struct AppContextState(Arc<Mutex<AppContext>>);
@@ -1802,6 +1920,7 @@ struct WombatApiInstance(Arc<RwLock<wombat_api::WombatApi>>);
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
     proxies_handlers: HashMap<String, Arc<SharedChild>>,
+    task_handlers: HashMap<String, tokio::sync::oneshot::Sender<()>>,
     search_log_handler: Option<tokio::task::JoinHandle<()>>,
 }
 

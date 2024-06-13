@@ -173,6 +173,8 @@ impl ProxyInterceptor for StaticHeadersInterceptor {
     }
     async fn modify_headers(&self, headers: &mut Headers) {
         let h = self.headers.clone();
+        headers.remove("Host");
+        headers.remove("Content-Length");
         for (name, value) in h.iter() {
             let header_value = value.parse::<HeaderValue>().unwrap_or_log();
             let header_name = name.parse::<HeaderName>().unwrap_or_log();
@@ -200,37 +202,41 @@ async fn handle(
     }
 }
 
-pub async fn start_proxy_to_aws_proxy(
+pub async fn start_proxy_to_adress(
     local_port: u16,
-    aws_local_port: u16,
+    address: String,
     request_handler: Arc<tokio::sync::RwLock<RequestHandler>>,
 ) -> tokio::sync::oneshot::Sender<()> {
     kill_pid_on_port(local_port).await;
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let request_filter = extract_request_data_filter();
-    let app = warp::any().and(request_filter).and_then(
-        move |uri: warp::path::FullPath,
-              params: Option<String>,
-              method: Method,
-              mut headers: Headers,
-              body: Bytes| {
-            let request_handler = request_handler.clone();
-            async move {
-                handle(uri.as_str(), &mut headers, request_handler).await;
-                proxy_to_and_forward_response(
-                    format!("http://localhost:{}/", aws_local_port).to_owned(),
-                    "".to_owned(),
-                    uri,
-                    params,
-                    method,
-                    headers,
-                    body,
-                )
-                .await
-            }
-        },
-    );
+    let app = warp::any()
+        .and(request_filter)
+        .and_then(
+            move |uri: warp::path::FullPath,
+                  params: Option<String>,
+                  method: Method,
+                  mut headers: Headers,
+                  body: Bytes| {
+                let request_handler = request_handler.clone();
+                let address = address.clone();
+                async move {
+                    handle(uri.as_str(), &mut headers, request_handler).await;
+                    proxy_to_and_forward_response(
+                        address,
+                        "".to_owned(),
+                        uri,
+                        params,
+                        method,
+                        headers,
+                        body,
+                    )
+                    .await
+                }
+            },
+        )
+        .with(warp::log("proxy::log"));
 
     let (_addr, server) =
         warp::serve(app).bind_with_graceful_shutdown(([0, 0, 0, 0], local_port), async {
