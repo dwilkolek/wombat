@@ -10,6 +10,7 @@
 	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	import { envImportance } from '$lib/stores/env-store';
 	import type { WombatAwsProfile } from '$lib/types';
+	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
 		return (r as any).data.html_url.split('/v').at(-1) as string;
 	});
@@ -52,9 +53,9 @@
 </svelte:head>
 <div class="hero max-h-screen min-h-screen bg-base-200">
 	<div class="absolute left-4 top-4 p-2">
-		{#await dependenciesPromise then deps}
-			{@const entries = Object.entries(deps).sort((a, b) => a[0].localeCompare(b[0]))}
-			<div class="flex flex-col gap-1">
+		<div class="flex flex-col gap-1">
+			{#await dependenciesPromise then deps}
+				{@const entries = Object.entries(deps).sort((a, b) => a[0].localeCompare(b[0]))}
 				{#each entries as dep}
 					<div class="flex items-center gap-1 text-sm">
 						{#if dep[1].Ok}
@@ -70,8 +71,19 @@
 						</span>
 					</div>
 				{/each}
+			{/await}
+			<div class="flex items-center gap-1 text-sm">
+				{#if $browserExtensionStatus.connected}
+					<div class="bg-lime-500 w-2 h-2 rounded" />
+				{:else}
+					<div class="bg-rose-500 w-2 h-2 rounded" />
+				{/if}
+				<span> Browser extension : </span>
+				<span class="">
+					{$browserExtensionStatus.connected ? 'Connected' : 'Disconnected'}
+				</span>
 			</div>
-		{/await}
+		</div>
 	</div>
 	<div class="hero-content flex-col">
 		<div class="text-center">

@@ -141,6 +141,14 @@ async fn chrome_extension_dir() -> Result<String, ()> {
         .into_string()
         .unwrap())
 }
+#[tauri::command]
+async fn browser_extension_health(
+    app_state: tauri::State<'_, AppContextState>,
+) -> Result<shared::BrowserExtensionStatus, ()> {
+    let app_state = app_state.0.lock().await;
+    let jar = app_state.cookie_jar.lock().await;
+    Ok(jar.to_status())
+}
 
 #[tauri::command]
 async fn favorite(
@@ -1698,6 +1706,7 @@ async fn main() {
     fix_path_env::fix().unwrap_or_log();
     let cookie_jar = Arc::new(Mutex::new(CookieJar {
         cookies: HashMap::new(),
+        last_health_check: Utc::now() - chrono::Duration::days(100),
     }));
     tokio::task::spawn(rest_api::serve(cookie_jar.clone()));
 
@@ -1735,13 +1744,19 @@ async fn main() {
         .setup(|app| {
             let resource_path = app
                 .path_resolver()
-                .resolve_resource("../chrome_extension")
+                .resolve_resource("../chrome-extension")
                 .expect("failed to chrome_extension resource");
             let chrome_extension_dir = user::chrome_extension_dir();
             if chrome_extension_dir.exists() {
                 let _ = fs::remove_dir(&chrome_extension_dir);
             }
-            let _ = shared::copy_dir_all(resource_path, chrome_extension_dir);
+
+            let cope_result = shared::copy_dir_all(resource_path, chrome_extension_dir);
+            if cope_result.is_err() {
+                warn!("Chrome extension copy failed, reason: {:?}", cope_result)
+            } else {
+                info!("Chrome extension copy sucessful")
+            }
 
             let handle = app.handle();
             tauri::async_runtime::spawn(async move {
@@ -1819,8 +1834,9 @@ async fn main() {
             available_infra_profiles,
             available_sso_profiles,
             wombat_aws_profiles,
+            start_lambda_app_proxy,
             chrome_extension_dir,
-            start_lambda_app_proxy
+            browser_extension_health
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");

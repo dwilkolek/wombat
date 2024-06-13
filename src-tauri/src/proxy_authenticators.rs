@@ -154,7 +154,7 @@ impl ProxyInterceptor for CookieAutheticator {
     async fn modify_headers(&self, headers: &mut Headers) {
         let jar = self.jar.lock().await;
         if let Some(cookie) = jar.cookies.get(&self.cookie_name) {
-            let header_value = format!("{}={}", &self.cookie_name, cookie);
+            let header_value = format!("{}={}", &self.cookie_name, cookie.1);
             info!("Injecting cookie {header_value}");
             headers.insert("Cookie", header_value.parse().unwrap());
         }

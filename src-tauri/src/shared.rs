@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use core::fmt;
 use log::error;
 use regex::Regex;
@@ -10,7 +11,43 @@ use tracing_unwrap::{OptionExt, ResultExt};
 pub type TrackedName = String;
 
 pub struct CookieJar {
-    pub cookies: HashMap<String, String>,
+    pub cookies: HashMap<String, (DateTime<Utc>, String)>,
+    pub last_health_check: DateTime<Utc>,
+}
+
+impl CookieJar {
+    pub fn to_status(&self) -> BrowserExtensionStatus {
+        BrowserExtensionStatus {
+            connected: (Utc::now() - self.last_health_check).num_seconds() < 10,
+            cookie_health: self
+                .cookies
+                .iter()
+                .map(|entry| {
+                    let env = Env::from_any(entry.0);
+                    let cookie_health = match (Utc::now() - entry.1 .0).num_seconds() {
+                        0..=300 => CookieHealth::Ok,
+                        301..=600 => CookieHealth::Stale,
+                        _ => CookieHealth::Old,
+                    };
+
+                    (env, cookie_health)
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BrowserExtensionStatus {
+    pub connected: bool,
+    pub cookie_health: HashMap<Env, CookieHealth>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum CookieHealth {
+    Ok,
+    Stale,
+    Old,
 }
 
 #[allow(clippy::upper_case_acronyms)]
