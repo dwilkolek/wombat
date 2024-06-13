@@ -1735,7 +1735,7 @@ async fn main() {
         .setup(|app| {
             let resource_path = app
                 .path_resolver()
-                .resolve_resource("_up_/chrome_extension")
+                .resolve_resource("../chrome_extension")
                 .expect("failed to chrome_extension resource");
             let chrome_extension_dir = user::chrome_extension_dir();
             if chrome_extension_dir.exists() {
