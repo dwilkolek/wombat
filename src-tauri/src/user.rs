@@ -14,7 +14,7 @@ pub fn wombat_dir() -> PathBuf {
 }
 
 pub fn chrome_extension_dir() -> PathBuf {
-    wombat_dir().join("chrome_extension")
+    wombat_dir().join("chrome-extension")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -30,6 +30,7 @@ pub struct UserConfig {
     last_used_profile: Option<String>,
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
+    lambda_app_proxy_port_map: Option<HashMap<TrackedName, HashMap<Env, u16>>>,
     pub dbeaver_path: Option<String>,
     pub logs_dir: Option<PathBuf>,
     pub preferences: Option<HashMap<String, WombatAwsProfilePreferences>>,
@@ -58,6 +59,8 @@ impl UserConfig {
 
                 db_proxy_port_map: HashMap::new(),
                 service_proxy_port_map: HashMap::new(),
+                lambda_app_proxy_port_map: Some(HashMap::new()),
+
                 dbeaver_path: None,
                 logs_dir: Some(UserConfig::logs_path()),
                 preferences: Some(HashMap::new()),
@@ -73,6 +76,9 @@ impl UserConfig {
         }
         if user_config.preferences.is_none() {
             user_config.preferences = Some(HashMap::new());
+        }
+        if user_config.lambda_app_proxy_port_map.is_none() {
+            user_config.lambda_app_proxy_port_map = Some(HashMap::new());
         }
 
         user_config
@@ -120,6 +126,8 @@ impl UserConfig {
         map: &mut HashMap<TrackedName, HashMap<Env, u16>>,
         tracked_name: TrackedName,
         env: Env,
+        from_port: u16,
+        range: u16,
     ) -> (u16, bool) {
         if let Some(mapping) = map.get(&tracked_name) {
             if let Some(port) = mapping.get(&env) {
@@ -129,9 +137,9 @@ impl UserConfig {
 
         let used_ports: Vec<u16> = map.values().flat_map(|e| e.values()).copied().collect();
 
-        let mut possible_port = rand::thread_rng().gen_range(52000..53000);
+        let mut possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
         while used_ports.iter().any(|p| *p == possible_port) {
-            possible_port = rand::thread_rng().gen_range(52000..53000);
+            possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
         }
         if !map.contains_key(&tracked_name) {
             map.insert(tracked_name.clone(), HashMap::new());
@@ -146,7 +154,7 @@ impl UserConfig {
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
         let env = Env::from_any(db_arn);
         let tracked_name = rds_arn_to_name(db_arn);
-        let port = Self::get_port(&mut self.db_proxy_port_map, tracked_name, env);
+        let port = Self::get_port(&mut self.db_proxy_port_map, tracked_name, env, 52000, 100);
         if port.1 {
             self.save()
         }
@@ -156,7 +164,27 @@ impl UserConfig {
     pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {
         let env = Env::from_any(ecs_arn);
         let tracked_name = ecs_arn_to_name(ecs_arn);
-        let port = Self::get_port(&mut self.service_proxy_port_map, tracked_name, env);
+        let port = Self::get_port(
+            &mut self.service_proxy_port_map,
+            tracked_name,
+            env,
+            53000,
+            100,
+        );
+        if port.1 {
+            self.save()
+        }
+        port.0
+    }
+
+    pub fn get_lambda_app_port(&mut self, app: &str, env: &Env) -> u16 {
+        let port = Self::get_port(
+            self.lambda_app_proxy_port_map.as_mut().unwrap(),
+            app.to_owned(),
+            env.to_owned(),
+            54000,
+            100,
+        );
         if port.1 {
             self.save()
         }

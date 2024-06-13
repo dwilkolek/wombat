@@ -1,6 +1,13 @@
 export type SupportLevel = 'Full' | 'Partial' | 'None';
 
 export type SsoProfiles = { [key in AwsEnv]?: SsoProfile };
+export type CookieHealth = 'Ok' | 'Stale' | 'Old';
+export type CookieHealthMap = { [key in AwsEnv]?: CookieHealth };
+export type BrowserExtensionStatus = {
+	connected: boolean;
+	cookie_health: CookieHealthMap;
+};
+
 export type WombatAwsProfile = {
 	name: string;
 	profile_base_name: string;
@@ -52,6 +59,7 @@ export type UserConfig = {
 	logs_dir: string;
 	db_proxy_port_map: { [key: string]: EnvPortMap };
 	service_proxy_port_map: { [key: string]: EnvPortMap };
+	lambda_app_proxy_port_map: { [key: string]: EnvPortMap };
 	preferences: { [key: string]: WombatProfilePreferences };
 };
 
