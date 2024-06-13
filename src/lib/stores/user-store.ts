@@ -15,6 +15,7 @@ const createUserStore = () => {
 		logs_dir: '',
 		db_proxy_port_map: {},
 		service_proxy_port_map: {},
+		lambda_app_proxy_port_map: {},
 		preferences: {}
 	});
 	execute<UserConfig>('user_config').then((config) => {

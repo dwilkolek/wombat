@@ -40,10 +40,31 @@ const cookiesConfig = [
 let wombatOpen = false;
 setInterval(async () => {
 	try {
-		wombatOpen = await fetch(`http://localhost:6891/ping`)
+		const prevWombatOpen = wombatOpen;
+		wombatOpen = await fetch(`http://localhost:6891/health`)
 			.then(() => true)
 			.catch(() => false);
-
+		if (prevWombatOpen !== wombatOpen && wombatOpen) {
+			Object.entries(cookies).forEach((entry) => {
+				const name = entry[0];
+				const value = entry[1];
+				if (value) {
+					fetch(`http://localhost:6891/cookies/${name}`, {
+						body: JSON.stringify(value),
+						method: 'PUT',
+						headers: { Accept: 'application/json', 'Content-Type': 'application/json' }
+					})
+						.then(() => {})
+						.catch(() => {});
+				} else {
+					fetch(`http://localhost:6891/cookies/${name}`, {
+						method: 'DELETE'
+					})
+						.then(() => {})
+						.catch(() => {});
+				}
+			});
+		}
 		popupOpen && chrome.runtime.sendMessage({ action: 'desktopApp', alive: wombatOpen });
 	} catch (e) {}
 }, 1000);
@@ -59,8 +80,9 @@ setInterval(function () {
 
 			if (cookieValue) {
 				fetch(`http://localhost:6891/cookies/${name}`, {
-					body: cookie.value,
-					method: 'PUT'
+					body: JSON.stringify(cookie.value),
+					method: 'PUT',
+					headers: { Accept: 'application/json', 'Content-Type': 'application/json' }
 				})
 					.then(() => {})
 					.catch(() => {});
