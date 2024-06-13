@@ -50,6 +50,14 @@
 			</li>
 
 			<li>
+				<a
+					class={$page.url.pathname === '/logged/lambda-apps' ? 'active' : ''}
+					href="/logged/lambda-apps"
+					>Lambda Apps
+				</a>
+			</li>
+
+			<li>
 				{#if $featuresStore.rdsTab}
 					<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
 						>Databases (RDS)</a

@@ -52,6 +52,7 @@ export type UserConfig = {
 	logs_dir: string;
 	db_proxy_port_map: { [key: string]: EnvPortMap };
 	service_proxy_port_map: { [key: string]: EnvPortMap };
+	lambda_app_proxy_port_map: { [key: string]: EnvPortMap };
 	preferences: { [key: string]: WombatProfilePreferences };
 };
 
