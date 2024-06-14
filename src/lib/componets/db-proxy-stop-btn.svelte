@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { execute } from '$lib/stores/error-store';
 
-	export let database_arn: String;
+	export let database_arn: string;
 </script>
 
 <div class="tooltip tooltip-left flex" data-tip="Stop proxy to database">
@@ -40,4 +40,3 @@
 		</div>
 	</button>
 </div>
-

@@ -1,4 +1,5 @@
 use crate::proxy::ProxyInterceptor;
+use crate::shared::Env;
 use crate::{aws, shared::CookieJar, wombat_api};
 use async_trait::async_trait;
 use headers::authorization::Credentials;
@@ -142,7 +143,7 @@ impl ProxyInterceptor for BasicAutheticator {
 }
 
 pub struct CookieAutheticator {
-    pub cookie_name: String,
+    pub env: Env,
     pub jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
 }
 
@@ -153,8 +154,8 @@ impl ProxyInterceptor for CookieAutheticator {
     }
     async fn modify_headers(&self, headers: &mut Headers) {
         let jar = self.jar.lock().await;
-        if let Some(cookie) = jar.cookies.get(&self.cookie_name) {
-            let header_value = format!("{}={}", &self.cookie_name, cookie.1);
+        let header_value = jar.header_value_for_env(&self.env);
+        if !header_value.is_empty() {
             info!("Injecting cookie {header_value}");
             headers.insert("Cookie", header_value.parse().unwrap());
         }

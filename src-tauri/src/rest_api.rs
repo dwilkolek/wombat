@@ -1,25 +1,41 @@
-use crate::shared::CookieJar;
+use crate::shared::{Cookie, CookieJar, Env};
+use chrono::{TimeZone, Utc};
+use serde::Deserialize;
 use warp::Filter;
 use warp::{self, http::StatusCode};
 
-async fn put_cookie(
+#[derive(Clone, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct NewCookieDto {
     name: String,
     value: String,
-    jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
-) -> std::result::Result<StatusCode, warp::Rejection> {
-    // log::info!("Storing {name} = {value}");
-    let mut jar = jar.lock().await;
-    match jar.cookies.get(&name) {
-        Some(old_value) => {
-            if old_value.1 != value {
-                jar.cookies.insert(name, (chrono::Utc::now(), value));
-            }
-        }
-        None => {
-            jar.cookies.insert(name, (chrono::Utc::now(), value));
+    env: Env,
+    stored_at: i64,
+}
+impl From<NewCookieDto> for Cookie {
+    fn from(dto: NewCookieDto) -> Self {
+        Cookie {
+            name: dto.name,
+            env: dto.env,
+            value: dto.value,
+            stored_at: Utc.timestamp_millis_opt(dto.stored_at).unwrap(),
         }
     }
+}
 
+async fn put_cookie(
+    dto: NewCookieDto,
+    jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
+) -> std::result::Result<StatusCode, warp::Rejection> {
+    log::info!(
+        "Storing cookie for env={}, name={}, value={}",
+        &dto.env,
+        &dto.name,
+        &dto.value
+    );
+    let mut jar = jar.lock().await;
+    jar.cookies.retain(|cookie| cookie.name != dto.name);
+    jar.cookies.push(Cookie::from(dto));
     Ok(StatusCode::OK)
 }
 
@@ -27,9 +43,9 @@ async fn delete_cookie(
     name: String,
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
 ) -> std::result::Result<StatusCode, warp::Rejection> {
-    // log::info!("Delete {name}");
+    log::info!("Deleted cookie: {name}");
     let mut jar = jar.lock().await;
-    jar.cookies.remove(&name);
+    jar.cookies.retain(|cookie| cookie.name != name);
     Ok(StatusCode::OK)
 }
 async fn health(
@@ -54,7 +70,6 @@ pub async fn serve(jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>) {
     warp::serve(
         warp::put()
             .and(warp::path("cookies"))
-            .and(warp::path::param::<String>())
             .and(warp::body::json())
             .and(with_jar(jar.clone()))
             .and_then(put_cookie)
