@@ -7,7 +7,7 @@
 	<title>Lambda Apps</title>
 	<meta name="description" content="Wombat" />
 </svelte:head>
-<div class="m-2">
+<div class="m-2 flex items-center">
 	<div role="alert" class="alert shadow-lg p-2">
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

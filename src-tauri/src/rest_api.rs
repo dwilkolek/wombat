@@ -1,6 +1,7 @@
-use crate::shared::{Cookie, CookieJar, Env};
+use crate::shared::{BrowserExtension, Cookie, CookieJar, Env};
 use chrono::{TimeZone, Utc};
 use serde::Deserialize;
+use warp::reply::Reply;
 use warp::Filter;
 use warp::{self, http::StatusCode};
 
@@ -26,7 +27,7 @@ impl From<NewCookieDto> for Cookie {
 async fn put_cookie(
     dto: NewCookieDto,
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
-) -> std::result::Result<StatusCode, warp::Rejection> {
+) -> Result<warp::reply::Response, warp::Rejection> {
     log::info!(
         "Storing cookie for env={}, name={}, value={}",
         &dto.env,
@@ -36,25 +37,30 @@ async fn put_cookie(
     let mut jar = jar.lock().await;
     jar.cookies.retain(|cookie| cookie.name != dto.name);
     jar.cookies.push(Cookie::from(dto));
-    Ok(StatusCode::OK)
+    Ok(warp::reply().into_response())
 }
 
 async fn delete_cookie(
     name: String,
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
-) -> std::result::Result<StatusCode, warp::Rejection> {
+) -> Result<warp::reply::Response, warp::Rejection> {
     log::info!("Deleted cookie: {name}");
     let mut jar = jar.lock().await;
     jar.cookies.retain(|cookie| cookie.name != name);
-    Ok(StatusCode::OK)
+    Ok(warp::reply().into_response())
 }
 async fn health(
-    jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
-) -> std::result::Result<StatusCode, warp::Rejection> {
+    version: String,
+    browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
+) -> Result<warp::reply::Response, warp::Rejection> {
     // log::info!("health check: ok");
-    let mut jar = jar.lock().await;
-    jar.last_health_check = chrono::Utc::now();
-    Ok(StatusCode::OK)
+    let mut browser_ext = browser_ext.lock().await;
+    browser_ext.last_health_check = chrono::Utc::now();
+    browser_ext.version = Some(version);
+    Ok(
+        warp::reply::with_status(env!("CARGO_PKG_VERSION").to_owned(), StatusCode::OK)
+            .into_response(),
+    )
 }
 
 fn with_jar(
@@ -66,7 +72,19 @@ fn with_jar(
     warp::any().map(move || jar.clone())
 }
 
-pub async fn serve(jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>) {
+fn with_browser_extension(
+    browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
+) -> impl Filter<
+    Extract = (std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,),
+    Error = std::convert::Infallible,
+> + Clone {
+    warp::any().map(move || browser_ext.clone())
+}
+
+pub async fn serve(
+    jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
+    browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
+) {
     warp::serve(
         warp::put()
             .and(warp::path("cookies"))
@@ -78,9 +96,10 @@ pub async fn serve(jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>) {
                 .and(warp::path::param::<String>())
                 .and(with_jar(jar.clone()))
                 .and_then(delete_cookie))
-            .or(warp::get()
+            .or(warp::post()
                 .and(warp::path("health"))
-                .and(with_jar(jar.clone()))
+                .and(warp::body::json())
+                .and(with_browser_extension(browser_ext.clone()))
                 .and_then(health)),
     )
     .run(([127, 0, 0, 1], 6891))

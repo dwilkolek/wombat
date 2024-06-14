@@ -1,7 +1,7 @@
 /* global */
 /** @type {Array.<Cookie>} */
 let cookies = [];
-
+const extVersion = '4.0.2'
 let syncEnabled = false;
 class Cookie {
 	constructor(name, value, env) {
@@ -69,11 +69,16 @@ function sendCookieToPopup(cookie) {
 }
 
 function notifyPopupDeskopCLientOnline() {
-	popupOpen && chrome.runtime.sendMessage({ action: 'desktopApp', alive: wombatOpen });
+	popupOpen &&
+		chrome.runtime.sendMessage({
+			action: 'desktopApp',
+			wombatVersion: wombatOpen
+		});
 }
 
 /* desktop */
-let wombatOpen = false;
+/** @type {String|undefined} */
+let wombatOpen = undefined;
 /** @param {Cookie} cookie */
 function sendCookieToDesktop(cookie) {
 	if (!isCookieFresh(cookie.storedAt)) {
@@ -111,7 +116,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.runtime.onConnect.addListener(function (port) {
 	if (port.name === 'popup') {
 		popupOpen = true;
-		chrome.runtime.sendMessage({ action: 'desktopApp', alive: wombatOpen });
+		chrome.runtime.sendMessage({ action: 'desktopApp', wombatVersion: wombatOpen });
 		cookies.forEach((cookie) => {
 			sendCookieToPopup(cookie);
 		});
@@ -124,9 +129,21 @@ chrome.runtime.onConnect.addListener(function (port) {
 /* popup opened/closed */
 setInterval(async () => {
 	const prevWombatOpen = wombatOpen;
-	wombatOpen = await fetch(`http://localhost:6891/health`)
-		.then(() => true)
-		.catch(() => false);
+	wombatOpen = await fetch(`http://localhost:6891/health`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify(extVersion)
+	})
+		.then((resp) => {
+			console.log(resp);
+			return resp.text();
+		})
+		.catch((e) => {
+			console.warn(e);
+			return undefined;
+		});
 	if (prevWombatOpen !== wombatOpen && wombatOpen) {
 		notifyDeskopClient();
 		notifyPopupDeskopCLientOnline();
@@ -157,3 +174,11 @@ setInterval(function () {
 		});
 	});
 }, 1000);
+
+setInterval(() => {
+	popupOpen &&
+		chrome.runtime.sendMessage({
+			action: 'extVersion',
+			extVersion: extVersion
+		});
+});
