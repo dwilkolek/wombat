@@ -16,6 +16,15 @@ const tauriConfJson = JSON.parse(fs.readFileSync(tauriConfPath).toString('utf8')
 tauriConfJson['package']['version'] = safeNewVersion;
 fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConfJson, null, 2));
 
+const chromeExtensionPath = './chrome-extension/background.js';
+const backgroundjs = fs.readFileSync(chromeExtensionPath).toString('utf8');
+const newBackgroundjs = backgroundjs.replace(
+	/const extVersion = '([0-9.]+)'/,
+	`const extVersion = '${newVersion}'`
+);
+fs.writeFileSync(chromeExtensionPath, newBackgroundjs);
+
+// const extVersion = '4.1.0';
 const cargoTomlPath = './src-tauri/Cargo.toml';
 const cargoToml = fs.readFileSync(cargoTomlPath).toString('utf8');
 const start = cargoToml.search(/version = "([0-9.]+)"/gm);

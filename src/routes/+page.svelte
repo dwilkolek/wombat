@@ -74,13 +74,21 @@
 			{/await}
 			<div class="flex items-center gap-1 text-sm">
 				{#if $browserExtensionStatus.connected}
-					<div class="bg-lime-500 w-2 h-2 rounded" />
+					{#if $browserExtensionStatus.version == version}
+						<div class="bg-lime-500 w-2 h-2 rounded" />
+					{:else}
+						<div class="bg-amber-500 w-2 h-2 rounded" />
+					{/if}
 				{:else}
 					<div class="bg-rose-500 w-2 h-2 rounded" />
 				{/if}
 				<span> Browser extension : </span>
 				<span class="">
-					{$browserExtensionStatus.connected ? 'Connected' : 'Disconnected'}
+					{#if $browserExtensionStatus.connected}
+						v{$browserExtensionStatus.version}
+					{:else}
+						Disconnected
+					{/if}
 				</span>
 			</div>
 		</div>

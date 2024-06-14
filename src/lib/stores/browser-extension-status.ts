@@ -3,7 +3,7 @@ import { type BrowserExtensionStatus } from '../types';
 import { invoke } from '@tauri-apps/api/tauri';
 let timeout: number | undefined = undefined;
 const createExtensionStatus = () => {
-	const state = writable<BrowserExtensionStatus>({ connected: false, cookie_health: {} });
+	const state = writable<BrowserExtensionStatus>({ connected: false, version: undefined });
 	const scheduleNext = (time: number) =>
 		setTimeout(() => {
 			console.log('checking browser status');

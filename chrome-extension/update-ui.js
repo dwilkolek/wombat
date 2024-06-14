@@ -19,8 +19,13 @@
 		}
 
 		if (request.action === 'desktopApp') {
-			document.getElementById('desktopAppHealth').innerText = request.alive ? 'RUNNING' : 'CLOSED';
+			document.getElementById('desktopAppHealth').innerText =
+				request.wombatVersion ?? 'not running';
+		}
+		if (request.action === 'extVersion') {
+			document.getElementById('extVersion').innerText = request.extVersion ?? 'unknown';
 		}
 	});
 })();
+
 chrome.runtime.connect({ name: 'popup' });
