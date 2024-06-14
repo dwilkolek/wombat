@@ -5,6 +5,7 @@
 	import LambdaTaskStatus from './lambda-task-status.svelte';
 	import LambdaAppProxyBtn from './lambda-app-proxy-btn.svelte';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
+	import { cookieJar } from '$lib/stores/cookie-jar-status';
 	export let app: string;
 
 	$: tasks = $taskStore;
@@ -29,25 +30,25 @@
 			)}
 			<div class={`flex flex-col app-env-cell px-2`}>
 				<div class="font-medium text-xs flex items-row gap-1 items-center">
-					{#if $browserExtensionStatus.cookie_health[enabled_env] == 'Ok'}
+					{#if $cookieJar.cookieHealth[enabled_env] == 'Ok'}
 						<div
 							class={`bg-lime-400 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'Cookie is fresh, <5min'}
 						/>
 					{/if}
-					{#if $browserExtensionStatus.cookie_health[enabled_env] == 'Stale'}
+					{#if $cookieJar.cookieHealth[enabled_env] == 'Stale'}
 						<div
 							class={`bg-amber-300 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'Cookie is stale, >5min'}
 						/>
 					{/if}
-					{#if $browserExtensionStatus.cookie_health[enabled_env] == 'Old'}
+					{#if $cookieJar.cookieHealth[enabled_env] == 'Old'}
 						<div
 							class={`bg-red-500 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'Cookie is old, >10min'}
 						/>
 					{/if}
-					{#if !$browserExtensionStatus.cookie_health[enabled_env]}
+					{#if !$cookieJar.cookieHealth[enabled_env]}
 						<div
 							class={`bg-gray-500 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'No cookie 🤷‍♂️'}

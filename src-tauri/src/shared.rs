@@ -10,6 +10,19 @@ use tracing_unwrap::{OptionExt, ResultExt};
 
 pub type TrackedName = String;
 
+pub struct BrowserExtension {
+    pub version: Option<String>,
+    pub last_health_check: DateTime<Utc>,
+}
+impl BrowserExtension {
+    pub fn to_status(&self) -> BrowserExtensionStatus {
+        BrowserExtensionStatus {
+            connected: (Utc::now() - self.last_health_check).num_seconds() < 10,
+            version: self.version.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Cookie {
     pub name: String,
@@ -20,7 +33,6 @@ pub struct Cookie {
 
 pub struct CookieJar {
     pub cookies: Vec<Cookie>,
-    pub last_health_check: DateTime<Utc>,
 }
 
 impl CookieJar {
@@ -32,9 +44,8 @@ impl CookieJar {
             .collect::<Vec<String>>()
             .join("; ")
     }
-    pub fn to_status(&self) -> BrowserExtensionStatus {
-        BrowserExtensionStatus {
-            connected: (Utc::now() - self.last_health_check).num_seconds() < 10,
+    pub fn to_status(&self) -> CookieJarStatus {
+        CookieJarStatus {
             cookie_health: self
                 .cookies
                 .iter()
@@ -53,9 +64,15 @@ impl CookieJar {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct CookieJarStatus {
+    pub cookie_health: HashMap<Env, CookieHealth>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct BrowserExtensionStatus {
     pub connected: bool,
-    pub cookie_health: HashMap<Env, CookieHealth>,
+    pub version: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

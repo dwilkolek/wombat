@@ -11,8 +11,8 @@ use log::{error, info, warn};
 use rds_resolver::RdsResolver;
 use serde_json::json;
 use shared::{
-    arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, BError, CookieJar, Env,
-    ResourceType,
+    arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, BError, BrowserExtension,
+    CookieJar, Env, ResourceType,
 };
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
@@ -143,11 +143,18 @@ async fn chrome_extension_dir() -> Result<String, ()> {
 }
 #[tauri::command]
 async fn browser_extension_health(
-    app_state: tauri::State<'_, AppContextState>,
+    browser_ext_instance: tauri::State<'_, BrowserExtensionInstance>,
 ) -> Result<shared::BrowserExtensionStatus, ()> {
-    let app_state = app_state.0.lock().await;
-    let jar = app_state.cookie_jar.lock().await;
-    Ok(jar.to_status())
+    let browser_ext = browser_ext_instance.0.lock().await;
+    Ok(browser_ext.to_status())
+}
+
+#[tauri::command]
+async fn cookie_jar_status(
+    cookie_jar: tauri::State<'_, CookieJarInstance>,
+) -> Result<shared::CookieJarStatus, ()> {
+    let cookie_jar = cookie_jar.0.lock().await;
+    Ok(cookie_jar.to_status())
 }
 
 #[tauri::command]
@@ -1367,9 +1374,9 @@ async fn start_lambda_app_proxy(
     env: shared::Env,
     address: String,
     headers: HashMap<String, String>,
+    cookie_jar: tauri::State<'_, CookieJarInstance>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
-    app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
     let local_port;
@@ -1397,15 +1404,9 @@ async fn start_lambda_app_proxy(
             headers,
         })];
 
-    let jar;
-    {
-        let app_state = app_state.0.lock().await;
-        jar = app_state.cookie_jar.clone();
-    }
-
     interceptors.push(Box::new(proxy_authenticators::CookieAutheticator {
         env,
-        jar,
+        jar: cookie_jar.0.clone(),
     }));
 
     let handle = proxy::start_proxy_to_adress(
@@ -1706,9 +1707,13 @@ async fn main() {
     fix_path_env::fix().unwrap_or_log();
     let cookie_jar = Arc::new(Mutex::new(CookieJar {
         cookies: Vec::new(),
-        last_health_check: Utc::now() - chrono::Duration::days(100),
     }));
-    tokio::task::spawn(rest_api::serve(cookie_jar.clone()));
+    let browser_ext = Arc::new(Mutex::new(BrowserExtension {
+        last_health_check: Utc::now() - chrono::Duration::days(100),
+        version: None,
+    }));
+
+    tokio::task::spawn(rest_api::serve(cookie_jar.clone(), browser_ext.clone()));
 
     let app_config = app_config();
     let _guard = match app_config.logger.as_str() {
@@ -1781,8 +1786,9 @@ async fn main() {
             user_id: user.id,
             last_auth_check: 0,
             no_of_failed_logins: 0,
-            cookie_jar,
         }))))
+        .manage(BrowserExtensionInstance(browser_ext))
+        .manage(CookieJarInstance(cookie_jar))
         .manage(UserConfigState(Arc::new(Mutex::new(user))))
         .manage(AsyncTaskManager(Arc::new(Mutex::new(TaskTracker {
             aws_resource_refresher: None,
@@ -1836,7 +1842,8 @@ async fn main() {
             wombat_aws_profiles,
             start_lambda_app_proxy,
             chrome_extension_dir,
-            browser_extension_health
+            browser_extension_health,
+            cookie_jar_status
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1889,7 +1896,6 @@ struct AppContext {
     user_id: uuid::Uuid,
     last_auth_check: i64,
     no_of_failed_logins: i64,
-    cookie_jar: Arc<Mutex<CookieJar>>,
 }
 
 struct AppContextState(Arc<Mutex<AppContext>>);
@@ -1916,6 +1922,8 @@ struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 
 struct WombatApiInstance(Arc<RwLock<wombat_api::WombatApi>>);
+struct BrowserExtensionInstance(Arc<Mutex<BrowserExtension>>);
+struct CookieJarInstance(Arc<Mutex<CookieJar>>);
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
