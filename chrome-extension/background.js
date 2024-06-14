@@ -1,7 +1,7 @@
 /* global */
 /** @type {Array.<Cookie>} */
 let cookies = [];
-const extVersion = '4.1.0';
+const extVersion = '4.0.2'
 let syncEnabled = false;
 class Cookie {
 	constructor(name, value, env) {
