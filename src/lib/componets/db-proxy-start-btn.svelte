@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { execute } from '$lib/stores/error-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
