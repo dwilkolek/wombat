@@ -20,6 +20,11 @@
 	const openGithubPageRelease = () => {
 		open('https://github.com/dwilkolek/wombat/releases/latest');
 	};
+	const openExtInstallGuide = () => {
+		open(
+			'https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked'
+		);
+	};
 
 	const { wombatAwsProfiles } = availableProfilesStore;
 	let { login } = userStore;
@@ -82,7 +87,7 @@
 				{:else}
 					<div class="bg-rose-500 w-2 h-2 rounded" />
 				{/if}
-				<span> Browser extension : </span>
+				<span>browser extension : </span>
 				<span class="">
 					{#if $browserExtensionStatus.connected}
 						v{$browserExtensionStatus.version}
@@ -91,6 +96,28 @@
 					{/if}
 				</span>
 			</div>
+		</div>
+	</div>
+	<div class="absolute right-4 top-4 p-2">
+		<h1 class="font-bold text-amber-400">Chrome extension</h1>
+		<div class="flex flex-col gap-1 text-sm">
+			<ul class="list-disc ml-6">
+				<li>automates <span class="text-orange-300">aws sso login</span> process</li>
+				<li>automates github login process</li>
+				<li>enables proxing to lambda services like commenting service</li>
+			</ul>
+
+			<a
+				on:click|preventDefault={() => {
+					openExtInstallGuide();
+				}}
+				target="_blank"
+				href="https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked"
+				>👉 <span class="underline text-amber-300 hover:text-amber-500">Installation guide</span></a
+			>
+			{#await invoke('chrome_extension_dir') then dir}
+				<pre class="text-xs ml-6">{dir}</pre>
+			{/await}
 		</div>
 	</div>
 	<div class="hero-content flex-col">
@@ -208,12 +235,6 @@
 			<div class="flex gap-1">
 				<span>User Id:</span>
 				<pre>{userId}</pre>
-			</div>
-			<div class="flex gap-1 text-sm">
-				<span>Chrome extension location:</span>
-				{#await invoke('chrome_extension_dir') then dir}
-					<pre>{dir}</pre>
-				{/await}
 			</div>
 		</div>
 	</div>
