@@ -10,12 +10,16 @@
 	},
 	"content_scripts": [
 		{
-			"js": ["verify.js"],
+			"js": ["aws-step-1.js"],
 			"matches": ["*://device.sso.eu-west-1.amazonaws.com/*"]
 		},
 		{
-			"js": ["allow.js"],
+			"js": ["aws-step-2.js"],
 			"matches": ["*://technipfmc.awsapps.com/start/*"]
+		},
+		{
+			"js": ["github.js"],
+			"matches": ["*://github.com/enterprises/TechnipFMC-emu/sso"]
 		}
 	],
 	"action": {

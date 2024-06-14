@@ -1404,7 +1404,7 @@ async fn start_lambda_app_proxy(
     }
 
     interceptors.push(Box::new(proxy_authenticators::CookieAutheticator {
-        cookie_name: format!("session-v1-{}", env.to_string().to_lowercase()),
+        env,
         jar,
     }));
 
@@ -1705,7 +1705,7 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
     let cookie_jar = Arc::new(Mutex::new(CookieJar {
-        cookies: HashMap::new(),
+        cookies: Vec::new(),
         last_health_check: Utc::now() - chrono::Duration::days(100),
     }));
     tokio::task::spawn(rest_api::serve(cookie_jar.clone()));
