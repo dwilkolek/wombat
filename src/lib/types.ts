@@ -5,7 +5,11 @@ export type CookieHealth = 'Ok' | 'Stale' | 'Old';
 export type CookieHealthMap = { [key in AwsEnv]?: CookieHealth };
 export type BrowserExtensionStatus = {
 	connected: boolean;
-	cookie_health: CookieHealthMap;
+	version: string | undefined;
+};
+
+export type CookieJarStatus = {
+	cookieHealth: CookieHealthMap;
 };
 
 export type WombatAwsProfile = {
