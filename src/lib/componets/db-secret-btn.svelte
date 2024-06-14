@@ -3,7 +3,7 @@
 	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
 	import { ask, message } from '@tauri-apps/api/dialog';
 	import { invoke } from '@tauri-apps/api/tauri';
-	import { availableProfilesStore, wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	export let database: RdsInstance | undefined;
 
@@ -61,8 +61,6 @@
 	{:else}
 		<div class="tooltip tooltip-left" data-tip={`Missing aws profile: ${database.normalized_name}`}>
 			<button class="opacity-30" disabled>
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
-				<!-- svelte-ignore a11y-no-static-element-interactions -->
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
