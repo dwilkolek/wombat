@@ -10,27 +10,42 @@ use tracing_unwrap::{OptionExt, ResultExt};
 
 pub type TrackedName = String;
 
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Cookie {
+    pub name: String,
+    pub value: String,
+    pub env: Env,
+    pub stored_at: DateTime<Utc>,
+}
+
 pub struct CookieJar {
-    pub cookies: HashMap<String, (DateTime<Utc>, String)>,
+    pub cookies: Vec<Cookie>,
     pub last_health_check: DateTime<Utc>,
 }
 
 impl CookieJar {
+    pub fn header_value_for_env(&self, env: &Env) -> String {
+        self.cookies
+            .iter()
+            .filter(|c| c.env == *env)
+            .map(|c| format!("{}={}", c.name, c.value))
+            .collect::<Vec<String>>()
+            .join("; ")
+    }
     pub fn to_status(&self) -> BrowserExtensionStatus {
         BrowserExtensionStatus {
             connected: (Utc::now() - self.last_health_check).num_seconds() < 10,
             cookie_health: self
                 .cookies
                 .iter()
-                .map(|entry| {
-                    let env = Env::from_any(entry.0);
-                    let cookie_health = match (Utc::now() - entry.1 .0).num_seconds() {
+                .map(|cookie| {
+                    let cookie_health = match (Utc::now() - cookie.stored_at).num_seconds() {
                         0..=300 => CookieHealth::Ok,
                         301..=600 => CookieHealth::Stale,
                         _ => CookieHealth::Old,
                     };
 
-                    (env, cookie_health)
+                    (cookie.env.clone(), cookie_health)
                 })
                 .collect(),
         }

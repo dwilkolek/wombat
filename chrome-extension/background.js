@@ -1,26 +1,49 @@
 /* global */
-const cookies = {};
+/** @type {Array.<Cookie>} */
+let cookies = [];
+
 let syncEnabled = false;
+class Cookie {
+	constructor(name, value, env) {
+		this.name = name;
+		this.value = value;
+		this.env = env;
+		this.storedAt = now();
+	}
+}
 const cookiesConfig = [
 	{
 		name: 'session-v1-dev',
-		domain: 'https://dxp.dev.services.technipfmc.com'
+		domain: 'https://dxp.dev.services.technipfmc.com',
+		env: 'DEV'
 	},
 	{
 		name: 'session-v1-demo',
-		domain: 'https://dxp.demo.services.technipfmc.com'
+		domain: 'https://dxp.demo.services.technipfmc.com',
+		env: 'DEMO'
 	},
 	{
-		name: 'session-v1-prod',
-		domain: 'https://dxp.services.technipfmc.com'
+		name: 'session-v1',
+		domain: 'https://dxp.services.technipfmc.com',
+		env: 'PROD'
 	}
 ];
+
+/**
+    @param {String} name
+    @param {String} env
+    @returns {String}
+*/
+function storageCookieKey(name, env) {
+	return `v2-${name}-${env}`;
+}
+
 chrome.storage.local.get(
-	cookiesConfig.map((e) => e.name),
+	cookiesConfig.map((e) => storageCookieKey(e.name, e.env)),
 	(v) => {
 		console.log('restored cookies', v);
 		Object.entries(v).forEach((cv) => {
-			cookies[cv[0]] = cv[1];
+			cookies.push(cv[1]);
 		});
 		syncEnabled = true;
 	}
@@ -35,12 +58,12 @@ function isCookieFresh(dateTimeMillis) {
 
 /* popup */
 let popupOpen = false;
-function sendCookieToPopup(name, value, storedAt) {
+/** @param {Cookie} cookie */
+function sendCookieToPopup(cookie) {
 	if (popupOpen) {
 		chrome.runtime.sendMessage({
 			action: 'newCookie',
-			name,
-			cookie: isCookieFresh(storedAt) ? value ?? '<null>' : '<null>'
+			cookie: cookie
 		});
 	}
 }
@@ -51,20 +74,21 @@ function notifyPopupDeskopCLientOnline() {
 
 /* desktop */
 let wombatOpen = false;
-function sendCookieToDesktop(name, value, storedAt) {
-	if (!isCookieFresh(storedAt)) {
+/** @param {Cookie} cookie */
+function sendCookieToDesktop(cookie) {
+	if (!isCookieFresh(cookie.storedAt)) {
 		return;
 	}
-	if (value) {
-		fetch(`http://localhost:6891/cookies/${name}`, {
-			body: JSON.stringify(value),
+	if (cookie.value) {
+		fetch(`http://localhost:6891/cookies`, {
+			body: JSON.stringify(cookie),
 			method: 'PUT',
 			headers: { Accept: 'application/json', 'Content-Type': 'application/json' }
 		})
 			.then(() => {})
 			.catch(() => {});
 	} else {
-		fetch(`http://localhost:6891/cookies/${name}`, {
+		fetch(`http://localhost:6891/cookies/${cookie.name}`, {
 			method: 'DELETE'
 		})
 			.then(() => {})
@@ -72,8 +96,8 @@ function sendCookieToDesktop(name, value, storedAt) {
 	}
 }
 function notifyDeskopClient() {
-	Object.entries(cookies).forEach((cookie) => {
-		sendCookieToDesktop(cookie[0], cookie[1][0], cookie[1][1]);
+	cookies.forEach((cookie) => {
+		sendCookieToDesktop(cookie);
 	});
 }
 
@@ -88,8 +112,8 @@ chrome.runtime.onConnect.addListener(function (port) {
 	if (port.name === 'popup') {
 		popupOpen = true;
 		chrome.runtime.sendMessage({ action: 'desktopApp', alive: wombatOpen });
-		Object.entries(cookies).forEach((entry) => {
-			sendCookieToPopup(entry[0], entry[1][0], entry[1][1]);
+		cookies.forEach((cookie) => {
+			sendCookieToPopup(cookie);
 		});
 		port.onDisconnect.addListener(function () {
 			popupOpen = false;
@@ -114,18 +138,22 @@ setInterval(function () {
 	if (!syncEnabled) {
 		return;
 	}
-	cookiesConfig.forEach(({ name, domain }) => {
-		chrome.cookies.get({ url: domain, name: name }, (cookie) => {
-			const cookieValue = cookie?.value;
-			const [oldCookieValue] = cookies[name] ?? [null, now()];
-			if (oldCookieValue == cookieValue) {
+	cookiesConfig.forEach(({ name, domain, env }) => {
+		chrome.cookies.get({ url: domain, name: name }, (chromeCookie) => {
+			const cookieValue = chromeCookie?.value;
+			const oldCookie = cookies.find((c) => c.name == name && c.env == env);
+			if (oldCookie?.value == cookieValue) {
 				return;
 			}
-			cookies[name] = [cookieValue, now()];
-			chrome.storage.local.set({ [name]: [cookieValue, now()] });
-			console.log('updating session key', name);
-			sendCookieToDesktop(name, cookieValue, now());
-			sendCookieToPopup(name, cookieValue, now());
+			const cookie = new Cookie(name, cookieValue, env);
+
+			cookies = cookies.filter((c) => c.name != name || c.env != env);
+			cookies.push(cookie);
+
+			chrome.storage.local.set({ [storageCookieKey(cookie.name, cookie.env)]: cookie });
+			console.log('updating session key', cookie);
+			sendCookieToDesktop(cookie);
+			sendCookieToPopup(cookie);
 		});
 	});
 }, 1000);
