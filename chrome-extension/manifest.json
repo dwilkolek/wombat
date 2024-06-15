@@ -19,7 +19,7 @@
 		},
 		{
 			"js": ["github.js"],
-			"matches": ["*://github.com/enterprises/TechnipFMC-emu/sso"]
+			"matches": ["*://github.com/*"]
 		}
 	],
 	"action": {
