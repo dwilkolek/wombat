@@ -103,7 +103,7 @@
 		<div class="flex flex-col gap-1 text-sm">
 			<ul class="list-disc ml-6">
 				<li>automates <span class="text-orange-300">aws sso login</span> process</li>
-				<li>automates github login process</li>
+				<li>automates github sign-in confirmation process</li>
 				<li>enables proxing to lambda services like commenting service</li>
 			</ul>
 
