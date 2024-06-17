@@ -1,8 +1,8 @@
-function execute() {
+function execute(i) {
+	console.log('aws step 2', i);
 	const allowBtn = document.querySelector('button[data-testid=allow-access-button]');
 	if (allowBtn) {
 		console.log('allow button found', allowBtn);
-		interval && clearInterval(interval);
 		allowBtn.click();
 		setInterval(() => {
 			if (document.querySelector('.awsui-context-alert')?.innerText?.includes('Request approved')) {
@@ -11,6 +11,9 @@ function execute() {
 		}, 400);
 		return;
 	}
+	if (i < 10) {
+		setTimeout(() => execute(i + 1), 200);
+	}
 }
-let interval = setInterval(execute, 1000);
-console.log('allow.js loaded');
+
+setTimeout(() => execute(0));
