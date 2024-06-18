@@ -12,6 +12,7 @@ pub type TrackedName = String;
 
 pub struct BrowserExtension {
     pub version: Option<String>,
+    pub reported_version: Option<String>,
     pub last_health_check: DateTime<Utc>,
 }
 impl BrowserExtension {

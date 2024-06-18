@@ -1,4 +1,5 @@
 use futures::TryFutureExt;
+use log::info;
 use serde::{Deserialize, Serialize};
 
 pub static REQUIRED_FEATURE: &str = "wombat-4.1.0";
@@ -143,6 +144,53 @@ impl WombatApi {
         }
         vec![]
     }
+
+    pub async fn event(&self, event: String) {
+        if let Some(client) = self.client() {
+            let result = client
+                .post(format!("{}/api/events", self.url))
+                .json(&TrackedEvent {
+                    name: event.clone(),
+                })
+                .send()
+                .await;
+            info!("reporting event: {:?}, result_ok={}", event, result.is_ok());
+        }
+    }
+
+    pub async fn report_versions(&self, browser_extension: Option<String>) -> bool {
+        if let Some(client) = self.client() {
+            let result = client
+                .post(format!("{}/api/versions", self.url))
+                .json(&Versions {
+                    browser_extension: browser_extension.clone(),
+                    app: env!("CARGO_PKG_VERSION").to_owned(),
+                })
+                .send()
+                .await;
+            info!(
+                "Reporting versions app={} browser_ext={:?}, result_ok={}",
+                env!("CARGO_PKG_VERSION").to_owned(),
+                browser_extension,
+                result.is_ok()
+            );
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct TrackedEvent {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Versions {
+    browser_extension: Option<String>,
+    app: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
