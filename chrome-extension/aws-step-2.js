@@ -1,5 +1,4 @@
 function execute(i) {
-	console.log('aws step 2', i);
 	const allowBtn = document.querySelector('button[data-testid=allow-access-button]');
 	if (allowBtn) {
 		console.log('allow button found', allowBtn);

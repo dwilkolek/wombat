@@ -20,6 +20,10 @@
 		{
 			"js": ["github.js"],
 			"matches": ["*://github.com/*"]
+		},
+		{
+			"js": ["snowflake.js"],
+			"matches": ["http://localhost/*"]
 		}
 	],
 	"action": {
