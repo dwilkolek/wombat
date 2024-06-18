@@ -1,5 +1,6 @@
 function execute(i) {
-	if (document.querySelector('h1').innerText == 'Single sign-on to TechnipFMC - EMU') {
+	const header = document.querySelector('h1');
+	if (header && header.innerText == 'Single sign-on to TechnipFMC - EMU') {
 		const continueBtn = document.querySelector('button[type=submit]');
 		if (continueBtn) {
 			continueBtn.click();
