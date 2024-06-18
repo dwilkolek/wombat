@@ -297,6 +297,7 @@ async fn login(
             format!("Wombat backend API is not ok. Reason: {}", status),
         ));
     }
+    api.report_versions(None).await;
 
     let refresher_axiom = Arc::clone(&axiom.0);
     let refresher_user_id = authorized_user.id;
@@ -1705,17 +1706,31 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
 #[tokio::main]
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
+    let app_config = app_config();
+    let user = UserConfig::default();
     let cookie_jar = Arc::new(Mutex::new(CookieJar {
         cookies: Vec::new(),
     }));
     let browser_ext = Arc::new(Mutex::new(BrowserExtension {
         last_health_check: Utc::now() - chrono::Duration::days(100),
         version: None,
+        reported_version: None,
     }));
+    let wombat_api = wombat_api::WombatApi::new(
+        app_config.wombat_api_url.clone(),
+        app_config.wombat_api_user.clone(),
+        app_config.wombat_api_password.clone(),
+        user.id,
+    );
 
-    tokio::task::spawn(rest_api::serve(cookie_jar.clone(), browser_ext.clone()));
+    let wombat_api = Arc::new(RwLock::new(wombat_api));
 
-    let app_config = app_config();
+    tokio::task::spawn(rest_api::serve(
+        cookie_jar.clone(),
+        browser_ext.clone(),
+        wombat_api.clone(),
+    ));
+
     let _guard = match app_config.logger.as_str() {
         "console" => {
             tracing_subscriber::fmt().init();
@@ -1736,14 +1751,7 @@ async fn main() {
     };
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
-    let user = UserConfig::default();
 
-    let api = wombat_api::WombatApi::new(
-        app_config.wombat_api_url.clone(),
-        app_config.wombat_api_user.clone(),
-        app_config.wombat_api_password.clone(),
-        user.id,
-    );
     let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
     let app = tauri::Builder::default()
         .setup(|app| {
@@ -1809,7 +1817,7 @@ async fn main() {
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
             EcsResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
-        .manage(WombatApiInstance(Arc::new(RwLock::new(api))))
+        .manage(WombatApiInstance(wombat_api))
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
