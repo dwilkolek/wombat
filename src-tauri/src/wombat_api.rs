@@ -145,16 +145,25 @@ impl WombatApi {
         vec![]
     }
 
-    pub async fn event(&self, event: String) {
-        if let Some(client) = self.client() {
-            let result = client
-                .post(format!("{}/api/events", self.url))
-                .json(&TrackedEvent {
-                    name: event.clone(),
-                })
-                .send()
-                .await;
-            info!("reporting event: {:?}, result_ok={}", event, result.is_ok());
+    pub fn event(&self, event: &str) {
+        let event = event.to_owned();
+        let client = self.client();
+        let url = self.url.clone();
+
+        info!("reporting event {event}, client={}", client.is_some());
+        if client.is_some() {
+            tokio::task::spawn(async move {
+                if let Some(client) = client {
+                    let result = client
+                        .post(format!("{}/api/events", url))
+                        .json(&TrackedEvent {
+                            name: event.clone(),
+                        })
+                        .send()
+                        .await;
+                    info!("reporting event: {:?}, result_ok={}", event, result.is_ok());
+                }
+            });
         }
     }
 
