@@ -292,11 +292,13 @@ async fn login(
     let mut api = wombat_api_instance.0.write().await;
     let api_status = api.status().await;
     if let Err(status) = api_status {
+        api.event("login-failed");
         return Err(BError::new(
             "login",
             format!("Wombat backend API is not ok. Reason: {}", status),
         ));
     }
+    api.event("login-success");
     api.report_versions(None).await;
 
     let refresher_axiom = Arc::clone(&axiom.0);
@@ -432,7 +434,11 @@ async fn credentials(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<DbSecret, BError> {
+    let wombat_api = wombat_api.0.read().await;
+    wombat_api.event("db-credentials-get");
+
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
@@ -483,6 +489,10 @@ async fn credentials(
             .await
         }
     };
+    match secret {
+        Ok(_) => wombat_api.event("db-credentials-found"),
+        Err(_) => wombat_api.event("db-credentials-not-found"),
+    }
     secret
 }
 
@@ -493,7 +503,12 @@ async fn stop_job(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("stop-job");
+    }
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("stop_job", msg)),
         Ok(authorized_user) => authorized_user,
@@ -603,7 +618,12 @@ async fn logout(
     task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_state: tauri::State<'_, UserConfigState>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("logout");
+    }
     let mut app_state = app_state.0.lock().await;
     if let Some(profile) = app_state.active_profile.as_ref() {
         ingest_log(
@@ -725,7 +745,12 @@ async fn find_logs(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("logs-search");
+    }
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("find_logs", msg)),
         Ok(authorized_user) => authorized_user,
@@ -846,7 +871,12 @@ async fn abort_find_logs(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
     user_config: tauri::State<'_, UserConfigState>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("logs-search-abort");
+    }
     info!("Attempt to abort find logs: {}", &reason);
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handler) = &tracker.search_log_handler {
@@ -899,7 +929,13 @@ async fn restart_service(
     axiom: tauri::State<'_, AxiomClientState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<String, BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("ecs-service-restart");
+    }
+
     let _authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("restart_service", msg)),
         Ok(authorized_user) => authorized_user,
@@ -930,6 +966,7 @@ async fn databases(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn discover(
     window: Window,
     name: &str,
@@ -938,7 +975,12 @@ async fn discover(
     axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<Vec<String>, BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("discover");
+    }
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("discover", msg)),
         Ok(authorized_user) => authorized_user,
@@ -1011,6 +1053,7 @@ async fn discover(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn start_db_proxy(
     window: Window,
     db: aws::RdsInstance,
@@ -1019,7 +1062,12 @@ async fn start_db_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("db-proxy-start");
+    }
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_db_proxy", msg)),
         Ok(authorized_user) => authorized_user,
@@ -1081,7 +1129,13 @@ async fn refresh_cache(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("cache-refresh");
+    }
+
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("refresh_cache", msg)),
         Ok(authorized_user) => authorized_user,
@@ -1238,7 +1292,12 @@ async fn start_service_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("ecs-proxy-start");
+    }
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1379,7 +1438,12 @@ async fn start_lambda_app_proxy(
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("lambda-app-proxy-start");
+    }
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1514,6 +1578,7 @@ async fn wombat_aws_profiles(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 async fn open_dbeaver(
     window: Window,
     db: aws::RdsInstance,
@@ -1522,7 +1587,12 @@ async fn open_dbeaver(
     app_state: tauri::State<'_, AppContextState>,
     axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("open-dbeaver");
+    }
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
             format!(
