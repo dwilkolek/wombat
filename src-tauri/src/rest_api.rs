@@ -81,7 +81,7 @@ async fn browser_extension_event(
 ) -> Result<warp::reply::Response, warp::Rejection> {
     log::info!("browser extension event: {}", &body.event);
     let wombat_api = wombat_api.read().await;
-    wombat_api.event(body.event).await;
+    wombat_api.event(&body.event);
     Ok(warp::reply().into_response())
 }
 
