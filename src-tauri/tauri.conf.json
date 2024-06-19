@@ -1,90 +1,101 @@
 {
-	"$schema": "../node_modules/@tauri-apps/cli/schema.json",
-	"build": {
-		"beforeBuildCommand": "npm run build",
-		"beforeDevCommand": "npm run dev",
-		"devPath": "http://localhost:5173",
-		"distDir": "../build"
-	},
-	"package": {
-		"productName": "Wombat",
-		"version": "4.0.2"
-	},
-	"tauri": {
-		"allowlist": {
-			"all": false,
-			"shell": {
-				"all": false,
-				"execute": false,
-				"open": true,
-				"scope": [],
-				"sidecar": false
-			},
-			"clipboard": {
-				"writeText": true
-			},
-			"dialog": {
-				"ask": true,
-				"message": true
-			},
-			"process": {
-				"all": false,
-				"exit": true,
-				"relaunch": false,
-				"relaunchDangerousAllowSymlinkMacos": false
-			},
-			"http": {
-				"request": true,
-				"scope": ["https://api.github.com/repos/dwilkolek/wombat/*"]
-			}
-		},
-		"bundle": {
-			"active": true,
-			"category": "DeveloperTool",
-			"copyright": "",
-			"deb": {
-				"depends": []
-			},
-			"externalBin": [],
-			"icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
-			"identifier": "eu.wilkolek.wombat",
-			"longDescription": "",
-			"macOS": {
-				"entitlements": null,
-				"exceptionDomain": "",
-				"frameworks": [],
-				"providerShortName": null,
-				"signingIdentity": null
-			},
-			"resources": ["../chrome-extension"],
-			"shortDescription": "",
-			"targets": "all",
-			"windows": {
-				"certificateThumbprint": null,
-				"digestAlgorithm": "sha256",
-				"timestampUrl": ""
-			}
-		},
-		"security": {
-			"csp": null
-		},
-		"updater": {
-			"active": true,
-			"endpoints": ["https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"],
-			"dialog": true,
-			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBOTI4MDNCMTY0RTU4NDMKUldSRFdFNFdPNENTR290QmhzTy9ZNUR1UEtTWEIrRndBdGF1OGZDYTBtTWRsdUt6b3dmd2hGV2QK",
-			"windows": {
-				"installMode": "basicUi"
-			}
-		},
-		"windows": [
-			{
-				"fullscreen": false,
-				"resizable": true,
-				"title": "Wombat - in combat",
-				"width": 1440,
-				"height": 900
-			}
-		]
-	}
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:5173",
+    "distDir": "../build"
+  },
+  "package": {
+    "productName": "Wombat",
+    "version": "4.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "execute": false,
+        "open": true,
+        "scope": [],
+        "sidecar": false
+      },
+      "clipboard": {
+        "writeText": true
+      },
+      "dialog": {
+        "ask": true,
+        "message": true
+      },
+      "process": {
+        "all": false,
+        "exit": true,
+        "relaunch": false,
+        "relaunchDangerousAllowSymlinkMacos": false
+      },
+      "http": {
+        "request": true,
+        "scope": [
+          "https://api.github.com/repos/dwilkolek/wombat/*"
+        ]
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "DeveloperTool",
+      "copyright": "",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.ico"
+      ],
+      "identifier": "eu.wilkolek.wombat",
+      "longDescription": "",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": [
+        "../chrome-extension"
+      ],
+      "shortDescription": "",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBOTI4MDNCMTY0RTU4NDMKUldSRFdFNFdPNENTR290QmhzTy9ZNUR1UEtTWEIrRndBdGF1OGZDYTBtTWRsdUt6b3dmd2hGV2QK",
+      "windows": {
+        "installMode": "basicUi"
+      }
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Wombat - in combat",
+        "width": 1440,
+        "height": 900
+      }
+    ]
+  }
 }
