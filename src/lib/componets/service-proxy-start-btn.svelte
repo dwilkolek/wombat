@@ -7,12 +7,13 @@
 		type InfraProfile,
 		type SsoProfile
 	} from '$lib/types';
-	import { invoke } from '@tauri-apps/api';
 	import { ask, message } from '@tauri-apps/api/dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { type CustomHeader } from '$lib/types';
+	import { taskStore, type NewTaskParams, TaskStatus } from '$lib/stores/task-store';
+	import { invoke } from '@tauri-apps/api/tauri';
 
 	export let service: ServiceDetails;
 	let dialog: HTMLDialogElement;
@@ -36,7 +37,9 @@
 	$: matchingInfraProfiles =
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
 		[];
-	$: isStartButtonDisabled = matchingInfraProfiles.length === 0;
+	$: isStartButtonDisabled =
+		matchingInfraProfiles.length === 0 ||
+		$taskStore.some((t) => t.arn == service.arn && t.status == TaskStatus.STARTING);
 
 	$: proxyAuthConfigsForThisService = $proxyAuthConfigsStore.filter(
 		(config) => config.env == service.env && config.toApp == service.name
@@ -54,9 +57,9 @@
 	};
 
 	const startProxy = async (
-		infraProfile: InfraProfile | null | undefined,
-		ssoProfile: SsoProfile | null | undefined,
-		proxyAuthConfig: ProxyAuthConfig | null | undefined,
+		infraProfile: InfraProfile | undefined,
+		ssoProfile: SsoProfile | undefined,
+		proxyAuthConfig: ProxyAuthConfig | undefined,
 		customHeadersList: CustomHeader[]
 	) => {
 		if (service?.env == AwsEnv.PROD) {
@@ -77,13 +80,16 @@
 		customHeadersList.forEach((header) => {
 			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
 		});
-		invoke('start_service_proxy', {
-			service,
-			proxyAuthConfig,
-			infraProfile,
-			ssoProfile,
-			headers
+		taskStore.startTask({ ...service, proxyAuthConfig }, async () => {
+			return invoke<NewTaskParams>('start_service_proxy', {
+				service,
+				proxyAuthConfig,
+				infraProfile,
+				ssoProfile,
+				headers
+			});
 		});
+		dialog.close();
 	};
 </script>
 
@@ -325,8 +331,8 @@
 					class="btn btn-active btn-accent btn-sm"
 					on:click|preventDefault={() => {
 						startProxy(
-							useDevWayFeature ? null : selectedInfraProfile,
-							useDevWayFeature ? selectedSsoProxy : null,
+							useDevWayFeature ? undefined : selectedInfraProfile,
+							useDevWayFeature ? selectedSsoProxy : undefined,
 							selectedAuthInterceptor,
 							customHeaders
 						);

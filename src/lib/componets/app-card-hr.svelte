@@ -1,16 +1,16 @@
 <script lang="ts">
-	import type { ProxyEventMessage } from '$lib/stores/task-store';
+	import { TaskStatus, type Task } from '$lib/stores/task-store';
 
-	export let task: ProxyEventMessage | undefined;
+	export let task: Task | undefined;
 </script>
 
 {#if task}
-	{#if task.status == 'STARTING'}
+	{#if task.status == TaskStatus.STARTING}
 		<div class={`grow flex gap-1 text-amber-300 relative items-stretch animate-pulse`}>
-			{#if task.proxy_auth_config}
+			{#if task.proxyAuthConfig}
 				<span class="text-xs absolute bottom-0 left-4 w-full"
-					>{task.proxy_auth_config?.authType}:&nbsp;{task.proxy_auth_config?.jepsenClientId ??
-						task.proxy_auth_config?.basicUser ??
+					>{task.proxyAuthConfig?.authType}:&nbsp;{task.proxyAuthConfig?.jepsenClientId ??
+						task.proxyAuthConfig?.basicUser ??
 						'?'}</span
 				>
 				<div class={`bg-lime-600 h-[2px] w-full rounded`} />
@@ -20,17 +20,32 @@
 		</div>
 	{/if}
 
-	{#if task.status == 'STARTED'}
+	{#if task.status == TaskStatus.RUNNING}
 		<div class={`grow flex gap-1 text-amber-300 relative items-stretch`}>
-			{#if task.proxy_auth_config}
+			{#if task.proxyAuthConfig}
 				<span class="text-xs absolute bottom-0 left-4 w-full"
-					>{task.proxy_auth_config?.authType}:&nbsp;{task.proxy_auth_config?.jepsenClientId ??
-						task.proxy_auth_config?.basicUser ??
+					>{task.proxyAuthConfig?.authType}:&nbsp;{task.proxyAuthConfig?.jepsenClientId ??
+						task.proxyAuthConfig?.basicUser ??
 						'?'}</span
 				>
 				<div class={`bg-lime-600 h-[2px] w-full rounded`} />
 			{:else}
 				<div class={`bg-lime-600 h-[2px] w-full rounded`} />
+			{/if}
+		</div>
+	{/if}
+
+	{#if task.status == TaskStatus.FAILED}
+		<div class={`grow flex gap-1 text-amber-300 relative items-stretch`}>
+			{#if task.proxyAuthConfig}
+				<span class="text-xs absolute bottom-0 left-4 w-full"
+					>{task.proxyAuthConfig?.authType}:&nbsp;{task.proxyAuthConfig?.jepsenClientId ??
+						task.proxyAuthConfig?.basicUser ??
+						'?'}</span
+				>
+				<div class={`bg-rose-600 h-[2px] w-full rounded`} />
+			{:else}
+				<div class={`bg-rose-600 h-[2px] w-full rounded`} />
 			{/if}
 		</div>
 	{/if}

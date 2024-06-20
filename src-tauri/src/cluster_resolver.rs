@@ -56,7 +56,7 @@ impl ClusterResolver {
     }
 
     pub async fn clusters(&mut self) -> Vec<aws::Cluster> {
-        let mut aws_config_resolver = self.aws_config_resolver.write().await;
+        let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         info!("Resolving clusters");
         let db = self.db.read().await;

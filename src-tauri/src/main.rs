@@ -11,8 +11,7 @@ use log::{error, info, warn};
 use rds_resolver::RdsResolver;
 use serde_json::json;
 use shared::{
-    arn_resource_type, arn_to_name, ecs_arn_to_name, rds_arn_to_name, BError, BrowserExtension,
-    CookieJar, Env, ResourceType,
+    ecs_arn_to_name, rds_arn_to_name, BError, BrowserExtension, CookieJar, Env, ResourceType,
 };
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
@@ -26,7 +25,6 @@ use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
-use wait_timeout::ChildExt;
 
 mod aws;
 mod cache_db;
@@ -42,32 +40,15 @@ mod user;
 mod wombat_api;
 
 #[derive(Clone, serde::Serialize)]
-struct ProxyEventMessage {
+struct TaskKilled {
     arn: String,
-    status: String,
-    port: u16,
-    name: String,
-    env: Env,
-    proxy_type: ResourceType,
-    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
 }
-impl ProxyEventMessage {
-    fn new(
-        arn: String,
-        status: String,
-        port: u16,
-        proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
-    ) -> Self {
-        Self {
-            arn: arn.clone(),
-            status,
-            port,
-            name: arn_to_name(&arn),
-            env: Env::from_any(&arn),
-            proxy_type: arn_resource_type(&arn).unwrap_or_log(),
-            proxy_auth_config,
-        }
-    }
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NewTaskParams {
+    port: u16,
+    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -84,7 +65,7 @@ struct AuthorizedUser {
     profile: String,
 }
 
-const CHECK_AUTH_AFTER: i64 = 45 * 60 * 1000; // every 45 minutes.
+const CHECK_AUTH_AFTER: i64 = 5 * 60 * 1000; // every 5 minutes.
 
 async fn get_authorized(
     window: &Window,
@@ -100,7 +81,7 @@ async fn get_authorized(
     if now - last_check > CHECK_AUTH_AFTER {
         info!("Checking authentication");
         for env in profile.sso_profiles.keys() {
-            let mut aws_config_provider = aws_config_provider.write().await;
+            let aws_config_provider = aws_config_provider.read().await;
             let (aws_profile, config) = aws_config_provider.sso_config(env).await;
             let login_check = check_login_and_trigger(user_id, &aws_profile, &config, axiom).await;
             if login_check.is_err() {
@@ -115,6 +96,8 @@ async fn get_authorized(
         }
         app_ctx.no_of_failed_logins = 0;
         app_ctx.last_auth_check = now;
+    } else {
+        info!("Checking authentication skipped");
     }
 
     Ok(AuthorizedUser {
@@ -443,7 +426,7 @@ async fn credentials(
         Err(msg) => return Err(BError::new("credentials", msg)),
         Ok(authorized_user) => authorized_user,
     };
-    let mut aws_config_provider = aws_config_provider.0.write().await;
+    let aws_config_provider = aws_config_provider.0.read().await;
     let (_, aws_config) = aws_config_provider
         .app_config(&db.normalized_name, &db.env)
         .await
@@ -531,8 +514,10 @@ async fn stop_job(
         if kill_result.is_ok() {
             info!("Killing dependant job, success: {}", kill_result.is_ok());
             let _ = window.emit(
-                "proxy-end",
-                ProxyEventMessage::new(arn.to_owned(), "END".into(), 0, None),
+                "task-killed",
+                TaskKilled {
+                    arn: arn.to_owned(),
+                },
             );
         }
     }
@@ -793,7 +778,7 @@ async fn find_logs(
     let user_config = Arc::clone(&user_config.0);
     let sdk_config: aws_config::SdkConfig;
     {
-        let mut aws_config_provider = aws_config_provider.0.write().await;
+        let aws_config_provider = aws_config_provider.0.read().await;
         //TODO: it will be annoying to do to search logs with different sdk_configs...
         //Let's hope it will keep working.
         let app_config = aws_config_provider.sso_config(&env).await;
@@ -873,13 +858,13 @@ async fn abort_find_logs(
     user_config: tauri::State<'_, UserConfigState>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("logs-search-abort");
-    }
     info!("Attempt to abort find logs: {}", &reason);
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handler) = &tracker.search_log_handler {
+        {
+            let wombat_api = wombat_api.0.read().await;
+            wombat_api.event("logs-search-abort");
+        }
         handler.abort();
         ingest_log(
             &axiom.0,
@@ -940,7 +925,7 @@ async fn restart_service(
         Err(msg) => return Err(BError::new("restart_service", msg)),
         Ok(authorized_user) => authorized_user,
     };
-    let mut aws_config_provider = aws_config_provider.0.write().await;
+    let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
         .app_config_with_fallback(&service_name, &env)
         .await
@@ -1053,75 +1038,6 @@ async fn discover(
 }
 
 #[tauri::command]
-#[allow(clippy::too_many_arguments)]
-async fn start_db_proxy(
-    window: Window,
-    db: aws::RdsInstance,
-    user_config: tauri::State<'_, UserConfigState>,
-    app_state: tauri::State<'_, AppContextState>,
-    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    axiom: tauri::State<'_, AxiomClientState>,
-    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
-) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("db-proxy-start");
-    }
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("start_db_proxy", msg)),
-        Ok(authorized_user) => authorized_user,
-    };
-    let mut aws_config_provider = aws_config_provider.0.write().await;
-    let (aws_profile, aws_config) = aws_config_provider
-        .app_config(&db.normalized_name, &db.env)
-        .await
-        .expect("Missing sdk_config to start db proxy");
-
-    let mut user_config = user_config.0.lock().await;
-    let local_port = user_config.get_db_port(&db.arn);
-    window
-        .emit(
-            "proxy-starting",
-            ProxyEventMessage::new(db.arn.clone(), "STARTING".into(), local_port, None),
-        )
-        .unwrap_or_log();
-
-    let bastions = aws::bastions(&aws_config).await;
-    let bastion = bastions
-        .into_iter()
-        .find(|b| b.env == db.env)
-        .expect("No bastion found");
-
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
-        None,
-        None,
-    )
-    .await;
-    let region = aws_config_provider.get_region(&aws_profile).await;
-    proxy::start_aws_ssm_proxy(
-        db.arn,
-        window,
-        bastion.instance_id,
-        aws_profile,
-        region,
-        db.endpoint.address,
-        db.endpoint.port,
-        local_port,
-        None,
-        local_port,
-        async_task_tracker,
-        None,
-    )
-    .await;
-
-    Ok(())
-}
-
-#[tauri::command]
 async fn refresh_cache(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
@@ -1135,11 +1051,16 @@ async fn refresh_cache(
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("cache-refresh");
     }
-
+    {
+        let mut app_state = app_state.0.lock().await;
+        app_state.no_of_failed_logins = 0;
+        app_state.last_auth_check = 0;
+    }
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("refresh_cache", msg)),
         Ok(authorized_user) => authorized_user,
     };
+
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
@@ -1278,6 +1199,77 @@ async fn service_details(
     Ok(())
 }
 
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn start_db_proxy(
+    window: Window,
+    db: aws::RdsInstance,
+    user_config: tauri::State<'_, UserConfigState>,
+    app_state: tauri::State<'_, AppContextState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+    axiom: tauri::State<'_, AxiomClientState>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api: tauri::State<'_, WombatApiInstance>,
+) -> Result<NewTaskParams, BError> {
+    {
+        let wombat_api = wombat_api.0.read().await;
+        wombat_api.event("db-proxy-start");
+    }
+
+    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+        Err(msg) => return Err(BError::new("start_db_proxy", msg)),
+        Ok(authorized_user) => authorized_user,
+    };
+
+    let aws_config_provider = aws_config_provider.0.read().await;
+    let (aws_profile, aws_config) = aws_config_provider
+        .app_config(&db.normalized_name, &db.env)
+        .await
+        .expect("Missing sdk_config to start db proxy");
+    let region = aws_config_provider.get_region(&aws_profile).await;
+
+    let mut user_config = user_config.0.lock().await;
+    let local_port = user_config.get_db_port(&db.arn);
+
+    let bastions = aws::bastions(&aws_config).await;
+    let bastion = bastions
+        .into_iter()
+        .find(|b| b.env == db.env)
+        .expect("No bastion found");
+
+    ingest_log(
+        &axiom.0,
+        authorized_user.id,
+        Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
+        None,
+        None,
+    )
+    .await;
+
+    let proxy_started = proxy::start_aws_ssm_proxy(
+        db.arn.clone(),
+        window.clone(),
+        bastion.instance_id,
+        aws_profile,
+        region,
+        db.endpoint.address,
+        db.endpoint.port,
+        local_port,
+        None,
+        local_port,
+        async_task_tracker.clone(),
+    )
+    .await;
+
+    match proxy_started {
+        Ok(port) => Ok(NewTaskParams {
+            port,
+            proxy_auth_config: None,
+        }),
+        Err(proxy_err) => Err(BError::new("start_db_proxy", format!("{proxy_err}"))),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn start_service_proxy(
@@ -1293,7 +1285,7 @@ async fn start_service_proxy(
     axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
-) -> Result<(), BError> {
+) -> Result<NewTaskParams, BError> {
     {
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("ecs-proxy-start");
@@ -1305,28 +1297,18 @@ async fn start_service_proxy(
     }
 
     let aws_local_port = local_port + 10000;
-    window
-        .emit(
-            "proxy-starting",
-            ProxyEventMessage::new(
-                service.arn.clone(),
-                "STARTING".into(),
-                aws_local_port,
-                proxy_auth_config.clone(),
-            ),
-        )
-        .unwrap_or_log();
 
     let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
         Err(msg) => return Err(BError::new("start_service_proxy", msg)),
         Ok(authorized_user) => authorized_user,
     };
 
-    let mut aws_config_provider = aws_config_provider.0.write().await;
+    let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
         .with_dev_way_check(&infra_profile, &sso_profile)
         .await
         .expect("Missing sdk_config to start service proxy");
+
     let bastions = aws::bastions(&aws_config).await;
     let bastion = bastions
         .into_iter()
@@ -1405,7 +1387,7 @@ async fn start_service_proxy(
     let region = aws_config_provider.get_region(&aws_profile).await;
 
     let host = format!("{}.service", service.name);
-    proxy::start_aws_ssm_proxy(
+    let proxy_started = proxy::start_aws_ssm_proxy(
         service.arn,
         window,
         bastion.instance_id,
@@ -1417,29 +1399,35 @@ async fn start_service_proxy(
         Some(handle),
         local_port,
         async_task_tracker,
-        proxy_auth_config.clone(),
     )
     .await;
 
-    info!("Started proxy to {}", &service.name);
-
-    Ok(())
+    info!(
+        "Proxy to {} started={}",
+        &service.name,
+        proxy_started.is_ok()
+    );
+    match proxy_started {
+        Ok(port) => Ok(NewTaskParams {
+            port,
+            proxy_auth_config,
+        }),
+        Err(proxy_err) => Err(BError::new("start_ecs_proxy", format!("{proxy_err}"))),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn start_lambda_app_proxy(
-    window: Window,
     app: String,
     env: shared::Env,
     address: String,
     headers: HashMap<String, String>,
     cookie_jar: tauri::State<'_, CookieJarInstance>,
-    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
-) -> Result<(), BError> {
+) -> Result<NewTaskParams, BError> {
     {
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("lambda-app-proxy-start");
@@ -1450,18 +1438,6 @@ async fn start_lambda_app_proxy(
         local_port = user_config.get_lambda_app_port(&app, &env);
     }
     let lambda_arn = format!("lambdaApp::{app}::{env}");
-
-    window
-        .emit(
-            "proxy-starting",
-            ProxyEventMessage::new(
-                lambda_arn.clone(),
-                "STARTING".into(),
-                local_port,
-                proxy_auth_config.clone(),
-            ),
-        )
-        .unwrap_or_log();
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
@@ -1488,19 +1464,12 @@ async fn start_lambda_app_proxy(
         .task_handlers
         .insert(lambda_arn.clone(), handle);
 
-    info!("Started lambda proxy to {}", &address);
-    window
-        .emit(
-            "proxy-start",
-            ProxyEventMessage::new(
-                lambda_arn.clone(),
-                "STARTED".into(),
-                local_port,
-                proxy_auth_config.clone(),
-            ),
-        )
-        .unwrap_or_log();
-    Ok(())
+    info!("Started lambda proxy={} to {}", lambda_arn, &address);
+
+    Ok(NewTaskParams {
+        port: local_port,
+        proxy_auth_config: None,
+    })
 }
 
 #[tauri::command]
@@ -1539,8 +1508,8 @@ async fn check_dependencies(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<HashMap<String, Result<String, String>>, ()> {
     let mut wombat_api = wombat_api_instance.0.write().await;
-    let mut aws_config_provider = aws_config_provider.0.write().await;
-    Ok(dependency_check::check_dependencies(&mut wombat_api, &mut aws_config_provider).await)
+    let aws_config_provider = aws_config_provider.0.read().await;
+    Ok(dependency_check::check_dependencies(&mut wombat_api, &aws_config_provider).await)
 }
 
 #[tauri::command]
@@ -1623,7 +1592,7 @@ async fn open_dbeaver(
             .expect("DBeaver needs to be configured")
             .clone();
     }
-    let mut aws_config_provider = aws_config_provider.0.write().await;
+    let aws_config_provider = aws_config_provider.0.read().await;
     let (_, aws_config) = aws_config_provider
         .app_config(&db.normalized_name, &db.env)
         .await
@@ -2061,23 +2030,24 @@ async fn check_login_and_trigger(
     config: &aws_config::SdkConfig,
     axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<(), BError> {
-    if !aws::is_logged(config).await {
+    if !aws::is_logged(profile, config).await {
         info!("Trigger log in into AWS");
-        let mut child = Command::new("aws")
-            .args(["sso", "login", "--profile", profile])
-            .spawn()
-            .expect("failed to execute process");
+        aws::cli_login(profile);
+        // let mut child = Command::new("aws")
+        //     .args(["sso", "login", "--profile", profile])
+        //     .spawn()
+        //     .expect("failed to execute process");
 
-        let one_sec = Duration::from_secs(30);
-        let _ = match child.wait_timeout(one_sec).unwrap() {
-            Some(status) => status.code(),
-            None => {
-                child.kill().unwrap();
-                child.wait().unwrap().code()
-            }
-        };
+        // let one_sec = Duration::from_secs(30);
+        // let _ = match child.wait_timeout(one_sec).unwrap() {
+        //     Some(status) => status.code(),
+        //     None => {
+        //         child.kill().unwrap();
+        //         child.wait().unwrap().code()
+        //     }
+        // };
 
-        if !aws::is_logged(config).await {
+        if !aws::is_logged(profile, config).await {
             ingest_log(
                 axiom,
                 user_id,

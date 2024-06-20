@@ -1,34 +1,44 @@
 <script lang="ts">
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
-	import { execute } from '$lib/stores/error-store';
 	import { featuresStore } from '$lib/stores/feature-store';
+	import { TaskStatus, taskStore } from '$lib/stores/task-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
+	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let database: RdsInstance;
+
+	$: isStartButtonDisabled = $taskStore.some(
+		(t) => t.arn == database.arn && t.status == TaskStatus.STARTING
+	);
+
+	const startDbProxy = async () => {
+		if (database?.env == AwsEnv.PROD) {
+			let response = await ask(
+				'Understand the risks before connecting to production database.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
+				{
+					title: 'Access to PRODUCTION database.',
+					okLabel: 'Proceed',
+					cancelLabel: 'Abort',
+					type: 'warning'
+				}
+			);
+			if (!response) {
+				return;
+			}
+		}
+		taskStore.startTask(database, async () => {
+			return invoke('start_db_proxy', { db: database });
+		});
+	};
 </script>
 
 {#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
 	<div class="tooltip tooltip-left" data-tip="Start proxy">
 		<button
-			class="flex flex-row gap-1"
-			on:click={async () => {
-				if (database?.env == AwsEnv.PROD) {
-					let response = await ask(
-						'Understand the risks before connecting to production database.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
-						{
-							title: 'Access to PRODUCTION database.',
-							okLabel: 'Proceed',
-							cancelLabel: 'Abort',
-							type: 'warning'
-						}
-					);
-					if (!response) {
-						return;
-					}
-				}
-				execute('start_db_proxy', { db: database });
-			}}
+			disabled={isStartButtonDisabled}
+			class={`flex flex-row gap-1 ${isStartButtonDisabled ? 'opacity-30' : ''}`}
+			on:click={startDbProxy}
 		>
 			<div class="w-5 h-5 relative">
 				<svg
