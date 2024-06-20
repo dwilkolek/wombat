@@ -4,7 +4,6 @@
 	import AppCardHr from './app-card-hr.svelte';
 	import LambdaTaskStatus from './lambda-task-status.svelte';
 	import LambdaAppProxyBtn from './lambda-app-proxy-btn.svelte';
-	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	import { cookieJar } from '$lib/stores/cookie-jar-status';
 	export let app: string;
 
