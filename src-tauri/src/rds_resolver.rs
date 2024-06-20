@@ -64,7 +64,7 @@ impl RdsResolver {
 
     pub async fn databases(&mut self) -> Vec<aws::RdsInstance> {
         info!("Resolving databases");
-        let mut aws_config_resolver = self.aws_config_resolver.write().await;
+        let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         let db = self.db.read().await;
         let conn = db.connect().unwrap();

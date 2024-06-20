@@ -9,14 +9,16 @@ use aws_sdk_ecs as ecs;
 use aws_sdk_rds as rds;
 use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
+use aws_sdk_sts as sts;
 use chrono::prelude::*;
 use ec2::types::Filter;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, error::Error, sync::Arc};
-use tokio::sync::RwLock;
+use tokio::{process::Command, sync::RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
+use wait_timeout::ChildExt;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
@@ -199,7 +201,6 @@ pub struct AwsConfigProvider {
     profile_set: ProfileSet,
     pub wombat_profiles: Vec<WombatAwsProfile>,
     pub active_wombat_profile: WombatAwsProfile,
-    profile_to_config: HashMap<String, aws_config::SdkConfig>,
 }
 
 impl AwsConfigProvider {
@@ -217,7 +218,6 @@ impl AwsConfigProvider {
                 single_source_profile: true,
             },
             wombat_profiles,
-            profile_to_config: HashMap::new(),
         }
     }
 
@@ -239,7 +239,7 @@ impl AwsConfigProvider {
             .collect()
     }
 
-    pub async fn sso_config(&mut self, env: &Env) -> (String, aws_config::SdkConfig) {
+    pub async fn sso_config(&self, env: &Env) -> (String, aws_config::SdkConfig) {
         info!("getting sso_profile for env={env}");
         let sso_profile = self
             .active_wombat_profile
@@ -251,7 +251,7 @@ impl AwsConfigProvider {
     }
 
     async fn get_or_create_app_config(
-        &mut self,
+        &self,
         app: &str,
         env: &Env,
     ) -> Option<(String, aws_config::SdkConfig)> {
@@ -273,47 +273,19 @@ impl AwsConfigProvider {
         }
     }
 
-    async fn for_sso(&mut self, sso_profile: &SsoProfile) -> (String, aws_config::SdkConfig) {
-        let profile_config = self.profile_to_config.get(&sso_profile.profile_name);
-
-        match profile_config {
-            Some(config) => {
-                info!("returning cached user config");
-                (sso_profile.profile_name.to_owned(), config.clone())
-            }
-            None => {
-                info!("creating user config");
-                let config = self.use_aws_config(&sso_profile.profile_name).await;
-                self.profile_to_config
-                    .insert(config.0.clone(), config.1.clone());
-                config
-            }
-        }
+    async fn for_sso(&self, sso_profile: &SsoProfile) -> (String, aws_config::SdkConfig) {
+        self.use_aws_config(&sso_profile.profile_name).await
     }
 
     pub async fn for_infra(
-        &mut self,
+        &self,
         infra_profile: &InfraProfile,
     ) -> Option<(String, aws_config::SdkConfig)> {
-        let profile_name = &infra_profile.profile_name;
-        let config = self.profile_to_config.get(profile_name);
-        match config {
-            Some(config) => {
-                info!("returning cached {profile_name} config");
-                Some((profile_name.clone(), config.clone()))
-            }
-            None => {
-                info!("creating {profile_name} config");
-                let config = self.use_aws_config(profile_name).await;
-                self.profile_to_config
-                    .insert(config.0.clone(), config.1.clone());
-                Some(config)
-            }
-        }
+        Some(self.use_aws_config(&infra_profile.profile_name).await)
     }
 
     pub async fn with_dev_way_check(
-        &mut self,
+        &self,
         infra_profile: &Option<InfraProfile>,
         sso_profile: &Option<SsoProfile>,
     ) -> Option<(String, aws_config::SdkConfig)> {
@@ -339,7 +311,7 @@ impl AwsConfigProvider {
     }
 
     pub async fn app_config(
-        &mut self,
+        &self,
         app: &str,
         env: &Env,
     ) -> Option<(String, aws_config::SdkConfig)> {
@@ -353,7 +325,7 @@ impl AwsConfigProvider {
     }
 
     pub async fn app_config_with_fallback(
-        &mut self,
+        &self,
         app: &str,
         env: &Env,
     ) -> Option<(String, aws_config::SdkConfig)> {
@@ -586,10 +558,13 @@ async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
     .await
 }
 
-pub async fn is_logged(config: &aws_config::SdkConfig) -> bool {
-    let ecs = ecs::Client::new(config);
-    let resp = ecs.list_clusters().send().await;
-    resp.is_ok()
+pub async fn is_logged(profile: &str, config: &aws_config::SdkConfig) -> bool {
+    let sts = sts::Client::new(config);
+    let sdk_result = sts.get_caller_identity().send().await;
+    let sdk_ok = sdk_result.is_ok();
+    let cli_ok = is_cli_logged(profile).await;
+    info!("Checked is_logged profile={profile}, sdk={sdk_ok}, cli={cli_ok}");
+    sdk_ok && cli_ok
 }
 
 pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
@@ -991,7 +966,7 @@ pub async fn service_details(
     let mut result = Vec::new();
     let mut tokio_tasks = Vec::new();
     for service in services {
-        let mut aws_config_provider = aws_config_provider.write().await;
+        let aws_config_provider = aws_config_provider.read().await;
         let (profile, config) = aws_config_provider
             .app_config_with_fallback(&service.name, &service.env)
             .await
@@ -1263,4 +1238,28 @@ pub async fn find_logs(
     let mut notifier = on_log_found.lock().await;
     notifier.success();
     Result::Ok(log_count)
+}
+
+pub async fn is_cli_logged(profile: &str) -> bool {
+    Command::new("aws")
+        .args(["sts", "get-caller-identity", "--profile", profile])
+        .output()
+        .await
+        .is_ok()
+}
+
+pub fn cli_login(profile: &str) {
+    let mut child = std::process::Command::new("aws")
+        .args(["sso", "login", "--profile", profile])
+        .spawn()
+        .expect("failed to execute process");
+
+    let one_sec = core::time::Duration::from_secs(30);
+    let _ = match child.wait_timeout(one_sec).unwrap() {
+        Some(status) => status.code(),
+        None => {
+            child.kill().unwrap();
+            child.wait().unwrap().code()
+        }
+    };
 }

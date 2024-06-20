@@ -1,4 +1,4 @@
-use crate::{wombat_api, AsyncTaskManager, ProxyEventMessage};
+use crate::{AsyncTaskManager, TaskKilled};
 use async_trait::async_trait;
 use filepath::FilePath;
 use log::{error, info, warn};
@@ -33,9 +33,7 @@ pub async fn start_aws_ssm_proxy(
     abort_on_exit: Option<tokio::sync::oneshot::Sender<()>>,
     access_port: u16,
     async_task_manager: tauri::State<'_, AsyncTaskManager>,
-
-    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
-) {
+) -> Result<u16, ProxyError> {
     let mut command = Command::new("aws");
 
     command.args([
@@ -109,15 +107,13 @@ pub async fn start_aws_ssm_proxy(
         {
             let contents = fs::read_to_string(err_log_path.clone()).unwrap_or_default();
             error!("Failed to start proxy: {}", contents);
-            window
-                .emit(
-                    "proxy-end",
-                    ProxyEventMessage::new(arn.clone(), "ERROR".into(), access_port, None),
-                )
-                .unwrap_or_log();
 
             kill_pid_on_port(local_port).await;
-            return;
+            return Err(if contents.contains("Error loading SSO Token") {
+                ProxyError::ErrorSsoToken
+            } else {
+                ProxyError::Unknown
+            });
         }
     }
     tokio::task::spawn(async move {
@@ -128,30 +124,18 @@ pub async fn start_aws_ssm_proxy(
         //  --document-name AWS-StartPortForwardingSessionToRemoteHost \
         //  --parameters "$parameters"
 
-        window
-            .emit(
-                "proxy-start",
-                ProxyEventMessage::new(
-                    arn.clone(),
-                    "STARTED".into(),
-                    access_port,
-                    proxy_auth_config.clone(),
-                ),
-            )
-            .unwrap_or_log();
         let _ = child_arc_clone.wait();
         if let Some(handle) = abort_on_exit {
             let kill_result = handle.send(());
             info!("Killing dependant job, success: {}", kill_result.is_ok());
         }
         window
-            .emit(
-                "proxy-end",
-                ProxyEventMessage::new(arn.clone(), "END".into(), access_port, None),
-            )
+            .emit("task-killed", TaskKilled { arn: arn.clone() })
             .unwrap_or_log();
         kill_pid_on_port(local_port).await;
     });
+
+    Ok(access_port)
 }
 
 #[async_trait]
@@ -350,4 +334,23 @@ pub fn trim_whitespace_v2(s: &str) -> String {
         result.push_str(w);
     });
     result
+}
+
+#[derive(Debug)]
+pub enum ProxyError {
+    ErrorSsoToken,
+    Unknown,
+}
+
+impl std::fmt::Display for ProxyError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Proxy Error: {}",
+            match self {
+                Self::ErrorSsoToken => "Invalid sso token",
+                Self::Unknown => "Unknown",
+            }
+        )
+    }
 }

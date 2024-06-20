@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { featuresStore } from '$lib/stores/feature-store';
-	import { taskStore } from '$lib/stores/task-store';
+	import { TaskStatus, taskStore } from '$lib/stores/task-store';
 	import type { AwsEnv, CustomHeader } from '$lib/types';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import CustomHeaderForm from './custom-header-form.svelte';
@@ -8,8 +8,10 @@
 
 	export let app: string;
 	export let env: AwsEnv;
-	$: isStartButtonDisabled = !$featuresStore.lambdaApps;
 	const lambdaArn = `lambdaApp::${app}::${env.toLowerCase()}`;
+	$: isStartButtonDisabled =
+		!$featuresStore.lambdaApps ||
+		$taskStore.some((t) => t.arn == lambdaArn && t.status == TaskStatus.STARTING);
 
 	$: port = $taskStore?.find((t) => {
 		return t.arn === lambdaArn;
@@ -35,12 +37,19 @@
 		customHeaders.forEach((header) => {
 			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
 		});
-		invoke('start_lambda_app_proxy', {
-			app,
-			env,
-			address: `https://${app}${env.toLowerCase() == 'prod' ? '' : '.' + env.toLowerCase()}.services.technipfmc.com/`,
-			headers
-		});
+		taskStore.startTask(
+			{
+				arn: lambdaArn,
+				name: app
+			},
+			async () =>
+				invoke('start_lambda_app_proxy', {
+					app,
+					env,
+					address: `https://${app}${env.toLowerCase() == 'prod' ? '' : '.' + env.toLowerCase()}.services.technipfmc.com/`,
+					headers
+				})
+		);
 		dialog.close();
 	};
 </script>
