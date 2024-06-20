@@ -111,7 +111,7 @@ impl EcsResolver {
 
     pub async fn services(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
         info!("Resolving services for clusters {clusters:?}");
-        let mut aws_config_resolver = self.aws_config_resolver.write().await;
+        let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         let db = self.db.read().await;
         let conn = db.connect().unwrap();

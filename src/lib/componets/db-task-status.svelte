@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { userStore } from '$lib/stores/user-store';
 	import { execute } from '$lib/stores/error-store';
-	import type { ProxyEventMessage } from '$lib/stores/task-store';
+	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import type { RdsInstance } from '$lib/types';
-	export let task: ProxyEventMessage | undefined;
+	export let task: Task | undefined;
 	export let db: RdsInstance;
 	$: port = task?.port ?? $userStore.db_proxy_port_map?.[db.name]?.[db.env] ?? '?';
 </script>
 
-{#if task}
-	{#if task.status !== 'STARTING'}
+{#if task && task.status !== TaskStatus.FAILED}
+	{#if task.status !== TaskStatus.STARTING}
 		<div
 			class="tooltip tooltip-left"
 			data-tip={$userStore.dbeaver_path
