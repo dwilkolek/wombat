@@ -57,29 +57,28 @@
 						Windows:
 						<pre class="pl-1">C:\Program Files\DBeaver\dbeaver.exe</pre>
 					</div>
-					
 				</div>
-				
+
 				<div class="flex flex-col pl-2">
 					<h4 class="text-lg">Log dir</h4>
 					<div class="pl-1 flex">
 						<input
-						id="logs_dir"
-						type="text"
-						autocomplete="off"
-						autocorrect="off"
-						autocapitalize="off"
-						spellcheck="false"
-						placeholder="Logs dir"
-						class="input input-bordered w-full min-w-xs mb-2"
-						bind:value={logs_dir}
-					/>
-
+							id="logs_dir"
+							type="text"
+							autocomplete="off"
+							autocorrect="off"
+							autocapitalize="off"
+							spellcheck="false"
+							placeholder="Logs dir"
+							class="input input-bordered w-full min-w-xs mb-2"
+							bind:value={logs_dir}
+						/>
 					</div>
 				</div>
 
 				<div class="flex pl-2">
-					<h4 class="text-lg">Wombat logs: </h4><pre class="pl-1">~/.wombat/logs</pre>
+					<h4 class="text-lg">Wombat logs:</h4>
+					<pre class="pl-1">~/.wombat/logs</pre>
 				</div>
 			</div>
 		</div>

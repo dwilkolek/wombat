@@ -91,7 +91,7 @@
 			{:else}
 				<div class="bg-rose-500 w-2 h-2 rounded" />
 			{/if}
-			<span> Browser extension : </span>
+			<span> Browser extension: </span>
 			<span class="">
 				{#if $browserExtensionStatus.connected}
 					v{$browserExtensionStatus.version}
