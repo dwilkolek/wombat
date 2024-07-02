@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use tracing_unwrap::OptionExt;
 
-use crate::shared::{ecs_arn_to_name, rds_arn_to_name, BError, Env, TrackedName};
+use crate::shared::{arn_to_name, BError, Env, TrackedName};
 use uuid::Uuid;
 
 pub fn wombat_dir() -> PathBuf {
@@ -153,7 +153,7 @@ impl UserConfig {
 
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
         let env = Env::from_any(db_arn);
-        let tracked_name = rds_arn_to_name(db_arn);
+        let tracked_name = arn_to_name(db_arn);
         let port = Self::get_port(&mut self.db_proxy_port_map, tracked_name, env, 52000, 100);
         if port.1 {
             self.save()
@@ -163,7 +163,7 @@ impl UserConfig {
 
     pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {
         let env = Env::from_any(ecs_arn);
-        let tracked_name = ecs_arn_to_name(ecs_arn);
+        let tracked_name = arn_to_name(ecs_arn);
         let port = Self::get_port(
             &mut self.service_proxy_port_map,
             tracked_name,

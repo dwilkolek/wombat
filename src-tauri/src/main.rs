@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance, SsoProfile};
-use axiom_rs::Client;
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
@@ -9,10 +8,7 @@ use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
 use log::{error, info, warn};
 use rds_resolver::RdsResolver;
-use serde_json::json;
-use shared::{
-    ecs_arn_to_name, rds_arn_to_name, BError, BrowserExtension, CookieJar, Env, ResourceType,
-};
+use shared::{arn_to_name, BError, BrowserExtension, CookieJar, Env};
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
@@ -61,7 +57,6 @@ struct ServiceDetailsPayload {
 
 #[derive(Clone, Debug)]
 struct AuthorizedUser {
-    id: uuid::Uuid,
     profile: String,
 }
 
@@ -70,11 +65,9 @@ const CHECK_AUTH_AFTER: i64 = 5 * 60 * 1000; // every 5 minutes.
 async fn get_authorized(
     window: &Window,
     app_state: &Arc<Mutex<AppContext>>,
-    axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<AuthorizedUser, String> {
     let mut app_ctx = app_state.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
-    let user_id = app_ctx.user_id;
     let last_check = app_ctx.last_auth_check;
     let aws_config_provider = app_ctx.aws_config_provider.clone();
     let now = chrono::Local::now().timestamp_millis();
@@ -83,7 +76,7 @@ async fn get_authorized(
         for env in profile.sso_profiles.keys() {
             let aws_config_provider = aws_config_provider.read().await;
             let (aws_profile, config) = aws_config_provider.sso_config(env).await;
-            let login_check = check_login_and_trigger(user_id, &aws_profile, &config, axiom).await;
+            let login_check = check_login_and_trigger(&aws_profile, &config).await;
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
                 if app_ctx.no_of_failed_logins == 2 {
@@ -102,7 +95,6 @@ async fn get_authorized(
 
     Ok(AuthorizedUser {
         profile: profile.name.clone(),
-        id: app_ctx.user_id,
     })
 }
 
@@ -145,19 +137,9 @@ async fn favorite(
     name: &str,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
-    ingest_log(
-        &axiom.0,
-        user_config.id,
-        Action::UpdateTrackedNames(name.to_owned()),
-        None,
-        None,
-    )
-    .await;
-
     user_config.favorite(
         &aws_config_provider.active_wombat_profile.name,
         name.to_owned(),
@@ -171,7 +153,6 @@ async fn login(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
 
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
@@ -204,19 +185,9 @@ async fn login(
     }
 
     let _ = window.emit("message", "Authenticating...");
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("login", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("login", msg));
     };
-
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::Login(profile.to_owned()),
-        None,
-        None,
-    )
-    .await;
 
     let _ = window.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
@@ -228,15 +199,7 @@ async fn login(
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
         rds_resolver_instance.init(cache_db.clone()).await;
-        let databases = rds_resolver_instance.databases().await;
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::RefreshRdsList,
-            None,
-            Some(databases.len()),
-        )
-        .await;
+        rds_resolver_instance.databases().await;
     }
 
     let _ = window.emit("message", "Fetching clusters...");
@@ -245,30 +208,13 @@ async fn login(
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
         cluster_resolver_instance.init(cache_db.clone()).await;
         clusters = cluster_resolver_instance.clusters().await;
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::RefreshClusterList,
-            None,
-            Some(clusters.len()),
-        )
-        .await;
     }
 
     let _ = window.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
         ecs_resolver_instance.init(cache_db.clone()).await;
-        let services = ecs_resolver_instance.services(clusters).await;
-
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::RefreshEcsList,
-            None,
-            Some(services.len()),
-        )
-        .await;
+        ecs_resolver_instance.services(clusters).await;
     }
 
     let _ = window.emit("message", "Syncing global state...");
@@ -284,10 +230,6 @@ async fn login(
     api.event("login-success");
     api.report_versions(None).await;
 
-    let refresher_axiom = Arc::clone(&axiom.0);
-    let refresher_user_id = authorized_user.id;
-    let authorized_user = authorized_user.clone();
-
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
     let cluster_resolver_instance = Arc::clone(&cluster_resolver_instance.0);
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
@@ -297,18 +239,7 @@ async fn login(
         tokio::time::sleep(Duration::from_secs(120)).await;
         {
             let mut rds_resolver_instance = rds_resolver_instance.write().await;
-            let databases = rds_resolver_instance.refresh().await;
-
-            if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
-                ingest_log_with_client(
-                    axiom,
-                    refresher_user_id,
-                    Action::RefreshRdsList,
-                    None,
-                    Some(databases.len()),
-                )
-                .await;
-            }
+            rds_resolver_instance.refresh().await;
         }
 
         tokio::time::sleep(Duration::from_secs(30)).await;
@@ -319,33 +250,12 @@ async fn login(
 
                 clusters = cluster_resolver_instance.refresh().await;
             }
-            if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
-                ingest_log_with_client(
-                    axiom,
-                    authorized_user.id,
-                    Action::RefreshClusterList,
-                    None,
-                    Some(clusters.len()),
-                )
-                .await;
-            }
         }
 
         tokio::time::sleep(Duration::from_secs(30)).await;
         {
             let mut ecs_resolver_instance = ecs_resolver_instance.write().await;
-            let services = ecs_resolver_instance.refresh(clusters).await;
-
-            if let Some(axiom) = refresher_axiom.lock().await.as_ref() {
-                ingest_log_with_client(
-                    axiom,
-                    authorized_user.id,
-                    Action::RefreshEcsList,
-                    None,
-                    Some(services.len()),
-                )
-                .await;
-            }
+            ecs_resolver_instance.refresh(clusters).await;
         }
     }));
 
@@ -358,17 +268,8 @@ async fn login(
 async fn set_dbeaver_path(
     dbeaver_path: &str,
     user_config: tauri::State<'_, UserConfigState>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    ingest_log(
-        &axiom.0,
-        user_config.id,
-        Action::SetDbeaverPath(dbeaver_path.to_owned()),
-        None,
-        None,
-    )
-    .await;
     user_config.set_dbeaver_path(dbeaver_path)
 }
 
@@ -376,17 +277,8 @@ async fn set_dbeaver_path(
 async fn set_logs_dir_path(
     logs_dir: &str,
     user_config: tauri::State<'_, UserConfigState>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
-    ingest_log(
-        &axiom.0,
-        user_config.id,
-        Action::SetLogsDirPath(logs_dir.to_owned()),
-        None,
-        None,
-    )
-    .await;
     user_config.set_logs_path(logs_dir)
 }
 
@@ -395,18 +287,9 @@ async fn save_preffered_envs(
     envs: Vec<shared::Env>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    axiom: tauri::State<'_, AxiomClientState>,
 ) -> Result<UserConfig, BError> {
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
-    ingest_log(
-        &axiom.0,
-        user_config.id,
-        Action::SetPrefferedEnvs(envs.clone()),
-        None,
-        None,
-    )
-    .await;
     user_config.save_preffered_envs(&aws_config_provider.active_wombat_profile.name, envs)
 }
 
@@ -415,17 +298,16 @@ async fn credentials(
     window: Window,
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<DbSecret, BError> {
     let wombat_api = wombat_api.0.read().await;
     wombat_api.event("db-credentials-get");
 
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("credentials", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("credentials", msg));
     };
+
     let aws_config_provider = aws_config_provider.0.read().await;
     let (_, aws_config) = aws_config_provider
         .app_config(&db.normalized_name, &db.env)
@@ -450,28 +332,6 @@ async fn credentials(
         }
     }
 
-    match &secret {
-        Ok(_) => {
-            ingest_log(
-                &axiom.0,
-                authorized_user.id,
-                Action::FetchCredentials(db.name, db.env),
-                None,
-                None,
-            )
-            .await
-        }
-        Err(err) => {
-            ingest_log(
-                &axiom.0,
-                authorized_user.id,
-                Action::FetchCredentials(db.name, db.env),
-                Some(err.message.clone()),
-                None,
-            )
-            .await
-        }
-    };
     match secret {
         Ok(_) => wombat_api.event("db-credentials-found"),
         Err(_) => wombat_api.event("db-credentials-not-found"),
@@ -485,31 +345,17 @@ async fn stop_job(
     arn: &str,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    axiom: tauri::State<'_, AxiomClientState>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     {
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("stop-job");
     }
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("stop_job", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("stop_job", msg));
     };
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handle) = tracker.task_handlers.remove(arn) {
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::StopJob(
-                shared::arn_to_name(arn).to_owned(),
-                Env::from_any(arn).to_owned(),
-                shared::arn_resource_type(arn).unwrap_or_log(),
-            ),
-            None,
-            None,
-        )
-        .await;
         let kill_result = handle.send(());
         if kill_result.is_ok() {
             info!("Killing dependant job, success: {}", kill_result.is_ok());
@@ -522,18 +368,6 @@ async fn stop_job(
         }
     }
     if let Some(job) = tracker.proxies_handlers.remove(arn) {
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::StopJob(
-                shared::arn_to_name(arn).to_owned(),
-                Env::from_any(arn).to_owned(),
-                shared::arn_resource_type(arn).unwrap_or_log(),
-            ),
-            None,
-            None,
-        )
-        .await;
         let _ = job.kill();
         let _ = job.wait();
 
@@ -579,19 +413,6 @@ async fn stop_job(
         //         Err(e) => warn!("Failed to kill session in SSM {}", e),
         //     };
         // }
-    } else {
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::StopJob(
-                shared::arn_to_name(arn).to_owned(),
-                Env::from_any(arn).to_owned(),
-                shared::arn_resource_type(arn).to_owned().unwrap_or_log(),
-            ),
-            Some(String::from("No matching job running!")),
-            None,
-        )
-        .await;
     }
 
     Ok(())
@@ -601,8 +422,6 @@ async fn stop_job(
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
-    axiom: tauri::State<'_, AxiomClientState>,
-    user_state: tauri::State<'_, UserConfigState>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     {
@@ -610,16 +429,6 @@ async fn logout(
         wombat_api.event("logout");
     }
     let mut app_state = app_state.0.lock().await;
-    if let Some(profile) = app_state.active_profile.as_ref() {
-        ingest_log(
-            &axiom.0,
-            user_state.0.lock().await.id,
-            Action::Logout(profile.name.clone()),
-            None,
-            None,
-        )
-        .await;
-    }
 
     let home_details_refresher = &mut task_tracker.0.lock().await;
     if let Some(handler) = &home_details_refresher.aws_resource_refresher {
@@ -726,7 +535,6 @@ async fn find_logs(
     filter: String,
     filename: Option<String>,
     app_state: tauri::State<'_, AppContextState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
@@ -736,22 +544,13 @@ async fn find_logs(
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("logs-search");
     }
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("find_logs", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("find_logs", msg));
     };
 
     {
         let handler = &async_task_tracker.0.lock().await.search_log_handler;
         if let Some(handler) = handler {
-            ingest_log(
-                &axiom.0,
-                authorized_user.id,
-                Action::AbortSearchLogs("new-search-request".to_owned()),
-                None,
-                None,
-            )
-            .await;
             handler.abort()
         }
     }
@@ -759,22 +558,6 @@ async fn find_logs(
         async_task_tracker.0.lock().await.search_log_handler = None;
     }
 
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::StartSearchLogs(
-            apps.to_owned(),
-            env.clone(),
-            filter.to_string(),
-            end - start,
-            filename.is_some(),
-        ),
-        None,
-        None,
-    )
-    .await;
-
-    let axiom = Arc::clone(&axiom.0);
     let user_config = Arc::clone(&user_config.0);
     let sdk_config: aws_config::SdkConfig;
     {
@@ -785,14 +568,7 @@ async fn find_logs(
         sdk_config = app_config.1
     }
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
-        let action = Action::SearchLogs(
-            apps.clone(),
-            env.clone(),
-            filter.to_string(),
-            end - start,
-            filename.is_some(),
-        );
-        let result = aws::find_logs(
+        let _ = aws::find_logs(
             &sdk_config,
             env,
             apps,
@@ -831,20 +607,6 @@ async fn find_logs(
             },
         )
         .await;
-
-        match &result {
-            Ok(cnt) => ingest_log(&axiom, authorized_user.id, action, None, Some(*cnt)).await,
-            Err(err) => {
-                ingest_log(
-                    &axiom,
-                    authorized_user.id,
-                    action,
-                    Some(err.message.to_owned()),
-                    None,
-                )
-                .await
-            }
-        }
     }));
 
     Ok(())
@@ -854,8 +616,6 @@ async fn find_logs(
 async fn abort_find_logs(
     reason: String,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    axiom: tauri::State<'_, AxiomClientState>,
-    user_config: tauri::State<'_, UserConfigState>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     info!("Attempt to abort find logs: {}", &reason);
@@ -866,14 +626,6 @@ async fn abort_find_logs(
             wombat_api.event("logs-search-abort");
         }
         handler.abort();
-        ingest_log(
-            &axiom.0,
-            user_config.0.lock().await.id,
-            Action::AbortSearchLogs(reason),
-            None,
-            None,
-        )
-        .await;
     }
     tracker.search_log_handler = None;
 
@@ -911,7 +663,6 @@ async fn restart_service(
     service_name: String,
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
@@ -920,11 +671,10 @@ async fn restart_service(
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("ecs-service-restart");
     }
-
-    let _authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("restart_service", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("restart_service", msg));
     };
+
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
         .app_config_with_fallback(&service_name, &env)
@@ -957,7 +707,6 @@ async fn discover(
     name: &str,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
@@ -966,7 +715,7 @@ async fn discover(
         let wombat_api = wombat_api.0.read().await;
         wombat_api.event("discover");
     }
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&window, &app_state.0).await {
         Err(msg) => return Err(BError::new("discover", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -986,14 +735,6 @@ async fn discover(
 
     let mut found_names = HashSet::new();
     if name.is_empty() {
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::Discover(name.to_owned()),
-            None,
-            Some(0),
-        )
-        .await;
         return Ok(Vec::new());
     }
 
@@ -1003,12 +744,10 @@ async fn discover(
             .read_databases()
             .await
             .into_iter()
-            .filter(|db| {
-                db.arn.contains(name) && !tracked_names.contains(&rds_arn_to_name(&db.arn))
-            })
+            .filter(|db| db.arn.contains(name) && !tracked_names.contains(&arn_to_name(&db.arn)))
             .collect();
 
-        found_names.extend(found_dbs.into_iter().map(|d| rds_arn_to_name(&d.arn)));
+        found_names.extend(found_dbs.into_iter().map(|d| arn_to_name(&d.arn)));
     }
 
     {
@@ -1018,21 +757,10 @@ async fn discover(
         found_names.extend(
             services
                 .into_iter()
-                .filter(|s| {
-                    s.arn.contains(name) && !tracked_names.contains(&ecs_arn_to_name(&s.arn))
-                })
-                .map(|service| ecs_arn_to_name(&service.arn)),
+                .filter(|s| s.arn.contains(name) && !tracked_names.contains(&arn_to_name(&s.arn)))
+                .map(|service| arn_to_name(&service.arn)),
         )
     }
-
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::Discover(name.to_owned()),
-        None,
-        Some(found_names.len()),
-    )
-    .await;
 
     Ok(found_names.into_iter().collect())
 }
@@ -1041,7 +769,6 @@ async fn discover(
 async fn refresh_cache(
     window: Window,
     app_state: tauri::State<'_, AppContextState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
@@ -1056,9 +783,9 @@ async fn refresh_cache(
         app_state.no_of_failed_logins = 0;
         app_state.last_auth_check = 0;
     }
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("refresh_cache", msg)),
-        Ok(authorized_user) => authorized_user,
+
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("refresh_cache", msg));
     };
 
     let clusters;
@@ -1075,8 +802,6 @@ async fn refresh_cache(
         rds_resolver_instance.refresh().await;
     }
 
-    ingest_log(&axiom.0, authorized_user.id, Action::ClearCache, None, None).await;
-
     window.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
 }
@@ -1087,13 +812,12 @@ async fn service_details(
     window: Window,
     app: String,
     app_state: tauri::State<'_, AppContextState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     rate_limitter: tauri::State<'_, ServiceDetailsRateLimiter>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
+    let authorized_user = match get_authorized(&window, &app_state.0).await {
         Err(msg) => return Err(BError::new("service_details", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -1103,15 +827,6 @@ async fn service_details(
         let aws_config_provider = aws_config_provider.0.read().await;
         environments = aws_config_provider.configured_envs();
     }
-
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::ServiceDetails(app.to_owned()),
-        None,
-        None,
-    )
-    .await;
 
     info!(
         "Called for service_details: {}, profile: {}",
@@ -1207,7 +922,6 @@ async fn start_db_proxy(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<NewTaskParams, BError> {
@@ -1216,9 +930,8 @@ async fn start_db_proxy(
         wombat_api.event("db-proxy-start");
     }
 
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("start_db_proxy", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("start_db_proxy", msg));
     };
 
     let aws_config_provider = aws_config_provider.0.read().await;
@@ -1236,15 +949,6 @@ async fn start_db_proxy(
         .into_iter()
         .find(|b| b.env == db.env)
         .expect("No bastion found");
-
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::StartRdsProxy(db.name.to_owned(), db.env.clone()),
-        None,
-        None,
-    )
-    .await;
 
     let proxy_started = proxy::start_aws_ssm_proxy(
         db.arn.clone(),
@@ -1282,7 +986,6 @@ async fn start_service_proxy(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<NewTaskParams, BError> {
@@ -1297,12 +1000,9 @@ async fn start_service_proxy(
     }
 
     let aws_local_port = local_port + 10000;
-
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("start_service_proxy", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("start_service_proxy", msg));
     };
-
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
         .with_dev_way_check(&infra_profile, &sso_profile)
@@ -1314,14 +1014,6 @@ async fn start_service_proxy(
         .into_iter()
         .find(|b| b.env == service.env)
         .expect("No bastion found");
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::StartEcsProxy(service.name.to_owned(), service.env.clone()),
-        None,
-        None,
-    )
-    .await;
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
@@ -1554,7 +1246,6 @@ async fn open_dbeaver(
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
-    axiom: tauri::State<'_, AxiomClientState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
@@ -1575,10 +1266,8 @@ async fn open_dbeaver(
                 )
         }
     }
-
-    let authorized_user = match get_authorized(&window, &app_state.0, &axiom.0).await {
-        Err(msg) => return Err(BError::new("open_dbeaver", msg)),
-        Ok(authorized_user) => authorized_user,
+    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+        return Err(BError::new("open_dbeaver", msg));
     };
 
     let dbeaver_path: String;
@@ -1616,26 +1305,14 @@ async fn open_dbeaver(
         }
     }
 
-    if let Err(err) = secret {
-        ingest_log(
-            &axiom.0,
-            authorized_user.id,
-            Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
-            Some(err.message.clone()),
-            None,
-        )
-        .await;
-        return Err(err);
-    }
-    let db_secret = secret.unwrap_or_log();
-    ingest_log(
-        &axiom.0,
-        authorized_user.id,
-        Action::OpenDbeaver(db.name.to_owned(), db.env.clone()),
-        None,
-        None,
-    )
-    .await;
+    let db_secret = match secret {
+        Ok(secret) => secret,
+        Err(error) => {
+            error!("failed to get rds secret, reason={}", &error.message);
+            return Err(error);
+        }
+    };
+
     Command::new(dbeaver_path)
         .args([
             "-con",
@@ -1668,8 +1345,6 @@ fn app_config() -> AppConfig {
             "%%WOMBAT_API_PASSWORD%%".to_string()
         }),
         logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
-        axiom_token: None,
-        axiom_org: "shrug".to_owned(),
     }
 }
 
@@ -1680,8 +1355,6 @@ fn app_config() -> AppConfig {
         wombat_api_url: "%%WOMBAT_API_URL%%".to_string(),
         wombat_api_user: "%%WOMBAT_API_USER%%".to_string(),
         wombat_api_password: "%%WOMBAT_API_PASSWORD%%".to_string(),
-        axiom_token: Some("%%AXIOM_TOKEN%%".to_string()),
-        axiom_org: "%%AXIOM_ORG%%".to_owned(),
     }
 }
 
@@ -1691,27 +1364,6 @@ struct AppConfig {
     wombat_api_url: String,
     wombat_api_user: String,
     wombat_api_password: String,
-    axiom_token: Option<String>,
-    axiom_org: String,
-}
-
-async fn initialize_axiom(user: &UserConfig, congig: &AppConfig) -> AxiomClientState {
-    return match congig.axiom_token.is_none() {
-        true => AxiomClientState(Arc::new(Mutex::new(None))),
-        false => {
-            let client = Client::builder()
-                .with_token(congig.axiom_token.as_ref().unwrap())
-                .with_org_id(congig.axiom_org.as_str())
-                .build();
-            return AxiomClientState(Arc::new(Mutex::new(match client {
-                Ok(client) => {
-                    ingest_log_with_client(&client, user.id, Action::Start, None, None).await;
-                    Some(client)
-                }
-                Err(_) => None,
-            })));
-        }
-    };
 }
 
 async fn initialize_cache_db(profile: &str) -> libsql::Database {
@@ -1826,11 +1478,9 @@ async fn main() {
             });
             Ok(())
         })
-        .manage(initialize_axiom(&user, &app_config).await)
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
             active_profile: None,
             aws_config_provider: aws_config_provider.clone(),
-            user_id: user.id,
             last_auth_check: 0,
             no_of_failed_logins: 0,
         }))))
@@ -1940,14 +1590,11 @@ async fn main() {
 struct AppContext {
     active_profile: Option<aws::WombatAwsProfile>,
     aws_config_provider: Arc<RwLock<aws::AwsConfigProvider>>,
-    user_id: uuid::Uuid,
     last_auth_check: i64,
     no_of_failed_logins: i64,
 }
 
 struct AppContextState(Arc<Mutex<AppContext>>);
-
-struct AxiomClientState(Arc<Mutex<Option<axiom_rs::Client>>>);
 
 struct UserConfigState(Arc<Mutex<UserConfig>>);
 
@@ -1986,49 +1633,9 @@ struct HomeEntry {
     dbs: Vec<aws::RdsInstance>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct ActionLog {
-    user_id: uuid::Uuid,
-    action: Action,
-    app_version: String,
-    profile: String,
-    error_message: Option<String>,
-    record_count: Option<usize>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-enum Action {
-    Start,
-    Login(String),
-    FetchCredentials(String, Env),
-    StopJob(String, Env, ResourceType),
-    StartEcsProxy(String, Env),
-    ServiceDetails(String),
-    StartRdsProxy(String, Env),
-    OpenDbeaver(String, Env),
-    LoginCheck(String),
-    RefreshServiceDetails,
-    RefreshRdsList,
-    RefreshEcsList,
-    RefreshClusterList,
-    Message(String),
-    ClearCache,
-    UpdateTrackedNames(String),
-    SetDbeaverPath(String),
-    SetLogsDirPath(String),
-    SetPrefferedEnvs(Vec<Env>),
-    Discover(String),
-    Logout(String),
-    StartSearchLogs(Vec<String>, Env, String, i64, bool),
-    SearchLogs(Vec<String>, Env, String, i64, bool),
-    AbortSearchLogs(String),
-}
-
 async fn check_login_and_trigger(
-    user_id: uuid::Uuid,
     profile: &str,
     config: &aws_config::SdkConfig,
-    axiom: &Arc<Mutex<Option<axiom_rs::Client>>>,
 ) -> Result<(), BError> {
     if !aws::is_logged(profile, config).await {
         info!("Trigger log in into AWS");
@@ -2048,67 +1655,10 @@ async fn check_login_and_trigger(
         // };
 
         if !aws::is_logged(profile, config).await {
-            ingest_log(
-                axiom,
-                user_id,
-                Action::LoginCheck(profile.to_owned()),
-                Some(String::from("Failed to log in.")),
-                None,
-            )
-            .await;
             return Err(BError::new("login", "Failed to log in"));
         } else {
-            ingest_log(
-                axiom,
-                user_id,
-                Action::LoginCheck(profile.to_owned()),
-                None,
-                None,
-            )
-            .await;
             return Ok(());
         }
     }
     Ok(())
-}
-
-async fn ingest_log(
-    client: &Arc<Mutex<Option<Client>>>,
-    user_id: uuid::Uuid,
-    action: Action,
-    error_message: Option<String>,
-    record_count: Option<usize>,
-) {
-    info!(
-        "Ingesting log: {:?}, err: {:?}, record count: {:?}",
-        &action, &error_message, &record_count
-    );
-    if let Some(client) = client.lock().await.as_ref() {
-        ingest_log_with_client(client, user_id, action, error_message, record_count).await;
-    }
-}
-
-async fn ingest_log_with_client(
-    client: &Client,
-    user_id: uuid::Uuid,
-    action: Action,
-    error_message: Option<String>,
-    record_count: Option<usize>,
-) {
-    if let Err(e) = client
-        .ingest(
-            "wombat",
-            vec![json!(ActionLog {
-                user_id,
-                action,
-                error_message,
-                record_count,
-                app_version: env!("CARGO_PKG_VERSION").to_owned(),
-                profile: String::from("%%PROFILE%%")
-            })],
-        )
-        .await
-    {
-        error!("Error ingesting logs {}", e)
-    }
 }

@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use core::fmt;
-use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -151,11 +150,11 @@ impl Env {
     }
 }
 
-pub fn ecs_arn_to_name(arn: &str) -> TrackedName {
+fn ecs_arn_to_name(arn: &str) -> TrackedName {
     arn.split('/').last().unwrap_or_log().to_owned()
 }
 
-pub fn rds_arn_to_name(arn: &str) -> TrackedName {
+fn rds_arn_to_name(arn: &str) -> TrackedName {
     arn.split(':')
         .last()
         .unwrap_or_log()
@@ -180,19 +179,6 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
         return arn.split("::").skip(1).take(1).collect();
     }
     format!("unknown!#{}", arn)
-}
-pub fn arn_resource_type(arn: &str) -> Option<ResourceType> {
-    if arn.starts_with("arn:aws:ecs") {
-        return Some(ResourceType::ECS);
-    }
-    if arn.starts_with("arn:aws:rds") {
-        return Some(ResourceType::RDS);
-    }
-    if arn.starts_with("lambdaApp::") {
-        return Some(ResourceType::LambdaApp);
-    }
-    error!("Unknown resource type given arn {}", arn);
-    None
 }
 
 pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
