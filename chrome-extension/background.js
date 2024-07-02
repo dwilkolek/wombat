@@ -111,15 +111,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 	if (request.action === 'closeTab') {
 		chrome.tabs.remove(sender.tab.id);
 	}
-	if (request.action === 'trackedEvent' && request.event) {
-		fetch(`http://localhost:6891/browser-extension-event`, {
-			method: 'POST',
-			body: JSON.stringify({
-				event: request.event
-			}),
-			headers: { Accept: 'application/json', 'Content-Type': 'application/json' }
-		});
-	}
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
