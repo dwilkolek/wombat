@@ -221,13 +221,11 @@ async fn login(
     let mut api = wombat_api_instance.0.write().await;
     let api_status = api.status().await;
     if let Err(status) = api_status {
-        api.event("login-failed");
         return Err(BError::new(
             "login",
             format!("Wombat backend API is not ok. Reason: {}", status),
         ));
     }
-    api.event("login-success");
     api.report_versions(None).await;
 
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
@@ -299,11 +297,7 @@ async fn credentials(
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<DbSecret, BError> {
-    let wombat_api = wombat_api.0.read().await;
-    wombat_api.event("db-credentials-get");
-
     if let Err(msg) = get_authorized(&window, &app_state.0).await {
         return Err(BError::new("credentials", msg));
     };
@@ -332,10 +326,6 @@ async fn credentials(
         }
     }
 
-    match secret {
-        Ok(_) => wombat_api.event("db-credentials-found"),
-        Err(_) => wombat_api.event("db-credentials-not-found"),
-    }
     secret
 }
 
@@ -345,12 +335,7 @@ async fn stop_job(
     arn: &str,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("stop-job");
-    }
     if let Err(msg) = get_authorized(&window, &app_state.0).await {
         return Err(BError::new("stop_job", msg));
     };
@@ -422,12 +407,7 @@ async fn stop_job(
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("logout");
-    }
     let mut app_state = app_state.0.lock().await;
 
     let home_details_refresher = &mut task_tracker.0.lock().await;
@@ -538,12 +518,7 @@ async fn find_logs(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("logs-search");
-    }
     if let Err(msg) = get_authorized(&window, &app_state.0).await {
         return Err(BError::new("find_logs", msg));
     };
@@ -616,15 +591,10 @@ async fn find_logs(
 async fn abort_find_logs(
     reason: String,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     info!("Attempt to abort find logs: {}", &reason);
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handler) = &tracker.search_log_handler {
-        {
-            let wombat_api = wombat_api.0.read().await;
-            wombat_api.event("logs-search-abort");
-        }
         handler.abort();
     }
     tracker.search_log_handler = None;
@@ -665,12 +635,7 @@ async fn restart_service(
     app_state: tauri::State<'_, AppContextState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<String, BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("ecs-service-restart");
-    }
     if let Err(msg) = get_authorized(&window, &app_state.0).await {
         return Err(BError::new("restart_service", msg));
     };
@@ -709,12 +674,7 @@ async fn discover(
     user_config: tauri::State<'_, UserConfigState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<Vec<String>, BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("discover");
-    }
     let authorized_user = match get_authorized(&window, &app_state.0).await {
         Err(msg) => return Err(BError::new("discover", msg)),
         Ok(authorized_user) => authorized_user,
@@ -772,12 +732,7 @@ async fn refresh_cache(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("cache-refresh");
-    }
     {
         let mut app_state = app_state.0.lock().await;
         app_state.no_of_failed_logins = 0;
@@ -923,13 +878,7 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<NewTaskParams, BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("db-proxy-start");
-    }
-
     if let Err(msg) = get_authorized(&window, &app_state.0).await {
         return Err(BError::new("start_db_proxy", msg));
     };
@@ -987,12 +936,7 @@ async fn start_service_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<NewTaskParams, BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("ecs-proxy-start");
-    }
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1118,12 +1062,7 @@ async fn start_lambda_app_proxy(
     cookie_jar: tauri::State<'_, CookieJarInstance>,
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<NewTaskParams, BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("lambda-app-proxy-start");
-    }
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1247,12 +1186,7 @@ async fn open_dbeaver(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    wombat_api: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
-    {
-        let wombat_api = wombat_api.0.read().await;
-        wombat_api.event("open-dbeaver");
-    }
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
             format!(
