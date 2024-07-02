@@ -14,6 +14,7 @@
 	import { type CustomHeader } from '$lib/types';
 	import { taskStore, type NewTaskParams, TaskStatus } from '$lib/stores/task-store';
 	import { invoke } from '@tauri-apps/api/tauri';
+	import { userStore } from '$lib/stores/user-store';
 
 	export let service: ServiceDetails;
 	let dialog: HTMLDialogElement;
@@ -329,6 +330,8 @@
 				<button
 					disabled={!selectedInfraProfile && !selectedSsoProxy}
 					class="btn btn-active btn-accent btn-sm"
+					data-umami-event="ecs_proxy_start"
+					data-umami-event-uid={$userStore.id}
 					on:click|preventDefault={() => {
 						startProxy(
 							useDevWayFeature ? undefined : selectedInfraProfile,

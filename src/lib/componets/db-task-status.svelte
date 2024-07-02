@@ -17,6 +17,8 @@
 				: 'Install dbeaver to get instant conneciton'}
 		>
 			<button
+				data-umami-event="dbeaver_open"
+				data-umami-event-uid={$userStore.id}
 				disabled={!$userStore.dbeaver_path}
 				class={`link text-sm gap-1 text-amber-300 flex items-center ${
 					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
