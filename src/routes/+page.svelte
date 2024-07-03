@@ -190,7 +190,13 @@
 					{#await dependenciesPromise then deps}
 						{#if !Object.entries(deps).some((v) => v[1].Err)}
 							<div class="form-control mt-6">
-								<button class="btn btn-accent" disabled={loading} type="submit">
+								<button
+									data-umami-event="login"
+									data-umami-event-uid={userId}
+									class="btn btn-accent"
+									disabled={loading}
+									type="submit"
+								>
 									{buttonText}</button
 								>
 							</div>

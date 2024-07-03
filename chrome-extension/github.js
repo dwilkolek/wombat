@@ -3,7 +3,7 @@ function execute(i) {
 	if (header && header.innerText == 'Single sign-on to TechnipFMC - EMU') {
 		const continueBtn = document.querySelector('button[type=submit]');
 		if (continueBtn) {
-			chrome.runtime.sendMessage({ action: 'trackedEvent', event: 'github-auth' });
+			window.umami.trackSafe('github-auth');
 			continueBtn.click();
 		}
 	}

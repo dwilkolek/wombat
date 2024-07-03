@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { userStore } from '$lib/stores/user-store';
 	import type { CustomHeader } from '$lib/types';
 
 	export let onRemove: (name: string) => void = () => {};
@@ -51,6 +52,8 @@
 		<button
 			disabled={disabled || header.name == ''}
 			class="btn btn-circle btn-xs btn-success"
+			data-umami-event="custom_header_add"
+			data-umami-event-uid={$userStore.id}
 			on:click={() => {
 				onAdd({ ...header });
 				header.name = '';
@@ -71,6 +74,8 @@
 		</button>
 	{:else}
 		<button
+			data-umami-event="custom_header_remove"
+			data-umami-event-uid={$userStore.id}
 			class="btn btn-circle btn-xs btn-error"
 			{disabled}
 			on:click|preventDefault={() => onRemove(header.name)}

@@ -10,19 +10,19 @@
 	},
 	"content_scripts": [
 		{
-			"js": ["aws-step-1.js"],
+			"js": ["umami.js", "aws-step-1.js"],
 			"matches": ["*://device.sso.eu-west-1.amazonaws.com/*"]
 		},
 		{
-			"js": ["aws-step-2.js"],
+			"js": ["umami.js", "aws-step-2.js"],
 			"matches": ["*://technipfmc.awsapps.com/start/*"]
 		},
 		{
-			"js": ["github.js"],
+			"js": ["umami.js", "github.js"],
 			"matches": ["*://github.com/*"]
 		},
 		{
-			"js": ["snowflake.js"],
+			"js": ["umami.js", "snowflake.js"],
 			"matches": ["http://localhost/*"]
 		}
 	],

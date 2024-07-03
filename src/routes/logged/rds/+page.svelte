@@ -67,6 +67,8 @@
 							<td>
 								<div class="flex flex-row items-stretch gap-1">
 									<button
+										data-umami-event="favorite_app_toggle"
+										data-umami-event-uid={$userStore.id}
 										on:click={() => {
 											userStore.favoriteTrackedName(db.name);
 										}}
@@ -94,6 +96,8 @@
 										class={`btn btn-circle ${
 											!$taskStore.find((t) => t.arn == db.arn) ? 'opacity-25' : ''
 										}`}
+										data-umami-event="dbeaver_start"
+										data-umami-event-uid={$userStore.id}
 										disabled={!$taskStore.find((t) => t.arn == db.arn)}
 										on:click={() => {
 											execute(
@@ -115,6 +119,8 @@
 								{#if !$taskStore.find((t) => t.arn == db.arn)}
 									<button
 										class="btn btn-focus"
+										data-umami-event="rds_proxy_start"
+										data-umami-event-uid={$userStore.id}
 										disabled={!!$taskStore.find((t) => t.arn == db.arn)}
 										on:click={async () => {
 											if (db?.env == AwsEnv.PROD) {

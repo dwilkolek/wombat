@@ -34,6 +34,8 @@
 			<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
 				<button
 					class="text-xs"
+					data-umami-event="favorite_app_toggle"
+					data-umami-event-uid={$userStore.id}
 					on:click={() => {
 						userStore.favoriteTrackedName(app);
 					}}
@@ -56,6 +58,8 @@
 					<div class="flex gap-2">
 						<span>Synchronized at: {details.timestamp}</span>
 						<button
+							data-umami-event="app_refresh"
+							data-umami-event-uid={$userStore.id}
 							on:click|preventDefault={() => {
 								details && allServiceDetailsStore.refreshOne(details.app);
 							}}

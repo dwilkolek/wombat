@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { userStore } from '$lib/stores/user-store';
 	import { error } from '../stores/error-store';
 </script>
 
@@ -9,6 +10,8 @@
 				on:click={() => {
 					error.set(undefined);
 				}}
+				data-umami-event="error_banner_clear"
+				data-umami-event-uid={$userStore.id}
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

@@ -4,6 +4,7 @@
 	import type { EcsService } from '$lib/types';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
+	import { userStore } from '$lib/stores/user-store';
 
 	export let service: EcsService;
 
@@ -38,6 +39,8 @@
 				<button
 					class="text-lime-500"
 					on:click={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
+					data-umami-event="ecs_restart_clear"
+					data-umami-event-uid={$userStore.id}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -59,6 +62,8 @@
 				<button
 					class="text-rose-700"
 					on:click={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
+					data-umami-event="ecs_restart_clear"
+					data-umami-event-uid={$userStore.id}
 					><svg
 						xmlns="http://www.w3.org/2000/svg"
 						fill="none"
@@ -77,6 +82,8 @@
 			{/if}
 		{:else}
 			<button
+				data-umami-event="ecs_task_restart_start"
+				data-umami-event-uid={$userStore.id}
 				on:click|preventDefault={(e) => {
 					invoke('restart_service', {
 						env: service.env,

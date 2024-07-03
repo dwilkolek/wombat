@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { userStore } from '$lib/stores/user-store';
 	import { invoke } from '@tauri-apps/api';
 
 	export let service_arn: string;
@@ -9,6 +10,8 @@
 		on:click={async () => {
 			await invoke('stop_job', { arn: service_arn });
 		}}
+		data-umami-event="ecs_proxy_stop"
+		data-umami-event-uid={$userStore.id}
 	>
 		<div class="w-5 h-5 relative">
 			<svg

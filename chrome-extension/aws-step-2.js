@@ -2,10 +2,10 @@ function execute(i) {
 	const allowBtn = document.querySelector('button[data-testid=allow-access-button]');
 	if (allowBtn) {
 		console.log('allow button found', allowBtn);
+		window.umami.trackSafe('aws-step-2');
 		allowBtn.click();
 		setInterval(() => {
 			if (document.querySelector('.awsui-context-alert')?.innerText?.includes('Request approved')) {
-				chrome.runtime.sendMessage({ action: 'trackedEvent', event: 'aws-auth' });
 				chrome.runtime.sendMessage({ action: 'closeTab' });
 			}
 		}, 400);

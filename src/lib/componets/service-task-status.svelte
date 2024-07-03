@@ -20,6 +20,8 @@
 				on:click|preventDefault={() => {
 					task && open('http://localhost:' + task.port);
 				}}
+				data-umami-event="browser_ecs_proxy_open"
+				data-umami-event-uid={$userStore.id}
 			>
 				{task.port}</button
 			>

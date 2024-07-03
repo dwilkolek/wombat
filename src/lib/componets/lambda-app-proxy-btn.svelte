@@ -5,6 +5,7 @@
 	import { invoke } from '@tauri-apps/api/tauri';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/api/dialog';
+	import { userStore } from '$lib/stores/user-store';
 
 	export let app: string;
 	export let env: AwsEnv;
@@ -199,6 +200,8 @@
 
 			<div class="flex flex-row justify-end gap-2 mt-2">
 				<button
+					data-umami-event="lambda_app_proxy_start"
+					data-umami-event-uid={$userStore.id}
 					class="btn btn-active btn-accent btn-sm"
 					on:click|preventDefault={() => startProxy()}
 				>

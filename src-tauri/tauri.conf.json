@@ -35,7 +35,7 @@
 			},
 			"http": {
 				"request": true,
-				"scope": ["https://api.github.com/repos/dwilkolek/wombat/*"]
+				"scope": ["https://api.github.com/repos/dwilkolek/wombat/*", "https://umami.wilkolek.eu/*"]
 			}
 		},
 		"bundle": {

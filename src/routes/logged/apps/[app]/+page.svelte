@@ -2,7 +2,7 @@
 	import AppEnvCard from '$lib/componets/app-env-card.svelte';
 	import StarIcon from '$lib/componets/star-icon.svelte';
 	import { serviceDetailStore } from '$lib/stores/service-details-store';
-	import { userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import type { AppPage } from './+page';
 
 	export let data: AppPage;
@@ -10,9 +10,8 @@
 	$: detailsStorr = serviceDetailStore(data.app);
 	$: details = $detailsStorr;
 
-	$: user = $userStore;
 	$: isFavourite = (name: string): boolean => {
-		return !!user.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	};
 </script>
 
@@ -24,6 +23,8 @@
 <div class="flex flex-row gap-2 items-center pl-5">
 	<button
 		class="text-md"
+		data-umami-event="favorite_app_toggle"
+		data-umami-event-uid={$userStore.id}
 		on:click={() => {
 			userStore.favoriteTrackedName(data.app);
 		}}

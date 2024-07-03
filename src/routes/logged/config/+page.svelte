@@ -83,6 +83,10 @@
 			</div>
 		</div>
 
-		<button class="btn btn-primary">Save!</button>
+		<button
+			class="btn btn-primary"
+			data-umami-event="config_update"
+			data-umami-event-uid={$userStore.id}>Save!</button
+		>
 	</form>
 </div>
