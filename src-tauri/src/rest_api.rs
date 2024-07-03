@@ -77,11 +77,8 @@ struct BrowserExtensionTrackingBody {
 }
 async fn browser_extension_event(
     body: BrowserExtensionTrackingBody,
-    wombat_api: std::sync::Arc<tokio::sync::RwLock<WombatApi>>,
 ) -> Result<warp::reply::Response, warp::Rejection> {
     log::info!("browser extension event: {}", &body.event);
-    let wombat_api = wombat_api.read().await;
-    wombat_api.event(&body.event);
     Ok(warp::reply().into_response())
 }
 
@@ -137,7 +134,6 @@ pub async fn serve(
             .or(warp::post()
                 .and(warp::path("browser-extension-event"))
                 .and(warp::body::json())
-                .and(with_wombat_api(wombat_api.clone()))
                 .and_then(browser_extension_event)),
     )
     .run(([127, 0, 0, 1], 6891))

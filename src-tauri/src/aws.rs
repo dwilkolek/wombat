@@ -1009,7 +1009,7 @@ pub async fn service_detail(
             &service_arn, error_str
         );
         return Err(ServiceDetailsMissing {
-            name: shared::ecs_arn_to_name(&service_arn),
+            name: shared::arn_to_name(&service_arn),
             timestamp: Utc::now(),
             env: Env::from_any(&service_arn),
             error: "Failed to describe service".to_owned(),
@@ -1037,7 +1037,7 @@ pub async fn service_detail(
             &service_arn, error_str
         );
         return Err(ServiceDetailsMissing {
-            name: shared::ecs_arn_to_name(&service_arn),
+            name: shared::arn_to_name(&service_arn),
             timestamp: Utc::now(),
             env: Env::from_any(&service_arn),
             error: "Failed to fetch task definition".to_owned(),
@@ -1057,7 +1057,7 @@ pub async fn service_detail(
         .to_owned();
 
     Ok(ServiceDetails {
-        name: shared::ecs_arn_to_name(&service_arn),
+        name: shared::arn_to_name(&service_arn),
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),

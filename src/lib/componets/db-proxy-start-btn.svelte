@@ -2,6 +2,7 @@
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { TaskStatus, taskStore } from '$lib/stores/task-store';
+	import { userStore } from '$lib/stores/user-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
 	import { invoke } from '@tauri-apps/api';
 	import { ask } from '@tauri-apps/api/dialog';
@@ -36,6 +37,8 @@
 {#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
 	<div class="tooltip tooltip-left" data-tip="Start proxy">
 		<button
+			data-umami-event="rds_proxy_start"
+			data-umami-event-uid={$userStore.id}
 			disabled={isStartButtonDisabled}
 			class={`flex flex-row gap-1 ${isStartButtonDisabled ? 'opacity-30' : ''}`}
 			on:click={startDbProxy}

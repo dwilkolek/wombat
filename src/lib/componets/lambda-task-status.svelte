@@ -17,6 +17,8 @@
 	>
 		{#if task.status === TaskStatus.RUNNING}
 			<button
+				data-umami-event="browser_lambda_app_proxy_open"
+				data-umami-event-uid={$userStore.id}
 				class={`link text-sm`}
 				on:click|preventDefault={() => {
 					task && open('http://localhost:' + task.port);

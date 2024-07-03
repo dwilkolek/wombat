@@ -65,6 +65,8 @@
 							<td>
 								<div class="flex flex-row items-stretch gap-1">
 									<button
+										data-umami-event="favorite_app_toggle"
+										data-umami-event-uid={$userStore.id}
 										on:click={() => {
 											userStore.favoriteTrackedName(service.name);
 										}}
@@ -82,6 +84,8 @@
 								<div class="flex flex-col">
 									{#if !$taskStore.find((t) => t.arn == service.arn)}
 										<button
+											data-umami-event="ecs-proxy-start"
+											data-umami-event-uid={$userStore.id}
 											class="btn btn-focus"
 											on:click={async () => {
 												if (service?.env == AwsEnv.PROD) {

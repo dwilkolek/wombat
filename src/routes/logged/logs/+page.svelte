@@ -8,6 +8,7 @@
 	import { beforeNavigate } from '$app/navigation';
 	import { logStore } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
+	import { userStore } from '$lib/stores/user-store';
 
 	$: activeCluser = clusterStore.activeCluser;
 
@@ -184,6 +185,8 @@
 							);
 						}
 					}}
+					data-umami-event="logs_search_start"
+					data-umami-event-uid={$userStore.id}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -213,6 +216,8 @@
 							);
 						}
 					}}
+					data-umami-event="logs_search_dump_start"
+					data-umami-event-uid={$userStore.id}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -238,6 +243,8 @@
 					on:click={() => {
 						logStore.abort('user-request');
 					}}
+					data-umami-event="logs_search_stop"
+					data-umami-event-uid={$userStore.id}
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"

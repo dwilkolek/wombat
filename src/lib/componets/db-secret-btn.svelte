@@ -5,6 +5,7 @@
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
+	import { userStore } from '$lib/stores/user-store';
 	export let database: RdsInstance | undefined;
 
 	const credentialsHandler = async () => {
@@ -40,15 +41,16 @@
 {#if database}
 	{#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database?.normalized_name && env == database?.env)}
 		<div class="tooltip tooltip-left" data-tip="Search for secret">
-			<button>
-				<!-- svelte-ignore a11y-click-events-have-key-events -->
-				<!-- svelte-ignore a11y-no-static-element-interactions -->
+			<button
+				on:click={credentialsHandler}
+				data-umami-event="rds_credentials_get"
+				data-umami-event-uid={$userStore.id}
+			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
 					class="w-4 h-4 text-amber-300"
-					on:click={credentialsHandler}
 				>
 					<path
 						fill-rule="evenodd"

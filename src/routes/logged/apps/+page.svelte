@@ -43,11 +43,20 @@
 			bind:value={discoverValue}
 			class="input input-bordered w-full max-w-xs"
 		/>
-		<button class="btn btn-primary" type="submit"> Discover </button>
+		<button
+			class="btn btn-primary"
+			type="submit"
+			data-umami-event="app_search_start"
+			data-umami-event-uid={$userStore.id}
+		>
+			Discover
+		</button>
 		{#if discovered}
 			<button
 				class="btn btn-secondary"
 				type="button"
+				data-umami-event="app_search_reset"
+				data-umami-event-uid={$userStore.id}
 				on:click={() => {
 					discoverValue = '';
 					discovered = undefined;
@@ -64,6 +73,8 @@
 					<input
 						type="checkbox"
 						class="toggle toggle-accent"
+						data-umami-event="selected_env_toggle"
+						data-umami-event-uid={$userStore.id}
 						checked={selectedClusters.includes(env)}
 						on:change={(e) => {
 							columnToggleHandler(env, e);
