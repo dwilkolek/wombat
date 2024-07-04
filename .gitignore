@@ -18,4 +18,4 @@ local.db-shm
 local.db-wal
 client_wal_index
 
-releease-server
+release-test-server

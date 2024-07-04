@@ -1000,7 +1000,7 @@ async fn start_service_proxy(
                     &source_app_profile
                 );
                 interceptors.push(Box::new(
-                    proxy_authenticators::BasicAutheticator::from_proxy_auth_config(
+                    proxy_authenticators::BasicAuthenticator::from_proxy_auth_config(
                         &source_app_config,
                         proxy_auth_config.clone(),
                     )

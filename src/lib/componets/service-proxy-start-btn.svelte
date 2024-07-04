@@ -25,7 +25,7 @@
 	let selectedSsoProxy =
 		$wombatProfileStore.ssoProfiles.find((ssoProfile) => ssoProfile.env == service.env) ??
 		$wombatProfileStore.ssoProfiles.at(0);
-	let useDevWayFeature = false;
+	let useSSOProfile = false;
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined;
 	let customHeaders: CustomHeader[] = [
 		{
@@ -52,10 +52,19 @@
 	) => {
 		return configs.filter(
 			(config) =>
-				useDevWayFeature ||
-				(infraProfile && (config.fromApp == '*' || infraProfile.app == config.fromApp))
+				infraProfile &&
+				(config.fromApp == '*' || infraProfile.app == config.fromApp) &&
+				!config.requireSsoProfile
 		);
 	};
+
+	$: filterForSsoProfile = (configs: ProxyAuthConfig[]) => {
+		return configs;
+	};
+
+	$: configsForProfile = useSSOProfile
+		? filterForSsoProfile(proxyAuthConfigsForThisService)
+		: filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile);
 
 	const startProxy = async (
 		infraProfile: InfraProfile | undefined,
@@ -174,13 +183,13 @@
 						<select
 							autofocus
 							class="select select-bordered w-full select-sm"
-							bind:value={useDevWayFeature}
+							bind:value={useSSOProfile}
 						>
 							<option value={false}> Infra </option>
-							<option value={true} disabled={!$featuresStore.devWay}> SSO </option>
+							<option value={true}> SSO </option>
 						</select>
 					</div>
-					{#if useDevWayFeature}
+					{#if useSSOProfile}
 						<div class="grow">
 							<!-- svelte-ignore a11y-autofocus -->
 							<select
@@ -189,8 +198,9 @@
 								bind:value={selectedSsoProxy}
 							>
 								{#each $wombatProfileStore.ssoProfiles as ssoProfile}
-									{#if ssoProfile.env == service.env}{@const interceptorCount =
-											filterForInfraProfile(proxyAuthConfigsForThisService, undefined).length}
+									{#if ssoProfile.env == service.env}{@const interceptorCount = filterForSsoProfile(
+											proxyAuthConfigsForThisService
+										).length}
 										<option value={ssoProfile}>
 											{ssoProfile.profile_name} - {interceptorCount} interceptor(s)
 										</option>
@@ -199,7 +209,7 @@
 							</select>
 						</div>
 					{/if}
-					{#if !useDevWayFeature}
+					{#if !useSSOProfile}
 						<div class="grow">
 							<!-- svelte-ignore a11y-autofocus -->
 							<select
@@ -229,7 +239,7 @@
 				>
 					<option value={undefined}>None</option>
 
-					{#each filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile) as config}
+					{#each configsForProfile as config}
 						<option value={config}>
 							{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}
 						</option>
@@ -334,8 +344,8 @@
 					data-umami-event-uid={$userStore.id}
 					on:click|preventDefault={() => {
 						startProxy(
-							useDevWayFeature ? undefined : selectedInfraProfile,
-							useDevWayFeature ? selectedSsoProxy : undefined,
+							useSSOProfile ? undefined : selectedInfraProfile,
+							useSSOProfile ? selectedSsoProxy : undefined,
 							selectedAuthInterceptor,
 							customHeaders
 						);

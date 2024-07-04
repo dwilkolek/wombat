@@ -141,6 +141,8 @@ export type ProxyAuthConfig = {
 	basicUser: string | null | undefined;
 
 	secretName: string;
+
+	requireSsoProfile: boolean;
 };
 
 export type CustomHeader = {
