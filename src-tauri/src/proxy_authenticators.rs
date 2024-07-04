@@ -98,8 +98,8 @@ impl ProxyInterceptor for JepsenAutheticator {
         uri.starts_with(&self.path_prefix)
     }
     async fn modify_headers(&self, headers: &mut Headers) {
-        info!("Jepsen applies");
         if let Ok(token) = self.get_jepsen_token().await {
+            info!("adding jepsen headers");
             headers.insert(
                 "Authorization",
                 format!("Bearer {}", &token).parse().unwrap(),
@@ -108,17 +108,17 @@ impl ProxyInterceptor for JepsenAutheticator {
     }
 }
 
-pub struct BasicAutheticator {
+pub struct BasicAuthenticator {
     path_prefix: String,
     user: String,
     password: Option<String>,
 }
-impl BasicAutheticator {
+impl BasicAuthenticator {
     pub async fn from_proxy_auth_config(
         aws_config: &aws_config::SdkConfig,
         basic_config: wombat_api::ProxyAuthConfig,
     ) -> Self {
-        BasicAutheticator {
+        BasicAuthenticator {
             user: basic_config.basic_user.unwrap(),
             path_prefix: basic_config.api_path,
             password: aws::get_secret(aws_config, basic_config.secret_name.as_str())
@@ -129,15 +129,19 @@ impl BasicAutheticator {
 }
 
 #[async_trait]
-impl ProxyInterceptor for BasicAutheticator {
+impl ProxyInterceptor for BasicAuthenticator {
     fn applies(&self, uri: &str) -> bool {
         uri.starts_with(&self.path_prefix)
     }
+
     async fn modify_headers(&self, headers: &mut Headers) {
         if let Some(password) = self.password.clone() {
             let credentials = Authorization::basic(&self.user, &password).0.encode();
             let credentials_value = credentials.to_str().unwrap();
+            info!("adding basic auth header");
             headers.insert("Authorization", credentials_value.parse().unwrap());
+        } else {
+            warn!("passowrd not found, skipping basic auth header");
         }
     }
 }
@@ -156,7 +160,7 @@ impl ProxyInterceptor for CookieAutheticator {
         let jar = self.jar.lock().await;
         let header_value = jar.header_value_for_env(&self.env);
         if !header_value.is_empty() {
-            info!("Injecting cookie {header_value}");
+            info!("Injecting cookie: {header_value}");
             headers.insert("Cookie", header_value.parse().unwrap());
         }
     }

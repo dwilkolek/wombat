@@ -206,4 +206,6 @@ pub struct ProxyAuthConfig {
     pub basic_user: Option<String>,
 
     pub secret_name: String,
+
+    pub require_sso_profile: bool,
 }
