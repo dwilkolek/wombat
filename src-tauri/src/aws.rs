@@ -744,9 +744,12 @@ pub async fn get_secret(
         .send()
         .await;
 
+    info!("looking for secret={secret_name}");
     if let Ok(param) = param {
         if let Some(param) = param.parameter() {
-            return Ok(param.value().unwrap_or_log().to_owned());
+            let secret = param.value().unwrap_or_log().to_owned();
+            info!("Found secret with value={secret}");
+            return Ok(secret);
         }
     }
 
