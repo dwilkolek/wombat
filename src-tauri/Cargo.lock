@@ -6575,7 +6575,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "4.2.0"
+version = "4.2.3"
 dependencies = [
  "async-trait",
  "aws-config",
