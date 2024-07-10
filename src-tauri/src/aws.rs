@@ -1149,6 +1149,12 @@ pub async fn find_logs(
                                     && stream
                                         .last_event_timestamp
                                         .is_some_and(|ts| ts >= start_date);
+                                info!(
+                                    "stream {} matches name & timestamp criteria (ts: {:?} - {:?}",
+                                    &stream_name,
+                                    &stream.first_event_timestamp,
+                                    &stream.last_event_timestamp
+                                );
                                 stream_names.push(stream_name.to_owned());
                                 is_over_time = !overlap;
                                 found_matching_stream = true
@@ -1156,13 +1162,13 @@ pub async fn find_logs(
                         }
                     }
 
-                    if stream_names.len() > 100 || (is_over_time && found_matching_stream) {
+                    if is_over_time && found_matching_stream {
                         streams_marker = None;
                     }
                 }
             }
 
-            info!("Found streams {:?}", &stream_names);
+            info!("looking in {} streams", &stream_names.len());
 
             let mut marker = None;
             let mut first = true;
@@ -1171,66 +1177,69 @@ pub async fn find_logs(
                 notifier.success();
                 return Result::Ok(0);
             }
+            for chunk in stream_names.chunks(100) {
+                while marker.as_ref().is_some() || first {
+                    first = false;
+                    let logs_response = client
+                        .filter_log_events()
+                        .set_log_group_name(Some(group_name.to_owned()))
+                        .set_log_stream_names(Some(chunk.to_vec()))
+                        .set_next_token(marker)
+                        .set_filter_pattern(filter.clone())
+                        .set_start_time(Some(start_date))
+                        .set_end_time(Some(end_date))
+                        .send()
+                        .await;
 
-            while marker.as_ref().is_some() || first {
-                first = false;
-                let logs_response = client
-                    .filter_log_events()
-                    .set_log_group_name(Some(group_name.to_owned()))
-                    .set_log_stream_names(Some(stream_names.clone()))
-                    .set_next_token(marker)
-                    .set_filter_pattern(filter.clone())
-                    .set_start_time(Some(start_date))
-                    .set_end_time(Some(end_date))
-                    .send()
-                    .await;
+                    if logs_response.is_err() {
+                        let message = logs_response
+                            .unwrap_err()
+                            .into_service_error()
+                            .meta()
+                            .message()
+                            .unwrap_or("")
+                            .to_owned();
 
-                if logs_response.is_err() {
-                    let message = logs_response
-                        .unwrap_err()
-                        .into_service_error()
-                        .meta()
-                        .message()
-                        .unwrap_or("")
-                        .to_owned();
+                        let mut notifier = on_log_found.lock().await;
+                        notifier.error(format!("Error: {}", &message).to_owned());
 
-                    let mut notifier = on_log_found.lock().await;
-                    notifier.error(format!("Error: {}", &message).to_owned());
-
-                    return Result::Err(BError {
-                        message,
-                        command: "find_logs".to_owned(),
-                    });
-                }
-                let log_response_data = logs_response.unwrap();
-
-                marker = log_response_data.next_token().map(|m| m.to_owned());
-                let events = log_response_data.events.unwrap_or_default();
-                info!("LOGS Found: {}", &events.len());
-                log_count += events.len();
-                let mut notifier = on_log_found.lock().await;
-                notifier.notify(
-                    events
-                        .into_iter()
-                        .map(|event| LogEntry {
-                            log_stream_name: event.log_stream_name.unwrap_or_default(),
-                            timestamp: event.timestamp.unwrap_or_default(),
-                            ingestion_time: event.ingestion_time.unwrap_or_default(),
-                            message: event.message.unwrap_or_default().to_owned(),
-                        })
-                        .collect(),
-                );
-                if let Some(limit) = limit {
-                    if log_count > limit {
-                        warn!("LOGS Exceeded max log count");
-                        let msg =
-                            format!("Exceeded amount of logs. Limit {}/{}.", &log_count, &limit)
-                                .to_owned();
-                        notifier.error(msg.to_owned());
                         return Result::Err(BError {
-                            message: msg,
+                            message,
                             command: "find_logs".to_owned(),
                         });
+                    }
+                    let log_response_data = logs_response.unwrap();
+
+                    marker = log_response_data.next_token().map(|m| m.to_owned());
+                    let events = log_response_data.events.unwrap_or_default();
+                    info!("LOGS Found: {}", &events.len());
+                    log_count += events.len();
+                    let mut notifier = on_log_found.lock().await;
+                    notifier.notify(
+                        events
+                            .into_iter()
+                            .map(|event| LogEntry {
+                                log_stream_name: event.log_stream_name.unwrap_or_default(),
+                                timestamp: event.timestamp.unwrap_or_default(),
+                                ingestion_time: event.ingestion_time.unwrap_or_default(),
+                                message: event.message.unwrap_or_default().to_owned(),
+                            })
+                            .collect(),
+                    );
+                    if let Some(limit) = limit {
+                        if log_count > limit {
+                            warn!("LOGS Exceeded max log count");
+                            let msg = format!(
+                                "Exceeded amount of logs. Limit {}/{}.",
+                                &log_count, &limit
+                            )
+                            .to_owned();
+                            notifier.error(msg.to_owned());
+                            return Result::Err(BError {
+                                message: msg,
+                                command: "find_logs".to_owned(),
+                            });
+                        }
                     }
                 }
             }
