@@ -577,7 +577,7 @@ async fn find_logs(
                 }
             },
             match &filename.is_some() {
-                false => Some(2500),
+                false => Some(10000),
                 true => None,
             },
         )
