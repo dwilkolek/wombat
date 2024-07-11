@@ -243,9 +243,9 @@
 		window.umami = {
 			track,
 			identify,
-			trackSafe: (obj, data) => {
+			trackSafe: async (obj, data) => {
 				try {
-					track(obj, data);
+					await track(obj, data);
 				} catch (e) {
 					console.warn('Error sending', e);
 				}

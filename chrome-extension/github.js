@@ -1,10 +1,11 @@
-function execute(i) {
+async function execute(i) {
 	const header = document.querySelector('h1');
 	if (header && header.innerText == 'Single sign-on to TechnipFMC - EMU') {
 		const continueBtn = document.querySelector('button[type=submit]');
 		if (continueBtn) {
-			window.umami.trackSafe('github-auth');
+			await window.umami.trackSafe('github-auth');
 			continueBtn.click();
+			return;
 		}
 	}
 	if (i < 10) {
