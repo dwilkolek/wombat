@@ -100,6 +100,7 @@ function sendCookieToDesktop(cookie) {
 			.catch(() => {});
 	}
 }
+
 function notifyDeskopClient() {
 	cookies.forEach((cookie) => {
 		sendCookieToDesktop(cookie);
@@ -107,13 +108,13 @@ function notifyDeskopClient() {
 }
 
 /* event listeners */
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender) => {
 	if (request.action === 'closeTab') {
 		chrome.tabs.remove(sender.tab.id);
 	}
 });
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender) => {
 	if (request.action === 'closeTab') {
 		chrome.tabs.remove(sender.tab.id);
 	}
@@ -133,7 +134,9 @@ chrome.runtime.onConnect.addListener(function (port) {
 });
 
 /* popup opened/closed */
-setInterval(async () => {
+let healthTimeout;
+const healthCheck = async () => {
+	clearTimeout(healthTimeout);
 	const prevWombatOpen = wombatOpen;
 	wombatOpen = await fetch(`http://localhost:6891/health`, {
 		method: 'POST',
@@ -146,15 +149,18 @@ setInterval(async () => {
 			console.log(resp);
 			return resp.text();
 		})
-		.catch((e) => {
-			console.warn(e);
+		.catch(() => {
+			// console.warn(e);
 			return undefined;
 		});
+
 	if (prevWombatOpen !== wombatOpen && wombatOpen) {
 		notifyDeskopClient();
 		notifyPopupDeskopCLientOnline();
 	}
-}, 1000);
+	healthTimeout = setTimeout(healthCheck, 1000);
+};
+healthCheck();
 
 /* checking stored session cookies */
 setInterval(function () {
@@ -182,9 +188,10 @@ setInterval(function () {
 }, 1000);
 
 setInterval(() => {
-	popupOpen &&
+	if (popupOpen) {
 		chrome.runtime.sendMessage({
 			action: 'extVersion',
 			extVersion: extVersion
 		});
-});
+	}
+}, 1000);
