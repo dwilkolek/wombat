@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { JsonView } from '@zerodevx/svelte-json-view';
 	import { endOfDay, format, startOfDay, sub } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
@@ -9,6 +8,7 @@
 	import { logStore } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 	import { userStore } from '$lib/stores/user-store';
+	import JsonView from '$lib/componets/json-view.svelte';
 
 	$: activeCluser = clusterStore.activeCluser;
 
@@ -353,7 +353,8 @@
 					}}>Copy raw json</button
 				>
 				<div class="text-sm overflow-auto h-[calc(40vh-80px)]">
-					<JsonView json={$selectedLog} />
+					<!-- <JsonView json={$selectedLog} /> -->
+					<JsonView log={$selectedLog} />
 				</div>
 			</div>
 		{/if}
