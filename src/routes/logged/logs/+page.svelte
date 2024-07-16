@@ -285,7 +285,7 @@
 <div class="flex flex-col w-full gap-2">
 	<div
 		class={`overflow-auto ${
-			$storeState.showLogDetails ? 'h-[calc(60vh-260px)]' : 'h-[calc(100vh-260px)]'
+			$storeState.showLogDetails ? 'h-[calc(60vh-240px)]' : 'h-[calc(100vh-240px)]'
 		} w-full`}
 	>
 		<table class="table table-xs w-full">
@@ -352,7 +352,7 @@
 						await writeText(JSON.stringify($selectedLog, null, 2));
 					}}>Copy raw json</button
 				>
-				<div class="text-sm overflow-auto h-[calc(40vh-80px)]">
+				<div class="text-sm overflow-auto h-[calc(40vh-60px)]">
 					<!-- <JsonView json={$selectedLog} /> -->
 					<JsonView log={$selectedLog} />
 				</div>

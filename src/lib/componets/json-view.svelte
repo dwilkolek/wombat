@@ -31,11 +31,11 @@
 	{#if nested}
 		{`{`}
 	{/if}
-	<table class={`table-auto w-full font-mono text-xs`}>
+	<table class={`table-auto w-full font-mono font-extralight text-xs`}>
 		<tbody>
 			{#each entries as [key, value]}
 				<tr>
-					<td class={`align-top py-1 w-28 ${nested ? 'pl-4' : 'pl-2'}`}>{key}</td>
+					<td class={`align-top py-0.5 w-28 ${nested ? 'pl-4' : 'pl-2'}`}>{key}</td>
 					<td class="">
 						{#if typeof value == 'string'}
 							{#if value.includes('\n')}
