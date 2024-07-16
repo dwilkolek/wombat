@@ -42,6 +42,12 @@
 		label: string;
 	};
 	$: filters = invoke<LogFilter[]>('log_filters');
+
+	$: expanded = false;
+
+	$: logHeight = expanded ? `h-[calc(24vh)]` : `h-[calc(60vh-240px)]`;
+	$: logHeightContainer = expanded ? 'h-[74vh]' : 'h-[40vh]';
+	$: logJsonViewHeight = expanded ? 'h-[74vh]' : 'h-[40vh]';
 </script>
 
 <svelte:head>
@@ -285,7 +291,7 @@
 <div class="flex flex-col w-full gap-2">
 	<div
 		class={`overflow-auto ${
-			$storeState.showLogDetails ? 'h-[calc(60vh-240px)]' : 'h-[calc(100vh-240px)]'
+			$storeState.showLogDetails ? logHeight : 'h-[calc(100vh-240px)]'
 		} w-full`}
 	>
 		<table class="table table-xs w-full">
@@ -311,55 +317,96 @@
 		</table>
 	</div>
 </div>
-<div class="fixed w-full bottom-0">
+<div class="fixed w-full bottom-0 bg-transparent">
 	<div class="w-full flex-col bg-base-300 rounded-t-lg">
-		<div class="w-full flex justify-center">
-			{#if !$storeState.showLogDetails}
-				<button on:click={() => ($storeState.showLogDetails = true)}>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
-					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-					</svg>
-				</button>
-			{/if}
+		<div class="w-full flex flex-row justify-center relative pb-1">
+			<div>
+				{#if !$storeState.showLogDetails}
+					<button on:click={() => ($storeState.showLogDetails = true)}>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="w-6 h-6"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+						</svg>
+					</button>
+				{/if}
+				{#if $storeState.showLogDetails}
+					<button on:click={() => ($storeState.showLogDetails = false)}>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="w-6 h-6"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+							/>
+						</svg>
+					</button>
+				{/if}
+			</div>
 			{#if $storeState.showLogDetails}
-				<button on:click={() => ($storeState.showLogDetails = false)}>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
+				<div class="absolute right-2 -top-1 flex gap-2 flex-row items-center">
+					<button
+						class="m-2 btn btn-active btn-primary btn-xs"
+						on:click={async () => {
+							await writeText(JSON.stringify($selectedLog, null, 2));
+						}}>Copy raw json</button
 					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-					</svg>
-				</button>
+					<button
+						class="btn btn-circle btn-xs"
+						on:click={() => {
+							expanded = !expanded;
+						}}
+					>
+						{#if expanded}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="size-5"
+							>
+								<path
+									d="M3.28 2.22a.75.75 0 0 0-1.06 1.06L5.44 6.5H2.75a.75.75 0 0 0 0 1.5h4.5A.75.75 0 0 0 8 7.25v-4.5a.75.75 0 0 0-1.5 0v2.69L3.28 2.22ZM13.5 2.75a.75.75 0 0 0-1.5 0v4.5c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-2.69l3.22-3.22a.75.75 0 0 0-1.06-1.06L13.5 5.44V2.75ZM3.28 17.78l3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 1 0 1.06 1.06ZM13.5 14.56l3.22 3.22a.75.75 0 1 0 1.06-1.06l-3.22-3.22h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0v-2.69Z"
+								/>
+							</svg>
+						{:else}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 20 20"
+								fill="currentColor"
+								class="size-5"
+							>
+								<path
+									d="m13.28 7.78 3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 0 0 1.06 1.06ZM2 17.25v-4.5a.75.75 0 0 1 1.5 0v2.69l3.22-3.22a.75.75 0 0 1 1.06 1.06L4.56 16.5h2.69a.75.75 0 0 1 0 1.5h-4.5a.747.747 0 0 1-.75-.75ZM12.22 13.28l3.22 3.22h-2.69a.75.75 0 0 0 0 1.5h4.5a.747.747 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69l-3.22-3.22a.75.75 0 1 0-1.06 1.06ZM3.5 4.56l3.22 3.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0V4.56Z"
+								/>
+							</svg>
+						{/if}
+					</button>
+				</div>
 			{/if}
 		</div>
 
 		{#if $selectedLog && $storeState.showLogDetails}
-			<div class="h-[40vh] flex flex-col gap-2">
-				<button
-					class="m-2 btn btn-active btn-primary btn-sm"
-					on:click={async () => {
-						await writeText(JSON.stringify($selectedLog, null, 2));
-					}}>Copy raw json</button
-				>
-				<div class="text-sm overflow-auto h-[calc(40vh-60px)]">
-					<!-- <JsonView json={$selectedLog} /> -->
+			<div class={`${logHeightContainer} flex flex-col gap-2`}>
+				<div class={`text-sm overflow-auto ${logJsonViewHeight}`}>
 					<JsonView log={$selectedLog} />
 				</div>
 			</div>
 		{/if}
 		{#if !$selectedLog && $storeState.showLogDetails}
-			<div class="overflow-auto h-[40vh] justify-evenly text-center flex flex-col gap-2">
+			<div
+				class={`${logHeightContainer} overflow-auto justify-evenly text-center flex flex-col gap-2`}
+			>
 				Select log to see details
 			</div>
 		{/if}
