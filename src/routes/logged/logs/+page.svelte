@@ -9,6 +9,7 @@
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 	import { userStore } from '$lib/stores/user-store';
 	import JsonView from '$lib/componets/json-view.svelte';
+	import { WebviewWindow } from '@tauri-apps/api/window';
 
 	$: activeCluser = clusterStore.activeCluser;
 
@@ -43,11 +44,29 @@
 	};
 	$: filters = invoke<LogFilter[]>('log_filters');
 
-	$: expanded = false;
+	const openLogInNewWindow = (log: unknown) => {
+		try {
+			const logB64 = btoa(JSON.stringify(log));
+			const windowHandle = logB64.replaceAll('=', '');
+			const existingWindow = WebviewWindow.getByLabel(windowHandle);
 
-	$: logHeight = expanded ? `h-[calc(24vh)]` : `h-[calc(60vh-240px)]`;
-	$: logHeightContainer = expanded ? 'h-[74vh]' : 'h-[40vh]';
-	$: logJsonViewHeight = expanded ? 'h-[74vh]' : 'h-[40vh]';
+			if (existingWindow) {
+				existingWindow.setFocus();
+				return;
+			}
+			const view = new WebviewWindow(windowHandle, {
+				url: `/window/log?log=${logB64}`,
+				minHeight: 900,
+				minWidth: 1440,
+				title: `${log['app'] ?? 'Unknown'} #${logB64.slice(-20)}`
+			});
+			view.once('tauri://error', function (args) {
+				console.warn('error', args);
+			});
+		} catch (e) {
+			console.warn(e);
+		}
+	};
 </script>
 
 <svelte:head>
@@ -291,7 +310,7 @@
 <div class="flex flex-col w-full gap-2">
 	<div
 		class={`overflow-auto ${
-			$storeState.showLogDetails ? logHeight : 'h-[calc(100vh-240px)]'
+			$storeState.showLogDetails ? 'h-[calc(60vh-240px)]' : 'h-[calc(100vh-240px)]'
 		} w-full`}
 	>
 		<table class="table table-xs w-full">
@@ -311,6 +330,35 @@
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
 						>
 						<td class="w-full">{log.message}</td>
+						<td class="">
+							<button
+								class="btn btn-circle btn-xs"
+								data-umami-event="log_open_in_window"
+								data-umami-event-uid={$userStore.id}
+								on:click={(e) => {
+									e.stopPropagation();
+									openLogInNewWindow(log.data);
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+									class="size-3"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
+										clip-rule="evenodd"
+									/>
+									<path
+										fill-rule="evenodd"
+										d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button></td
+						>
 					</tr>
 				{/each}
 			</tbody>
@@ -363,50 +411,42 @@
 						}}>Copy raw json</button
 					>
 					<button
+						data-umami-event="log_open_in_window"
+						data-umami-event-uid={$userStore.id}
 						class="btn btn-circle btn-xs"
-						on:click={() => {
-							expanded = !expanded;
-						}}
+						on:click={() => openLogInNewWindow($selectedLog)}
 					>
-						{#if expanded}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="size-5"
-							>
-								<path
-									d="M3.28 2.22a.75.75 0 0 0-1.06 1.06L5.44 6.5H2.75a.75.75 0 0 0 0 1.5h4.5A.75.75 0 0 0 8 7.25v-4.5a.75.75 0 0 0-1.5 0v2.69L3.28 2.22ZM13.5 2.75a.75.75 0 0 0-1.5 0v4.5c0 .414.336.75.75.75h4.5a.75.75 0 0 0 0-1.5h-2.69l3.22-3.22a.75.75 0 0 0-1.06-1.06L13.5 5.44V2.75ZM3.28 17.78l3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 1 0 1.06 1.06ZM13.5 14.56l3.22 3.22a.75.75 0 1 0 1.06-1.06l-3.22-3.22h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0v-2.69Z"
-								/>
-							</svg>
-						{:else}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 20 20"
-								fill="currentColor"
-								class="size-5"
-							>
-								<path
-									d="m13.28 7.78 3.22-3.22v2.69a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.69l-3.22 3.22a.75.75 0 0 0 1.06 1.06ZM2 17.25v-4.5a.75.75 0 0 1 1.5 0v2.69l3.22-3.22a.75.75 0 0 1 1.06 1.06L4.56 16.5h2.69a.75.75 0 0 1 0 1.5h-4.5a.747.747 0 0 1-.75-.75ZM12.22 13.28l3.22 3.22h-2.69a.75.75 0 0 0 0 1.5h4.5a.747.747 0 0 0 .75-.75v-4.5a.75.75 0 0 0-1.5 0v2.69l-3.22-3.22a.75.75 0 1 0-1.06 1.06ZM3.5 4.56l3.22 3.22a.75.75 0 0 0 1.06-1.06L4.56 3.5h2.69a.75.75 0 0 0 0-1.5h-4.5a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0V4.56Z"
-								/>
-							</svg>
-						{/if}
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+							class="size-5"
+						>
+							<path
+								fill-rule="evenodd"
+								d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
+								clip-rule="evenodd"
+							/>
+							<path
+								fill-rule="evenodd"
+								d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
+								clip-rule="evenodd"
+							/>
+						</svg>
 					</button>
 				</div>
 			{/if}
 		</div>
 
 		{#if $selectedLog && $storeState.showLogDetails}
-			<div class={`${logHeightContainer} flex flex-col gap-2`}>
-				<div class={`text-sm overflow-auto ${logJsonViewHeight}`}>
+			<div class={`h-[40vh] flex flex-col gap-2`}>
+				<div class={`text-sm overflow-auto h-[40vh]`}>
 					<JsonView log={$selectedLog} />
 				</div>
 			</div>
 		{/if}
 		{#if !$selectedLog && $storeState.showLogDetails}
-			<div
-				class={`${logHeightContainer} overflow-auto justify-evenly text-center flex flex-col gap-2`}
-			>
+			<div class={`h-[40vh] overflow-auto justify-evenly text-center flex flex-col gap-2`}>
 				Select log to see details
 			</div>
 		{/if}
