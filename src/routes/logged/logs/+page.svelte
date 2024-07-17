@@ -46,9 +46,9 @@
 	$: filters = invoke<LogFilter[]>('log_filters');
 
 	const openLogInNewWindow = (log: unknown) => {
+		const logB64 = encodeURIComponent(btoa(JSON.stringify(log)));
+		const windowHandle = logB64.replaceAll(/[^A-Z0-9]/gi, 'x');
 		try {
-			const logB64 = btoa(JSON.stringify(log));
-			const windowHandle = logB64.replaceAll('=', '');
 			const existingWindow = WebviewWindow.getByLabel(windowHandle);
 
 			if (existingWindow) {
@@ -63,10 +63,8 @@
 			});
 			view.once('tauri://error', function (args) {
 				console.warn('error', args);
-				message(JSON.stringify(args), { title: 'Ooops event!', type: 'error' });
 			});
 		} catch (e) {
-			message(JSON.stringify(e), { title: 'Ooops!', type: 'error' });
 			console.warn(e);
 		}
 	};
