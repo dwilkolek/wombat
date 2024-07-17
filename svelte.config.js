@@ -37,7 +37,7 @@ const config = {
 				'/logged/lambda-apps',
 				'/logged/logs',
 				'/logged/apps/[app]',
-				'/logged/logs/window'
+				'/window/log'
 			]
 		}
 	}
