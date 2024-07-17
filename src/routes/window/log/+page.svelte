@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { writeText } from '@tauri-apps/api/clipboard';
 
-	$: log = JSON.parse(atob($page.url.searchParams.get('log')));
+	$: log = JSON.parse(atob(decodeURIComponent($page.url.searchParams.get('log'))));
 </script>
 
 <svelte:head>
