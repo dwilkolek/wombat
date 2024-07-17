@@ -327,7 +327,7 @@
 							$selectedLog === log.data ? log.style.active : ''
 						}`}
 					>
-						<td>{log.app}</td>
+						<td class="min-w-[100px]">{log.app}</td>
 						<td>{log.level}</td>
 						<td class="min-w-[200px] max-w-[200px]"
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
