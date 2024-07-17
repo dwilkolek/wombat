@@ -10,6 +10,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { WebviewWindow } from '@tauri-apps/api/window';
+	import { message } from '@tauri-apps/api/dialog';
 
 	$: activeCluser = clusterStore.activeCluser;
 
@@ -62,8 +63,10 @@
 			});
 			view.once('tauri://error', function (args) {
 				console.warn('error', args);
+				message(JSON.stringify(args), { title: 'Ooops event!', type: 'error' });
 			});
 		} catch (e) {
+			message(JSON.stringify(e), { title: 'Ooops!', type: 'error' });
 			console.warn(e);
 		}
 	};
