@@ -3,7 +3,7 @@ async function execute(i) {
 		document.body.innerHTML ==
 		'Your identity was confirmed and propagated to Snowflake JDBC driver. You can close this window now and go back where you started from.'
 	) {
-		await window.umami.trackSafe('snowflake-auth');
+		await window.umami.trackSafe('snowflake_auth');
 		chrome.runtime.sendMessage({ action: 'closeTab' });
 		return;
 	}

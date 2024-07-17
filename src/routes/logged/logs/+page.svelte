@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { JsonView } from '@zerodevx/svelte-json-view';
 	import { endOfDay, format, startOfDay, sub } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
@@ -9,6 +8,8 @@
 	import { logStore } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 	import { userStore } from '$lib/stores/user-store';
+	import JsonView from '$lib/componets/json-view.svelte';
+	import { WebviewWindow } from '@tauri-apps/api/window';
 
 	$: activeCluser = clusterStore.activeCluser;
 
@@ -42,6 +43,30 @@
 		label: string;
 	};
 	$: filters = invoke<LogFilter[]>('log_filters');
+
+	const openLogInNewWindow = (log: unknown) => {
+		try {
+			const logB64 = btoa(JSON.stringify(log));
+			const windowHandle = logB64.replaceAll('=', '');
+			const existingWindow = WebviewWindow.getByLabel(windowHandle);
+
+			if (existingWindow) {
+				existingWindow.setFocus();
+				return;
+			}
+			const view = new WebviewWindow(windowHandle, {
+				url: `/window/log?log=${logB64}`,
+				minHeight: 900,
+				minWidth: 1440,
+				title: `${log['app'] ?? 'Unknown'} #${logB64.slice(-20)}`
+			});
+			view.once('tauri://error', function (args) {
+				console.warn('error', args);
+			});
+		} catch (e) {
+			console.warn(e);
+		}
+	};
 </script>
 
 <svelte:head>
@@ -285,7 +310,7 @@
 <div class="flex flex-col w-full gap-2">
 	<div
 		class={`overflow-auto ${
-			$storeState.showLogDetails ? 'h-[calc(60vh-260px)]' : 'h-[calc(100vh-260px)]'
+			$storeState.showLogDetails ? 'h-[calc(60vh-240px)]' : 'h-[calc(100vh-240px)]'
 		} w-full`}
 	>
 		<table class="table table-xs w-full">
@@ -305,60 +330,123 @@
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
 						>
 						<td class="w-full">{log.message}</td>
+						<td class="">
+							<button
+								class="btn btn-circle btn-xs"
+								data-umami-event="log_open_in_window"
+								data-umami-event-uid={$userStore.id}
+								on:click={(e) => {
+									e.stopPropagation();
+									openLogInNewWindow(log.data);
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+									class="size-3"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
+										clip-rule="evenodd"
+									/>
+									<path
+										fill-rule="evenodd"
+										d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button></td
+						>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
 	</div>
 </div>
-<div class="fixed w-full bottom-0">
+<div class="fixed w-full bottom-0 bg-transparent">
 	<div class="w-full flex-col bg-base-300 rounded-t-lg">
-		<div class="w-full flex justify-center">
-			{#if !$storeState.showLogDetails}
-				<button on:click={() => ($storeState.showLogDetails = true)}>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
-					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-					</svg>
-				</button>
-			{/if}
+		<div class="w-full flex flex-row justify-center relative pb-1">
+			<div>
+				{#if !$storeState.showLogDetails}
+					<button on:click={() => ($storeState.showLogDetails = true)}>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="w-6 h-6"
+						>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+						</svg>
+					</button>
+				{/if}
+				{#if $storeState.showLogDetails}
+					<button on:click={() => ($storeState.showLogDetails = false)}>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke-width="1.5"
+							stroke="currentColor"
+							class="w-6 h-6"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+							/>
+						</svg>
+					</button>
+				{/if}
+			</div>
 			{#if $storeState.showLogDetails}
-				<button on:click={() => ($storeState.showLogDetails = false)}>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke-width="1.5"
-						stroke="currentColor"
-						class="w-6 h-6"
+				<div class="absolute right-2 -top-1 flex gap-2 flex-row items-center">
+					<button
+						class="m-2 btn btn-active btn-primary btn-xs"
+						on:click={async () => {
+							await writeText(JSON.stringify($selectedLog, null, 2));
+						}}>Copy raw json</button
 					>
-						<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-					</svg>
-				</button>
+					<button
+						data-umami-event="log_open_in_window"
+						data-umami-event-uid={$userStore.id}
+						class="btn btn-circle btn-xs"
+						on:click={() => openLogInNewWindow($selectedLog)}
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 20 20"
+							fill="currentColor"
+							class="size-5"
+						>
+							<path
+								fill-rule="evenodd"
+								d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
+								clip-rule="evenodd"
+							/>
+							<path
+								fill-rule="evenodd"
+								d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
+								clip-rule="evenodd"
+							/>
+						</svg>
+					</button>
+				</div>
 			{/if}
 		</div>
 
 		{#if $selectedLog && $storeState.showLogDetails}
-			<div class="h-[40vh] flex flex-col gap-2">
-				<button
-					class="m-2 btn btn-active btn-primary btn-sm"
-					on:click={async () => {
-						await writeText(JSON.stringify($selectedLog, null, 2));
-					}}>Copy raw json</button
-				>
-				<div class="text-sm overflow-auto h-[calc(40vh-80px)]">
-					<JsonView json={$selectedLog} />
+			<div class={`h-[40vh] flex flex-col gap-2`}>
+				<div class={`text-sm overflow-auto h-[40vh]`}>
+					<JsonView log={$selectedLog} />
 				</div>
 			</div>
 		{/if}
 		{#if !$selectedLog && $storeState.showLogDetails}
-			<div class="overflow-auto h-[40vh] justify-evenly text-center flex flex-col gap-2">
+			<div class={`h-[40vh] overflow-auto justify-evenly text-center flex flex-col gap-2`}>
 				Select log to see details
 			</div>
 		{/if}
