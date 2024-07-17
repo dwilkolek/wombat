@@ -1,6 +1,7 @@
 import type { AwsEnv } from '$lib/types';
 import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
+import { format } from 'date-fns';
 import { writable, get } from 'svelte/store';
 type LogEntry = {
 	log_stream_name: string;
@@ -52,7 +53,15 @@ function transformLog(newLog: LogEntry) {
 			timestamp: newLog.timestamp,
 			level,
 			message: newLog.message,
-			data: { message: newLog.message },
+			data: {
+				app,
+				timestamp:
+					typeof newLog.timestamp == 'number' || typeof newLog.timestamp == 'string'
+						? format(new Date(newLog.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')
+						: newLog.timestamp,
+				level,
+				message: newLog.message
+			},
 			style: logStyle(level)
 		};
 	} else {
