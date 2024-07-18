@@ -6,6 +6,7 @@
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/api/dialog';
 	import { userStore } from '$lib/stores/user-store';
+	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
 	export let app: string;
 	export let env: AwsEnv;
@@ -19,23 +20,37 @@
 	})?.port;
 
 	let dialog: HTMLDialogElement;
-	let baseAddress = `https://dxp${env.toLowerCase() == 'prod' ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`;
-	let customHeaders: CustomHeader[] = [
-		{
-			name: 'Origin',
-			encodeBase64: false,
-			value: baseAddress + '/'
-		},
-		{
-			name: 'Referer',
-			encodeBase64: false,
-			value: baseAddress
-		}
-	];
+
+	$: availableApps = new Set([
+		'dxp',
+		...$wombatProfileStore.infraProfiles
+			.filter((infra) => infra.env == env)
+			.map((infra) => infra.app)
+	]);
+
+	$: selectedApp = 'dxp';
+	let defaultHeaders = getAppHeaders(selectedApp ?? 'dxp');
+	let customHeaders: CustomHeader[] = [];
+
+	function getAppHeaders(app: string) {
+		const baseAddress = `https://${app}${env.toLowerCase() == 'prod' ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`;
+		return [
+			{
+				name: 'Origin',
+				encodeBase64: false,
+				value: baseAddress + '/'
+			},
+			{
+				name: 'Referer',
+				encodeBase64: false,
+				value: baseAddress
+			}
+		];
+	}
 
 	const startProxy = async () => {
 		const headers: { [key: string]: string } = {};
-		customHeaders.forEach((header) => {
+		[...defaultHeaders, ...customHeaders].forEach((header) => {
 			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
 		});
 		taskStore.startTask(
@@ -168,8 +183,33 @@
 				</div>
 			</div>
 			<div>
-				<div class="flex items-center gap-2 pb-2">Headers</div>
+				<div class="flex items-center gap-2 pb-2">
+					Headers <select
+						class="select select-bordered w-full select-sm"
+						bind:value={selectedApp}
+						on:change={(e) => {
+							defaultHeaders = getAppHeaders(e.currentTarget.value);
+						}}
+					>
+						{#each availableApps as app}
+							<option value={app}> {app} </option>
+						{/each}
+					</select>
+				</div>
+
 				<div class="flex gap-1 flex-col">
+					{#each defaultHeaders as header}
+						{#key JSON.stringify(header)}
+							<CustomHeaderForm
+								added={true}
+								{header}
+								disabled={true}
+								onRemove={() => {
+									console.error('cannot remove');
+								}}
+							/>
+						{/key}
+					{/each}
 					{#each customHeaders as header}
 						{#key JSON.stringify(header)}
 							<CustomHeaderForm
