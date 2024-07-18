@@ -42,6 +42,13 @@
 				>
 			</li>
 			<li>
+				<a
+					class={$page.url.pathname === '/logged/lambda-apps' ? 'active' : ''}
+					href="/logged/lambda-apps"
+					>Lambda Apps
+				</a>
+			</li>
+			<li>
 				{#if $featuresStore.ecsTab}
 					<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
 						>Services (ECS)
@@ -49,14 +56,6 @@
 				{:else}
 					<span class="opacity-30">Services (ECS) </span>
 				{/if}
-			</li>
-
-			<li>
-				<a
-					class={$page.url.pathname === '/logged/lambda-apps' ? 'active' : ''}
-					href="/logged/lambda-apps"
-					>Lambda Apps
-				</a>
 			</li>
 
 			<li>
