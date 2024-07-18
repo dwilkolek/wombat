@@ -28,18 +28,17 @@
 </script>
 
 <div>
-	{#if nested}
-		{`{`}
-	{/if}
-	<table class={`table-auto w-full font-mono font-extralight text-[11px]`}>
+	<table
+		class={`table-auto w-full font-mono font-extralight text-xs ${nested ? '' : 'table-zebra'} text-zinc-400 `}
+	>
 		<tbody>
 			{#each entries as [key, value]}
 				<tr>
-					<td class={`align-top w-28 ${nested ? 'pl-4' : 'pl-2'}`}>{key}</td>
-					<td class="">
+					<td class={`align-top min-w-28 w-28 ${nested ? 'pl-0' : 'pl-2'} text-right`}>{key}: </td>
+					<td class="text-zinc-300">
 						{#if typeof value == 'string'}
 							{#if value.includes('\n')}
-								<div class="p-0.5">
+								<div class="text-slate-400">
 									{#each value.split('\n') as line}
 										{@html line
 											.replaceAll('<', '&lt;')
@@ -66,7 +65,4 @@
 			{/each}
 		</tbody>
 	</table>
-	{#if nested}
-		{`}`}
-	{/if}
 </div>

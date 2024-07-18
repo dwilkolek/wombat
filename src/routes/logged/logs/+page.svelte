@@ -10,7 +10,6 @@
 	import { userStore } from '$lib/stores/user-store';
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { WebviewWindow } from '@tauri-apps/api/window';
-	import { message } from '@tauri-apps/api/dialog';
 
 	$: activeCluser = clusterStore.activeCluser;
 
@@ -45,21 +44,21 @@
 	};
 	$: filters = invoke<LogFilter[]>('log_filters');
 
-	const openLogInNewWindow = (log: unknown) => {
-		const logB64 = encodeURIComponent(btoa(JSON.stringify(log)));
-		const windowHandle = logB64.replaceAll(/[^A-Z0-9]/gi, 'x');
+	const openLogInNewWindow = async (log: unknown) => {
+		const key = await invoke<string>('kv_put', { value: JSON.stringify(log) });
+
 		try {
-			const existingWindow = WebviewWindow.getByLabel(windowHandle);
+			const existingWindow = WebviewWindow.getByLabel(key);
 
 			if (existingWindow) {
 				existingWindow.setFocus();
 				return;
 			}
-			const view = new WebviewWindow(windowHandle, {
-				url: `/window/log?log=${logB64}`,
+			const view = new WebviewWindow(key, {
+				url: `/window/log?kvKey=${key}`,
 				minHeight: 900,
 				minWidth: 1440,
-				title: `${log['app'] ?? 'Unknown'} #${logB64.slice(-20)}`
+				title: `${log['app'] ?? 'Unknown'} #${key}`
 			});
 			view.once('tauri://error', function (args) {
 				console.warn('error', args);
