@@ -16,7 +16,8 @@
     "dependencies": {
         "@tauri-apps/api": "1.6.0",
         "daisyui": "4.12.10",
-        "date-fns": "3.6.0"
+        "date-fns": "3.6.0",
+        "html-to-image": "^1.11.11"
     },
     "devDependencies": {
         "@fontsource/fira-mono": "5.0.13",

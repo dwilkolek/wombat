@@ -17,12 +17,6 @@
 	{:then logString}
 		{@const log = JSON.parse(logString)}
 		<div class="p-2">
-			<button
-				class="m-2 btn btn-active btn-primary btn-xs absolute right-2 top-2"
-				on:click={async () => {
-					await writeText(JSON.stringify(log, null, 2));
-				}}>Copy raw json</button
-			>
 			<JsonView {log} nested={false} />
 		</div>
 	{/await}
