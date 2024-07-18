@@ -30,7 +30,7 @@
 		</div>
 	</div>
 </div>
-<div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
+<div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-40">
 	<div class="flex flex-wrap gap-2">
 		{#each lambdaServices as app}
 			<LambdaAppCard {app} />
