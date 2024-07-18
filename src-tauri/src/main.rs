@@ -8,6 +8,7 @@ use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
 use log::{error, info, warn};
 use rds_resolver::RdsResolver;
+use sha2::{Digest, Sha256};
 use shared::{arn_to_name, BError, BrowserExtension, CookieJar, Env};
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
@@ -289,6 +290,30 @@ async fn save_preffered_envs(
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     user_config.save_preffered_envs(&aws_config_provider.active_wombat_profile.name, envs)
+}
+#[tauri::command]
+async fn kv_put(value: String, kv_store: tauri::State<'_, KVStoreInstance>) -> Result<String, ()> {
+    let mut kv_store = kv_store.0.lock().await;
+    Ok(kv_store.put(value))
+}
+
+#[tauri::command]
+async fn kv_get(
+    key: String,
+    kv_store: tauri::State<'_, KVStoreInstance>,
+) -> Result<String, String> {
+    let kv_store = kv_store.0.lock().await;
+    match kv_store.get(&key) {
+        Some(v) => Ok(v),
+        None => Err(format!("Key {} not found", &key)),
+    }
+}
+
+#[tauri::command]
+async fn kv_delete(key: String, kv_store: tauri::State<'_, KVStoreInstance>) -> Result<String, ()> {
+    let mut kv_store = kv_store.0.lock().await;
+    kv_store.delete(&key);
+    Ok(key)
 }
 
 #[tauri::command]
@@ -1441,6 +1466,9 @@ async fn main() {
             EcsResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
         .manage(WombatApiInstance(wombat_api))
+        .manage(KVStoreInstance(Arc::new(Mutex::new(KVStore {
+            store: HashMap::new(),
+        }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,
@@ -1474,7 +1502,10 @@ async fn main() {
             start_lambda_app_proxy,
             chrome_extension_dir,
             browser_extension_health,
-            cookie_jar_status
+            cookie_jar_status,
+            kv_put,
+            kv_get,
+            kv_delete
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
@@ -1552,6 +1583,26 @@ struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 struct WombatApiInstance(Arc<RwLock<wombat_api::WombatApi>>);
 struct BrowserExtensionInstance(Arc<Mutex<BrowserExtension>>);
 struct CookieJarInstance(Arc<Mutex<CookieJar>>);
+struct KVStoreInstance(Arc<Mutex<KVStore>>);
+
+struct KVStore {
+    store: HashMap<String, String>,
+}
+impl KVStore {
+    fn put(&mut self, value: String) -> String {
+        let key = format!("{:X}", Sha256::new().chain_update(&value).finalize());
+        self.store.insert(key.clone(), value);
+        key
+    }
+
+    fn delete(&mut self, key: &str) {
+        self.store.remove(key);
+    }
+
+    fn get(&self, key: &str) -> Option<String> {
+        self.store.get(key).map(|x| x.to_owned())
+    }
+}
 
 struct TaskTracker {
     aws_resource_refresher: Option<tokio::task::JoinHandle<()>>,
