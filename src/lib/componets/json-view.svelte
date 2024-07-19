@@ -74,6 +74,7 @@
 						Loading preview
 					{:then dataUrl}
 						Right click bellow to copy as image
+						<!-- svelte-ignore a11y-missing-attribute -->
 						<img class="invert object-fit object-center h-16 w-36" src={dataUrl} />
 					{/await}
 				</div>
@@ -137,7 +138,7 @@
 														for (const lastLineIdx in lastLines) {
 															const lastLine = lastLines[lastLineIdx];
 
-															if (lastLine.tag == 'ext') {
+															if (lastLine && lastLine.tag == 'ext') {
 																lastLine.tag = 'std';
 															} else {
 																break;

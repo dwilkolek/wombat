@@ -1,7 +1,6 @@
 <script lang="ts">
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { page } from '$app/stores';
-	import { writeText } from '@tauri-apps/api/clipboard';
 	import { invoke } from '@tauri-apps/api/tauri';
 
 	$: logPromise = invoke<string>('kv_get', { key: $page.url.searchParams.get('kvKey') });
