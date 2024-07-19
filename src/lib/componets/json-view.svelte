@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toPng } from 'html-to-image';
 	import JsonView from '$lib/componets/json-view.svelte';
+	import { writeText } from '@tauri-apps/api/clipboard';
 	type LogType = { [key: string]: unknown };
 	export let log: LogType;
 	export let nested: boolean | null | undefined;
@@ -14,52 +15,173 @@
 		'context',
 		'mdc'
 	];
-	$: entries = Object.entries(log);
-	$: entries.sort((a, b) => {
+	const objToList = (obj: object): { key: string; value: unknown }[] => {
+		return Object.entries(obj).map(([k, v]) => {
+			return { key: k, value: v };
+		});
+	};
+	$: entries = objToList(log).sort((a, b) => {
+		const akey = a.key.split('.')[0];
+		const bkey = b.key.split('.')[0];
 		const aPos =
-			priorityList.indexOf(a[0]) > -1
-				? priorityList.indexOf(a[0])
-				: 100 + JSON.stringify(a[1]).length;
+			priorityList.indexOf(akey) > -1
+				? priorityList.indexOf(akey)
+				: 100 + JSON.stringify(a.value).length;
 		const bPos =
-			priorityList.indexOf(b[0]) > -1
-				? priorityList.indexOf(b[0])
-				: 100 + JSON.stringify(b[1]).length;
+			priorityList.indexOf(bkey) > -1
+				? priorityList.indexOf(bkey)
+				: 100 + JSON.stringify(b.value).length;
 		return aPos - bPos;
 	});
 
 	let container: HTMLDivElement;
+	$: regeneratePng = () => {
+		return new Promise<string>((resolve) => {
+			setTimeout(async () => {
+				const dataUrl = await toPng(container);
+				resolve(dataUrl);
+			}, 500);
+		});
+	};
+	$: showCompactBtn =
+		!nested && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'));
+	$: compactStacktrace = true;
+	$: activeTags = compactStacktrace ? ['std', 'dots'] : ['ext', 'std'];
+	$: pngPromise = regeneratePng();
 </script>
 
-<div class={`flex`}>
-	<div bind:this={container} class="grow bg-base-300">
-		<table
-			class={`table-auto w-full font-mono font-extralight text-xs ${nested ? '' : 'table-zebra'} text-zinc-400 `}
-		>
+<div class={`pr-36`}>
+	{#if !nested}
+		<div class="min-w-36 w-36 absolute right-0">
+			<div class="flex flex-col gap-2 p-2">
+				{#if showCompactBtn}<button
+						class="btn btn-active btn-primary btn-xs"
+						on:click={() => {
+							compactStacktrace = !compactStacktrace;
+							pngPromise = regeneratePng();
+						}}>{compactStacktrace ? 'Show Full' : 'Show Compact'}</button
+					>
+				{/if}
+				<button
+					class="btn btn-active btn-primary btn-xs"
+					on:click={async () => {
+						await writeText(JSON.stringify(log, null, 2));
+					}}>Copy raw json</button
+				>
+
+				<div class="border border-primary p-2 text-center rounded-lg font-semibold text-xs">
+					{#await pngPromise}
+						Loading preview
+					{:then dataUrl}
+						Right click bellow to copy as image
+						<img class="invert object-fit object-center h-16 w-36" src={dataUrl} />
+					{/await}
+				</div>
+			</div>
+		</div>
+	{/if}
+	<div bind:this={container} class={`${nested ? 'bg-transparent' : 'bg-base-300'} grow`}>
+		<table class={`table-auto w-full font-mono font-extralight text-xs text-zinc-400 `}>
 			<tbody>
-				{#each entries as [key, value]}
-					<tr>
+				{#each entries as { key, value }, index}
+					<tr class={nested ? 'transparent' : index % 2 == 1 ? 'bg-base-200' : 'bg-base-300'}>
 						<td class={`align-top min-w-28 w-28 ${nested ? 'pl-0' : 'pl-2'} text-right`}
 							>{key}:
 						</td>
 						<td class="text-zinc-300">
 							{#if typeof value == 'string'}
 								{#if value.includes('\n')}
+									{@const stacktraceLines = value
+										.split('\n')
+										.map((line) => {
+											let formatted = line
+												.replaceAll('<s', '&lt;')
+												.replaceAll('\t', '&nbsp;&nbsp;&nbsp;&nbsp;');
+											let isSpecial = false;
+											if (formatted.includes('Caused by')) {
+												isSpecial = true;
+												formatted = formatted.replaceAll(
+													/(.*)Caused by(.*)/gi,
+													'<span class="text-orange-400">$1Caused by$2</span>'
+												);
+											}
+											if (formatted.includes('com.technipfmc')) {
+												isSpecial = true;
+												formatted = formatted.replaceAll(
+													/(.*)com.technipfmc(.*)/g,
+													'<span class="text-amber-300">$1com.technipfmc$2</span>'
+												);
+											}
+
+											return { line: formatted, isSpecial };
+										})
+										.reduce(
+											(acc, line, li, arr) => {
+												acc.sinceLastSpecial++;
+												let tag = 'ext';
+												const lastLines = [
+													acc.lines.at(-1),
+													acc.lines.at(-2),
+													acc.lines.at(-3)
+												].filter((line) => !!line);
+												if (
+													acc.seenSpecial == false ||
+													line.isSpecial ||
+													acc.sinceLastSpecial < 4
+												) {
+													tag = 'std';
+												}
+												if (line.isSpecial) {
+													acc.seenSpecial = true;
+													if (acc.sinceLastSpecial > 1) {
+														for (const lastLineIdx in lastLines) {
+															const lastLine = lastLines[lastLineIdx];
+
+															if (lastLine.tag == 'ext') {
+																lastLine.tag = 'std';
+															} else {
+																break;
+															}
+														}
+													}
+
+													acc.sinceLastSpecial = 0;
+												}
+												acc.lines.push({ tag, line: line.line });
+												if (arr.length - 1 == li) {
+													const newLines = [];
+													let extCount = 0;
+													for (const line of acc.lines) {
+														if (line.tag == 'std') {
+															if (extCount > 0) {
+																newLines.push({
+																	line: `<span class="text-zinc-700">&nbsp;&nbsp;&nbsp;&nbsp;>>> collapsed ${extCount} lines <<<</span>`,
+																	tag: 'dots'
+																});
+															}
+															extCount = 0;
+															newLines.push(line);
+															continue;
+														} else {
+															extCount++;
+															newLines.push(line);
+														}
+													}
+													acc.lines = newLines;
+												}
+												return acc;
+											},
+											{ lines: [], sinceLastSpecial: 0, seenSpecial: false }
+										).lines}
+
 									<div class="text-slate-400 text-pretty">
-										{#each value.split('\n') as line}
-											<span class="break-all">
-												{@html line
-													.replaceAll('<', '&lt;')
-													.replaceAll('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
-													.replaceAll(
-														/(.*)Caused by(.*)/gi,
-														'<span class="text-orange-400">$1Caused by$2</span>'
-													)
-													.replaceAll(
-														/(.*)com.technipfmc(.*)/g,
-														'<span class="text-amber-300">$1com.technipfmc$2</span>'
-													)}
-											</span>
-											<br />
+										{#each stacktraceLines as line}
+											{#if activeTags.includes(line.tag)}
+												<span class="break-all">
+													{@html line.line}
+												</span>
+												<br />
+											{/if}
 										{/each}
 									</div>
 								{:else}
@@ -74,20 +196,4 @@
 			</tbody>
 		</table>
 	</div>
-	{#if !nested}
-		<div class="flex flex-col min-w-36 w-36">
-			<button
-				class="m-2 btn btn-active btn-primary btn-xs"
-				on:click={async () => {
-					await writeText(JSON.stringify(log, null, 2));
-				}}>Copy raw json</button
-			>
-			{#await toPng(container) then dataUrl}
-				<div class="border border-primary mx-2 p-2 text-center rounded-lg font-semibold text-xs">
-					Right click below to copy as image
-					<img class="invert object-fit object-center h-16 w-36" src={dataUrl} />
-				</div>
-			{/await}
-		</div>
-	{/if}
 </div>
