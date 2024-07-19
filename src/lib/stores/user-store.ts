@@ -1,13 +1,11 @@
 import { derived, writable } from 'svelte/store';
 import { execute } from './error-store';
 import type { AwsEnv, UserConfig, WombatAwsProfile } from '../types';
-import { emit, listen } from '@tauri-apps/api/event';
-import type { ProxyEventMessage } from './task-store';
-import { invoke } from '@tauri-apps/api';
+import { emit } from '@tauri-apps/api/event';
 
 const createUserStore = () => {
 	const loggedIn = writable(false);
-	const { subscribe, set, update } = writable<UserConfig>({
+	const { subscribe, set } = writable<UserConfig>({
 		id: undefined,
 		dbeaver_path: undefined,
 		known_profiles: [],
@@ -20,30 +18,6 @@ const createUserStore = () => {
 	});
 	execute<UserConfig>('user_config').then((config) => {
 		set(prepareConfig(config));
-	});
-	listen<ProxyEventMessage>('proxy-start', (event) => {
-		if (event.payload.proxy_type == 'ECS') {
-			update((config) => {
-				const clone = { ...config };
-				if (!clone.service_proxy_port_map[event.payload.name]) {
-					clone.service_proxy_port_map[event.payload.name] = {};
-				}
-				clone.service_proxy_port_map[event.payload.name][event.payload.env] = event.payload.port;
-				return clone;
-			});
-		}
-		if (event.payload.proxy_type == 'RDS') {
-			update((config) => {
-				const clone = { ...config };
-				if (!clone.db_proxy_port_map[event.payload.name]) {
-					clone.db_proxy_port_map[event.payload.name] = {};
-				}
-				clone.db_proxy_port_map[event.payload.name][event.payload.env] = event.payload.port;
-				return clone;
-			});
-		}
-		// DO NOT FUCKING REMOVE. PREVENTS FROM PROXY HANGING
-		invoke('ping');
 	});
 
 	const setDbeaverPath = async (path: string) => {
