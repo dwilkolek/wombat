@@ -3,9 +3,9 @@
 	import ServiceProxyStopBtn from './service-proxy-stop-btn.svelte';
 
 	import { taskStore } from '$lib/stores/task-store';
-	import type { ServiceDetails } from '$lib/types';
+	import type { EcsService } from '$lib/types';
 
-	export let service: ServiceDetails;
+	export let service: EcsService;
 	$: port = $taskStore?.find((t) => t.arn == service?.arn)?.port;
 </script>
 
