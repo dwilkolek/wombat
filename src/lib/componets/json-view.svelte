@@ -31,7 +31,7 @@
 </script>
 
 <div class={`flex`}>
-	<div bind:this={container} class="grow">
+	<div bind:this={container} class="grow bg-base-300">
 		<table
 			class={`table-auto w-full font-mono font-extralight text-xs ${nested ? '' : 'table-zebra'} text-zinc-400 `}
 		>
