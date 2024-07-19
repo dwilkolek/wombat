@@ -179,6 +179,7 @@
 										{#each stacktraceLines as line}
 											{#if activeTags.includes(line.tag)}
 												<span class="break-all">
+													<!-- eslint-disable-next-line -->
 													{@html line.line}
 												</span>
 												<br />
