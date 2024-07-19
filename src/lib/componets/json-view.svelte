@@ -2,8 +2,7 @@
 	import { toPng } from 'html-to-image';
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { writeText } from '@tauri-apps/api/clipboard';
-	type LogType = { [key: string]: unknown };
-	export let log: LogType;
+	export let log: object;
 	export let nested: boolean | null | undefined;
 	const priorityList = [
 		'app',
@@ -35,6 +34,18 @@
 	});
 
 	let container: HTMLDivElement;
+	enum Tag {
+		std,
+		dots,
+		ext
+	}
+	function getReducerAcc(): {
+		lines: { line: string; tag: Tag }[];
+		sinceLastSpecial: number;
+		seenSpecial: boolean;
+	} {
+		return { lines: [], sinceLastSpecial: 0, seenSpecial: false };
+	}
 	$: regeneratePng = () => {
 		return new Promise<string>((resolve) => {
 			setTimeout(async () => {
@@ -46,7 +57,7 @@
 	$: showCompactBtn =
 		!nested && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'));
 	$: compactStacktrace = true;
-	$: activeTags = compactStacktrace ? ['std', 'dots'] : ['ext', 'std'];
+	$: activeTags = compactStacktrace ? [Tag.std, Tag.dots] : [Tag.ext, Tag.std];
 	$: pngPromise = regeneratePng();
 </script>
 
@@ -116,64 +127,57 @@
 
 											return { line: formatted, isSpecial };
 										})
-										.reduce(
-											(acc, line, li, arr) => {
-												acc.sinceLastSpecial++;
-												let tag = 'ext';
-												const lastLines = [
-													acc.lines.at(-1),
-													acc.lines.at(-2),
-													acc.lines.at(-3)
-												].filter((line) => !!line);
-												if (
-													acc.seenSpecial == false ||
-													line.isSpecial ||
-													acc.sinceLastSpecial < 4
-												) {
-													tag = 'std';
-												}
-												if (line.isSpecial) {
-													acc.seenSpecial = true;
-													if (acc.sinceLastSpecial > 1) {
-														for (const lastLineIdx in lastLines) {
-															const lastLine = lastLines[lastLineIdx];
+										.reduce((acc, line, li, arr) => {
+											acc.sinceLastSpecial++;
+											let tag = Tag.ext;
+											const lastLines = [
+												acc.lines.at(-1),
+												acc.lines.at(-2),
+												acc.lines.at(-3)
+											].filter((line) => !!line);
+											if (acc.seenSpecial == false || line.isSpecial || acc.sinceLastSpecial < 4) {
+												tag = Tag.std;
+											}
+											if (line.isSpecial) {
+												acc.seenSpecial = true;
+												if (acc.sinceLastSpecial > 1) {
+													for (const lastLineIdx in lastLines) {
+														const lastLine = lastLines[lastLineIdx];
 
-															if (lastLine && lastLine.tag == 'ext') {
-																lastLine.tag = 'std';
-															} else {
-																break;
-															}
-														}
-													}
-
-													acc.sinceLastSpecial = 0;
-												}
-												acc.lines.push({ tag, line: line.line });
-												if (arr.length - 1 == li) {
-													const newLines = [];
-													let extCount = 0;
-													for (const line of acc.lines) {
-														if (line.tag == 'std') {
-															if (extCount > 0) {
-																newLines.push({
-																	line: `<span class="text-zinc-700">&nbsp;&nbsp;&nbsp;&nbsp;>>> collapsed ${extCount} lines <<<</span>`,
-																	tag: 'dots'
-																});
-															}
-															extCount = 0;
-															newLines.push(line);
-															continue;
+														if (lastLine && lastLine.tag == Tag.ext) {
+															lastLine.tag = Tag.std;
 														} else {
-															extCount++;
-															newLines.push(line);
+															break;
 														}
 													}
-													acc.lines = newLines;
 												}
-												return acc;
-											},
-											{ lines: [], sinceLastSpecial: 0, seenSpecial: false }
-										).lines}
+
+												acc.sinceLastSpecial = 0;
+											}
+											acc.lines.push({ tag, line: line.line });
+											if (arr.length - 1 == li) {
+												const newLines = [];
+												let extCount = 0;
+												for (const line of acc.lines) {
+													if (line.tag == Tag.std) {
+														if (extCount > 0) {
+															newLines.push({
+																line: `<span class="text-zinc-700">&nbsp;&nbsp;&nbsp;&nbsp;>>> collapsed ${extCount} lines <<<</span>`,
+																tag: Tag.dots
+															});
+														}
+														extCount = 0;
+														newLines.push(line);
+														continue;
+													} else {
+														extCount++;
+														newLines.push(line);
+													}
+												}
+												acc.lines = newLines;
+											}
+											return acc;
+										}, getReducerAcc()).lines}
 
 									<div class="text-slate-400 text-pretty">
 										{#each stacktraceLines as line}
@@ -189,8 +193,10 @@
 								{:else}
 									{value}
 								{/if}
-							{:else}
+							{:else if typeof value == 'object' && value != null}
 								<JsonView log={value} nested={true} />
+							{:else}
+								{JSON.stringify(value)}
 							{/if}
 						</td>
 					</tr>
