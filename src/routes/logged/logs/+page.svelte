@@ -406,7 +406,7 @@
 				{/if}
 			</div>
 			{#if $storeState.showLogDetails}
-				<div class="absolute right-2 -top-1 flex gap-2 flex-row items-center">
+				<div class="absolute right-2 top-1 flex gap-2 flex-row items-center">
 					<button
 						data-umami-event="log_open_in_window"
 						data-umami-event-uid={$userStore.id}
