@@ -1,6 +1,6 @@
 {
 	"name": "wombat",
-	"version": "4.2.6",
+	"version": "4.2.7",
 	"scripts": {
 		"start": "tauri dev",
 		"dev": "vite dev",
@@ -8,8 +8,10 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"lint": "prettier --check . && eslint .",
-		"format": "prettier --write .",
+		"lintRust": "cd src-tauri && cargo clippy && cd ..",
+		"lint": "npm run lintRust && prettier --check . && eslint .",
+		"formatRust": "cd src-tauri && cargo fmt && cd ..",
+		"format": "npm run formatRust && prettier --write .",
 		"tauri": "tauri",
 		"bump-version": "node bump-version.js"
 	},
