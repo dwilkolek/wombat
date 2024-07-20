@@ -48,25 +48,6 @@
 					>Lambda Apps
 				</a>
 			</li>
-			<li>
-				{#if $featuresStore.ecsTab}
-					<a class={$page.url.pathname === '/logged/ecs' ? 'active' : ''} href="/logged/ecs"
-						>Services (ECS)
-					</a>
-				{:else}
-					<span class="opacity-30">Services (ECS) </span>
-				{/if}
-			</li>
-
-			<li>
-				{#if $featuresStore.rdsTab}
-					<a class={$page.url.pathname === '/logged/rds' ? 'active' : ''} href="/logged/rds"
-						>Databases (RDS)</a
-					>
-				{:else}
-					<span class="opacity-30">Databases (RDS)</span>
-				{/if}
-			</li>
 
 			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"

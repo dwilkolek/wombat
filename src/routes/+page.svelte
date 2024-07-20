@@ -12,7 +12,12 @@
 	import type { WombatAwsProfile } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
-		return (r as any).data.html_url.split('/v').at(-1) as string;
+		return (
+			(r as unknown as { data: undefined | { html_url: undefined | string } })?.data?.html_url ??
+			'/v9.9.9'
+		)
+			.split('/v')
+			.at(-1) as string;
 	});
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
