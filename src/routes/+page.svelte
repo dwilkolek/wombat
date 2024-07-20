@@ -11,10 +11,12 @@
 	import { envImportance } from '$lib/stores/env-store';
 	import type { WombatAwsProfile } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
-	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest').then((r) => {
+	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest', {
+		headers: { 'User-Agent': 'wombat' }
+	}).then((r) => {
 		return (
 			(r as unknown as { data: undefined | { html_url: undefined | string } })?.data?.html_url ??
-			'/v9.9.9'
+			'/v0.0.0'
 		)
 			.split('/v')
 			.at(-1) as string;
