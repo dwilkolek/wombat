@@ -8,10 +8,8 @@
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"lintRust": "cd src-tauri && cargo clippy && cd ..",
-		"lint": "npm run lintRust && prettier --check . && eslint .",
-		"formatRust": "cd src-tauri && cargo fmt && cd ..",
-		"format": "npm run formatRust && prettier --write .",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write .",
 		"tauri": "tauri",
 		"bump-version": "node bump-version.js"
 	},
