@@ -1,5 +1,5 @@
 (function () {
-	chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+	chrome.runtime.onMessage.addListener((request) => {
 		if (request.action === 'newCookie') {
 			console.log(request);
 			const cookie = request.cookie;

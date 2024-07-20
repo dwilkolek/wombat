@@ -3,9 +3,9 @@
 	import {
 		AwsEnv,
 		type ProxyAuthConfig,
-		type ServiceDetails,
 		type InfraProfile,
-		type SsoProfile
+		type SsoProfile,
+		type EcsService
 	} from '$lib/types';
 	import { ask, message } from '@tauri-apps/api/dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
@@ -16,7 +16,7 @@
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { userStore } from '$lib/stores/user-store';
 
-	export let service: ServiceDetails;
+	export let service: EcsService;
 	let dialog: HTMLDialogElement;
 	let selectedInfraProfile =
 		$wombatProfileStore.infraProfiles.find(
