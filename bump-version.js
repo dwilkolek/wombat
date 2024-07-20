@@ -9,7 +9,7 @@ console.log(`New version ${newVersion}(${safeNewVersion})`);
 const packageJsonPath = './package.json';
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath).toString('utf8'));
 packageJson['version'] = safeNewVersion;
-fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 4));
+fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
 const tauriConfPath = './src-tauri/tauri.conf.json';
 const tauriConfJson = JSON.parse(fs.readFileSync(tauriConfPath).toString('utf8'));
@@ -38,6 +38,7 @@ fs.writeFileSync('./version', newVersion);
 cp.execSync('npm install');
 cp.execSync('cd src-tauri && cargo generate-lockfile && cd ..');
 
+cp.execSync('npm run format');
 setTimeout(() => {
 	cp.execSync(`git commit -a -m"Release v${newVersion}"`);
 	cp.execSync(`git tag v${newVersion}`);
