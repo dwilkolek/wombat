@@ -191,12 +191,12 @@
 										{/each}
 									</div>
 								{:else}
-									{value}
+									<span class="break-all">{value}</span>
 								{/if}
 							{:else if typeof value == 'object' && value != null}
 								<JsonView log={value} nested={true} />
 							{:else}
-								{JSON.stringify(value)}
+								<span class="break-all">{JSON.stringify(value)}</span>
 							{/if}
 						</td>
 					</tr>
