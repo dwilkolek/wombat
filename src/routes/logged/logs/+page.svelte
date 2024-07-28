@@ -325,12 +325,22 @@
 							$selectedLog === log.data ? log.style.active : ''
 						}`}
 					>
-						<td class="min-w-[100px]">{log.app}</td>
+						<td class="break-keep">{log.app}</td>
 						<td>{log.level}</td>
-						<td class="min-w-[200px] max-w-[200px]"
+						<td class="min-w-[170px] max-w-[170px]"
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
 						>
-						<td class="w-full">{log.message}</td>
+						<td>
+							<table class="w-full table-fixed border-collapse border-0 border-spacing-0">
+								<tbody>
+									<tr class="border-0">
+										<td class="text-ellipsis overflow-hidden whitespace-nowrap p-0 m-0">
+											{log.message}
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</td>
 						<td class="">
 							<div class="flex">
 								<button
