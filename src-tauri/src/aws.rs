@@ -1104,11 +1104,71 @@ pub async fn find_logs(
         let group_name = group.log_group_name().unwrap_or_default();
         info!("Group: {}", &group_name);
         {
+            let mut stream_names = vec![];
+            let mut streams_marker = None;
+            let mut first_streams = true;
             info!("Looking for {:?} in {}", &filter, apps_dbg_str);
-            let stream_names: Vec<String> =
-                find_stream_names_for_apps(&client, group_name, &apps, start_date, end_date).await;
+            while first_streams || streams_marker.is_some() {
+                {
+                    first_streams = false;
+                    let response2 = client
+                        .describe_log_streams()
+                        .set_log_group_name(Some(group_name.to_owned()))
+                        .set_next_token(streams_marker)
+                        .order_by(cloudwatchlogs::types::OrderBy::LastEventTime)
+                        .descending(true)
+                        .send()
+                        .await;
 
-            info!("looking in {}", &stream_names.join(",").to_string());
+                    if response2.is_err() {
+                        let message = response2.unwrap_err().to_string();
+
+                        let mut notifier = on_log_found.lock().await;
+                        notifier.error(format!("Error: {}", &message).to_owned());
+
+                        return Result::Err(BError {
+                            message,
+                            command: "find_logs".to_owned(),
+                        });
+                    }
+                    let response2_data = response2.unwrap();
+
+                    streams_marker = response2_data.next_token().map(|m| m.to_owned());
+
+                    let streams = response2_data.log_streams.unwrap_or_default();
+                    let mut is_over_time = false;
+                    let mut found_matching_stream = false;
+
+                    for stream in streams {
+                        let stream_name = stream.log_stream_name.unwrap_or_default();
+                        for app in apps.iter() {
+                            if stream_name.starts_with(&format!("web/{}/", &app)) {
+                                let overlap = stream
+                                    .first_event_timestamp
+                                    .is_some_and(|ts| ts <= end_date)
+                                    && stream
+                                        .last_event_timestamp
+                                        .is_some_and(|ts| ts >= start_date);
+                                info!(
+                                    "stream {} matches name & timestamp criteria (ts: {:?} - {:?}",
+                                    &stream_name,
+                                    &stream.first_event_timestamp,
+                                    &stream.last_event_timestamp
+                                );
+                                stream_names.push(stream_name.to_owned());
+                                is_over_time = !overlap;
+                                found_matching_stream = true
+                            }
+                        }
+                    }
+
+                    if is_over_time && found_matching_stream {
+                        streams_marker = None;
+                    }
+                }
+            }
+
+            info!("looking in {} streams", &stream_names.len());
 
             let mut marker = None;
             let mut first = true;
@@ -1190,83 +1250,6 @@ pub async fn find_logs(
     let mut notifier = on_log_found.lock().await;
     notifier.success();
     Result::Ok(log_count)
-}
-async fn find_stream_names_for_apps(
-    client: &cloudwatchlogs::Client,
-    group_name: &str,
-    apps: &[String],
-    start_date: i64,
-    end_date: i64,
-) -> Vec<String> {
-    futures::future::join_all(
-        apps.iter()
-            .map(|app| find_stream_names(client, group_name, app, start_date, end_date))
-            .collect::<Vec<_>>(),
-    )
-    .await
-    .iter()
-    .flatten()
-    .cloned()
-    .collect()
-}
-async fn find_stream_names(
-    client: &cloudwatchlogs::Client,
-    group_name: &str,
-    app: &str,
-    start_date: i64,
-    end_date: i64,
-) -> Vec<String> {
-    let mut stream_names = vec![];
-    let mut streams_marker = None;
-    let mut first_streams = true;
-
-    while first_streams || streams_marker.is_some() {
-        first_streams = false;
-        let response2 = client
-            .describe_log_streams()
-            .set_log_group_name(Some(group_name.to_owned()))
-            .set_log_stream_name_prefix(Some(format!("web/{}/", app)))
-            .set_next_token(streams_marker)
-            .limit(10)
-            .send()
-            .await;
-
-        if response2.is_err() {
-            let message = response2.unwrap_err().to_string();
-            error!("{message}");
-            return vec![];
-        }
-        let response2_data = response2.unwrap();
-
-        streams_marker = response2_data.next_token().map(|m| m.to_owned());
-
-        let streams = response2_data.log_streams.unwrap_or_default();
-        let mut is_over_time = false;
-        let mut found_matching_stream = false;
-
-        for stream in streams {
-            let stream_name = stream.log_stream_name.unwrap_or_default();
-            let matches_app = stream_name.starts_with(&format!("web/{}/", &app));
-            let overlaps = stream
-                .first_event_timestamp
-                .is_some_and(|ts| ts <= end_date)
-                && stream
-                    .last_event_timestamp
-                    .is_some_and(|ts| ts >= start_date);
-            if matches_app && overlaps {
-                info!("stream {stream_name} matches name & timestamp criteria");
-                stream_names.push(stream_name.to_owned());
-                is_over_time = !overlaps;
-                found_matching_stream = true
-            }
-        }
-
-        if is_over_time && found_matching_stream {
-            streams_marker = None;
-        }
-    }
-
-    stream_names
 }
 
 pub async fn is_cli_logged(profile: &str) -> bool {
