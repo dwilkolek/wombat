@@ -3920,6 +3920,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "range-overlap"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "306d64753c3718cf83da998dc175552739f66e8a816f50e98960f818e145480b"
+
+[[package]]
 name = "raw-window-handle"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6576,6 +6582,7 @@ dependencies = [
  "libsql",
  "log",
  "rand 0.8.5",
+ "range-overlap",
  "regex",
  "remove_dir_all",
  "reqwest 0.12.5",
