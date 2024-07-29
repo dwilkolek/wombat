@@ -543,6 +543,7 @@ async fn find_logs(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<(), BError> {
     if let Err(msg) = get_authorized(&window, &app_state.0).await {
         return Err(BError::new("find_logs", msg));
@@ -556,6 +557,12 @@ async fn find_logs(
     }
     {
         async_task_tracker.0.lock().await.search_log_handler = None;
+    }
+
+    let is_v2_enabled;
+    {
+        let wombat_api = wombat_api_instance.0.read().await;
+        is_v2_enabled = wombat_api.is_feature_enabled("log-streams-search-v2").await;
     }
 
     let user_config = Arc::clone(&user_config.0);
@@ -605,6 +612,7 @@ async fn find_logs(
                 false => Some(10000),
                 true => None,
             },
+            is_v2_enabled,
         )
         .await;
     }));
