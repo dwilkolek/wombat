@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { endOfDay, format, startOfDay, sub } from 'date-fns';
+	import { endOfDay, format, startOfDay } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
 	import { invoke } from '@tauri-apps/api';
@@ -9,25 +9,15 @@
 	import { userStore } from '$lib/stores/user-store';
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { WebviewWindow } from '@tauri-apps/api/window';
+	import TimerangeSelect from '$lib/componets/timerange-select.svelte';
 
 	$: activeCluser = clusterStore.activeCluser;
 
 	$: selectedServices = serviceStore.selectedServices;
 
 	$: clusters = clusterStore.clusters;
-	const toLocalDateStr = (date: Date) => {
-		return `${date.getUTCFullYear()}-${withZeros(date.getMonth() + 1)}-${withZeros(
-			date.getDate()
-		)}T${withZeros(date.getHours())}:${withZeros(date.getMinutes())}:${withZeros(
-			date.getSeconds()
-		)}`;
-	};
-	const withZeros = (v: number) => {
-		return v < 10 ? `0${v}` : v;
-	};
 
-	$: startDate = logStore.startDate;
-	$: endDate = logStore.endDate;
+	$: timerange = logStore.timerange;
 	$: filterString = logStore.filterString;
 	$: selectedLog = logStore.selectedLog;
 	$: storeState = logStore.storeState;
@@ -83,57 +73,71 @@
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(sub(new Date(), { minutes: 5 }));
-						endDate.set(new Date());
-					}}>Last 5m</button
-				>
-				<button
-					class="btn btn-accent btn-xs"
-					on:click={() => {
-						startDate.set(sub(new Date(), { minutes: 15 }));
-						endDate.set(new Date());
+						timerange.set({
+							type: 'relative',
+							amount: 15,
+							unit: 'minutes'
+						});
 					}}>Last 15m</button
 				>
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(sub(new Date(), { minutes: 30 }));
-						endDate.set(new Date());
+						timerange.set({
+							type: 'relative',
+							amount: 30,
+							unit: 'hours'
+						});
 					}}>Last 30m</button
 				>
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(sub(new Date(), { hours: 1 }));
-						endDate.set(new Date());
+						timerange.set({
+							type: 'relative',
+							amount: 1,
+							unit: 'hours'
+						});
 					}}>Last 1h</button
 				>
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(sub(new Date(), { hours: 4 }));
-						endDate.set(new Date());
+						timerange.set({
+							type: 'relative',
+							amount: 4,
+							unit: 'hours'
+						});
 					}}>Last 4h</button
 				>
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(sub(new Date(), { hours: 8 }));
-						endDate.set(new Date());
+						timerange.set({
+							type: 'relative',
+							amount: 8,
+							unit: 'hours'
+						});
 					}}>Last 8h</button
 				>
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(sub(new Date(), { hours: 24 }));
-						endDate.set(new Date());
+						timerange.set({
+							type: 'relative',
+							amount: 24,
+							unit: 'hours'
+						});
 					}}>Last 24h</button
 				>
 				<button
 					class="btn btn-accent btn-xs"
 					on:click={() => {
-						startDate.set(startOfDay(new Date()));
-						endDate.set(endOfDay(new Date()));
+						timerange.set({
+							type: 'absolute',
+							from: startOfDay(new Date()),
+							to: endOfDay(new Date())
+						});
 					}}>Today</button
 				>
 			</div>
@@ -166,25 +170,11 @@
 				<ServiceMultiselect />
 			</div>
 			<div>
-				<input
-					type="datetime-local"
-					placeholder="Start date"
-					class="input input-sm input-bordered w-full max-w-xs"
-					on:change={(event) => {
-						startDate.set(new Date(event.currentTarget.value));
+				<TimerangeSelect
+					onSelect={(newRange) => {
+						timerange.set(newRange);
 					}}
-					value={toLocalDateStr($startDate)}
-				/>
-			</div>
-			<div>
-				<input
-					type="datetime-local"
-					placeholder="End date"
-					class="input input-sm input-bordered w-full max-w-xs"
-					on:change={(event) => {
-						endDate.set(new Date(event.currentTarget.value));
-					}}
-					value={toLocalDateStr($endDate)}
+					range={$timerange}
 				/>
 			</div>
 		</div>
