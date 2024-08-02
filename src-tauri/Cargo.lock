@@ -37,7 +37,7 @@ dependencies = [
  "cfg-if",
  "once_cell",
  "version_check",
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
@@ -271,9 +271,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-cloudwatchlogs"
-version = "1.39.0"
+version = "1.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "787378387de0df0f463980bb9c7785bcb9394193dd53527bf8bdaca22dbede52"
+checksum = "4c4dc724b2fd4de29ed5408b9c10b78766faeadd6df50fc02262bda7b968d4eb"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -318,9 +318,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ecs"
-version = "1.37.0"
+version = "1.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea694d7331974527336c5532a6751a569814e1790b1be1cf6deae936bddf801"
+checksum = "dfcf9586e9d23bfb73f2bc8dff2d84ac6aa05318a9a63dc2694fe6e46accefa4"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -341,9 +341,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-rds"
-version = "1.46.0"
+version = "1.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeb617ba194b065c2363ba32d2728fd13ecdc8f26484eeb6091e0b18e68e48ae"
+checksum = "ce151491d1a78ccfc07e943074873ced3e9182bf2f60cc5a7b275975463d81ef"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -387,9 +387,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ssm"
-version = "1.40.0"
+version = "1.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98ad37321602a715d506727ad17dc7a2c21c9d33ad73f04cf27b209d54b6514e"
+checksum = "59b7cf15ca37f504a530c208ecdd52c5d7b88900c7b3d2e4aaeb6266e872ab85"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -845,9 +845,9 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "bytemuck"
-version = "1.16.1"
+version = "1.16.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b236fc92302c97ed75b38da1f4917b5cdda4984745740f153a5d3059e48d725e"
+checksum = "102087e286b4677862ea56cf8fc58bb2cdfa8725c40ffb80fe3a008eb7f2fc83"
 
 [[package]]
 name = "byteorder"
@@ -863,9 +863,9 @@ checksum = "8f1fe948ff07f4bd06c30984e69f5b4899c516a3ef74f34df92a2df2ab535495"
 
 [[package]]
 name = "bytes"
-version = "1.6.1"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12916984aab3fa6e39d655a33e09c0071eb36d6ab3aea5c2d78551f1df6d952"
+checksum = "8318a53db07bb3f8dca91a600466bdb3f2eaadeedfdbcf02e1accbad9271ba50"
 dependencies = [
  "serde",
 ]
@@ -1420,7 +1420,7 @@ dependencies = [
  "cc",
  "memchr",
  "rustc_version",
- "toml 0.8.16",
+ "toml 0.8.19",
  "vswhom",
  "winreg 0.52.0",
 ]
@@ -2050,7 +2050,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.12",
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -2069,7 +2069,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.1.0",
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -2553,9 +2553,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.6"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
+checksum = "de3fc2e30ba82dd1b3911c8de1ffc143c74a914a14e99514d7637e3099df5ea0"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.5",
@@ -2740,7 +2740,7 @@ dependencies = [
 [[package]]
 name = "libsql"
 version = "0.5.0-alpha.2"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2771,13 +2771,13 @@ dependencies = [
  "tower-http",
  "tracing",
  "uuid",
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
 name = "libsql-ffi"
 version = "0.3.0"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "bindgen",
  "cc",
@@ -2786,7 +2786,7 @@ dependencies = [
 [[package]]
 name = "libsql-hrana"
 version = "0.2.0"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -2797,7 +2797,7 @@ dependencies = [
 [[package]]
 name = "libsql-rusqlite"
 version = "0.31.0"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "bitflags 2.6.0",
  "fallible-iterator 0.2.0",
@@ -2810,12 +2810,12 @@ dependencies = [
 [[package]]
 name = "libsql-sqlite3-parser"
 version = "0.12.0"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "bitflags 2.6.0",
  "cc",
  "fallible-iterator 0.3.0",
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "log",
  "memchr",
  "phf 0.11.2",
@@ -2827,20 +2827,20 @@ dependencies = [
 [[package]]
 name = "libsql-sys"
 version = "0.6.0"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "bytes",
  "libsql-ffi",
  "libsql-rusqlite",
  "once_cell",
  "tracing",
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
 name = "libsql_replication"
 version = "0.4.0"
-source = "git+https://github.com/tursodatabase/libsql#a64a0899a1c76f08b0ec3809707f4aad4e173694"
+source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
 dependencies = [
  "aes",
  "async-stream",
@@ -2859,7 +2859,7 @@ dependencies = [
  "tonic",
  "tracing",
  "uuid",
- "zerocopy",
+ "zerocopy 0.7.35",
 ]
 
 [[package]]
@@ -3406,12 +3406,12 @@ dependencies = [
 
 [[package]]
 name = "os_pipe"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29d73ba8daf8fac13b0501d1abeddcfe21ba7401ada61a819144b6c2a4f32209"
+checksum = "5ffd2b0a5634335b135d5728d84c5e0fd726954b87111f7506a61c502280d982"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3499,7 +3499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
 ]
 
 [[package]]
@@ -3692,7 +3692,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42cf17e9a1800f5f396bc67d193dc9411b59012a5876445ef450d449881e1016"
 dependencies = [
  "base64 0.22.1",
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "quick-xml 0.32.0",
  "serde",
  "time",
@@ -3719,9 +3719,12 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 
 [[package]]
 name = "ppv-lite86"
-version = "0.2.17"
+version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
+checksum = "dee4364d9f3b902ef14fab8a1ddffb783a1cb6b4bba3bfc1fa3922732c7de97f"
+dependencies = [
+ "zerocopy 0.6.6",
+]
 
 [[package]]
 name = "precomputed-hash"
@@ -3962,9 +3965,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.10.5"
+version = "1.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b91213439dad192326a0d7c6ee3955910425f441d7038e0d6933b0aec5c4517f"
+checksum = "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -4418,11 +4421,11 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.121"
+version = "1.0.122"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ab380d7d9f22ef3f21ad3e6c1ebe8e4fc7a2000ccba2e4d71fc96f15b2cb609"
+checksum = "784b6203951c57ff748476b126ccb5e8e2959a5c19e5c617ab1956be3dbc68da"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "itoa 1.0.11",
  "memchr",
  "ryu",
@@ -4471,7 +4474,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -4556,12 +4559,12 @@ dependencies = [
 
 [[package]]
 name = "shared_child"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0d94659ad3c2137fef23ae75b03d5241d633f8acded53d672decfa0e6e0caef"
+checksum = "09fa9338aed9a1df411814a5b2252f7cd206c55ae9bf2fa763f8de84603aa60c"
 dependencies = [
  "libc",
- "winapi",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4789,7 +4792,7 @@ dependencies = [
  "cfg-expr 0.15.8",
  "heck 0.5.0",
  "pkg-config",
- "toml 0.8.16",
+ "toml 0.8.19",
  "version-compare 0.2.0",
 ]
 
@@ -4864,9 +4867,9 @@ dependencies = [
 
 [[package]]
 name = "target-lexicon"
-version = "0.12.15"
+version = "0.12.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4873307b7c257eddcb50c9bedf158eb669578359fb28428bef438fec8e6ba7c2"
+checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
@@ -5068,12 +5071,13 @@ dependencies = [
 
 [[package]]
 name = "tempfile"
-version = "3.10.1"
+version = "3.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85b77fafb263dd9d05cbeac119526425676db3784113aa9295c88498cbf8bff1"
+checksum = "b8fcd239983515c23a32fb82099f97d0b11b8c72f654ed659363a95c3dad7a53"
 dependencies = [
  "cfg-if",
  "fastrand",
+ "once_cell",
  "rustix",
  "windows-sys 0.52.0",
 ]
@@ -5322,21 +5326,21 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.8.16"
+version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81967dd0dd2c1ab0bc3468bd7caecc32b8a4aa47d0c8c695d8c2b2108168d62c"
+checksum = "a1ed1f98e3fdc28d6d910e6737ae6ab1a93bf1985935a1193e68f93eeb68d24e"
 dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit 0.22.17",
+ "toml_edit 0.22.20",
 ]
 
 [[package]]
 name = "toml_datetime"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8fb9f64314842840f1d940ac544da178732128f1c78c21772e876579e0da1db"
+checksum = "0dd7358ecb8fc2f8d014bf86f6f638ce72ba252a2c3a2572f2a795f1d23efb41"
 dependencies = [
  "serde",
 ]
@@ -5347,7 +5351,7 @@ version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -5356,15 +5360,15 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.22.17"
+version = "0.22.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d9f8729f5aea9562aac1cc0441f5d6de3cff1ee0c5d67293eeca5eb36ee7c16"
+checksum = "583c44c02ad26b0c3f3066fe629275e50627026c51ac2e595cca4c230ce1ce1d"
 dependencies = [
- "indexmap 2.2.6",
+ "indexmap 2.3.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow 0.6.16",
+ "winnow 0.6.18",
 ]
 
 [[package]]
@@ -6143,11 +6147,11 @@ checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
 
 [[package]]
 name = "winapi-util"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d4cc384e1e73b93bafa6fb4f1df8c41695c8a91cf9c4c64358067d15a7b6c6b"
+checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6256,6 +6260,15 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
 ]
@@ -6509,9 +6522,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.16"
+version = "0.6.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b480ae9340fc261e6be3e95a1ba86d54ae3f9171132a73ce8d4bbaf68339507c"
+checksum = "68a9bda4691f099d435ad181000724da8e5899daa10713c2d432552b9ccd3a6f"
 dependencies = [
  "memchr",
 ]
@@ -6558,7 +6571,7 @@ dependencies = [
 
 [[package]]
 name = "wombat"
-version = "4.2.11"
+version = "4.2.12"
 dependencies = [
  "async-trait",
  "aws-config",
@@ -6700,12 +6713,33 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 
 [[package]]
 name = "zerocopy"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "854e949ac82d619ee9a14c66a1b674ac730422372ccb759ce0c39cabcf2bf8e6"
+dependencies = [
+ "byteorder",
+ "zerocopy-derive 0.6.6",
+]
+
+[[package]]
+name = "zerocopy"
 version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0"
 dependencies = [
  "byteorder",
- "zerocopy-derive",
+ "zerocopy-derive 0.7.35",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.6.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "125139de3f6b9d625c39e2efdd73d41bdac468ccd556556440e322be0e1bbd91"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.72",
 ]
 
 [[package]]
