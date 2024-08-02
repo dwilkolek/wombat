@@ -1335,7 +1335,8 @@ async fn find_stream_names_v2(
                 let log_stream_end = stream
                     .last_event_timestamp
                     .or(stream.last_ingestion_time)
-                    .unwrap_or(last_known_creation_time);
+                    .unwrap_or(last_known_creation_time)
+                    + 60 * 1000;
 
                 let overlaps = range_overlap::has_incl_overlap(
                     log_stream_start,
