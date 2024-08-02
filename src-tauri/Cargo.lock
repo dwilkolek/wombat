@@ -2739,8 +2739,9 @@ dependencies = [
 
 [[package]]
 name = "libsql"
-version = "0.5.0-alpha.2"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007e45366a683bc61d5a6e4c05a4b91100c96ec04198d1d4529eb5a89b3c589f"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2777,7 +2778,8 @@ dependencies = [
 [[package]]
 name = "libsql-ffi"
 version = "0.3.0"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "503716a5a09a73719e011957c363a69348b52818bd7679e4ee463099f23ffa89"
 dependencies = [
  "bindgen",
  "cc",
@@ -2786,7 +2788,8 @@ dependencies = [
 [[package]]
 name = "libsql-hrana"
 version = "0.2.0"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aeaf5d19e365465e1c23d687a28c805d7462531b3f619f0ba49d3cf369890a3e"
 dependencies = [
  "base64 0.21.7",
  "bytes",
@@ -2797,7 +2800,8 @@ dependencies = [
 [[package]]
 name = "libsql-rusqlite"
 version = "0.31.0"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11e74daae7edb0a3ab7d1568c6d0be43bb255f00b2b3b6d1b90ae7007a76c6f9"
 dependencies = [
  "bitflags 2.6.0",
  "fallible-iterator 0.2.0",
@@ -2810,7 +2814,8 @@ dependencies = [
 [[package]]
 name = "libsql-sqlite3-parser"
 version = "0.12.0"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "735c12460491141cf29496f258b30130f5830c7923eb373fc4d1c710c2d6d62c"
 dependencies = [
  "bitflags 2.6.0",
  "cc",
@@ -2821,13 +2826,15 @@ dependencies = [
  "phf 0.11.2",
  "phf_codegen 0.11.2",
  "phf_shared 0.11.2",
+ "smallvec",
  "uncased",
 ]
 
 [[package]]
 name = "libsql-sys"
 version = "0.6.0"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "782109ea979be605ca908c2024cba05a11b32428198a2adb5ccb05b378169903"
 dependencies = [
  "bytes",
  "libsql-ffi",
@@ -2840,7 +2847,8 @@ dependencies = [
 [[package]]
 name = "libsql_replication"
 version = "0.4.0"
-source = "git+https://github.com/tursodatabase/libsql#f0d6611b45862b7ae875c2dbc5ef3cdcb41c9fb6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fa2f887b42d9d966e4358d398dcba87bb229bc1f62f1229f983ce663fe264d7"
 dependencies = [
  "aes",
  "async-stream",
