@@ -45,7 +45,7 @@ export const wombatProfileStore = derived(
 			.sort((a, b) => envImportance[a] - envImportance[b]);
 
 		envStore.update((oldEnv) =>
-			environments.includes(oldEnv) ? oldEnv : environments[0] ?? oldEnv
+			environments.includes(oldEnv) ? oldEnv : (environments[0] ?? oldEnv)
 		);
 
 		return {
