@@ -150,3 +150,15 @@ export type CustomHeader = {
 	value: string;
 	encodeBase64: boolean;
 };
+
+export type Timerange =
+	| {
+			type: 'relative';
+			amount: number;
+			unit: 'minutes' | 'hours';
+	  }
+	| {
+			type: 'absolute';
+			from: Date;
+			to: Date;
+	  };

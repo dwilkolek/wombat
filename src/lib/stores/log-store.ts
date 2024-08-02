@@ -1,4 +1,4 @@
-import type { AwsEnv } from '$lib/types';
+import type { AwsEnv, Timerange } from '$lib/types';
 import { invoke } from '@tauri-apps/api';
 import { listen } from '@tauri-apps/api/event';
 import { format } from 'date-fns';
@@ -119,9 +119,14 @@ function logStyle(level: LogLevel): LogStyle {
 }
 const createLogStore = () => {
 	const selectedLog = writable<unknown>(undefined);
-	const startDate = writable<Date>(new Date(new Date().getTime() - 60 * 60 * 1000));
-	const endDate = writable<Date>(new Date());
+	const timerange = writable<Timerange>({
+		type: 'relative',
+		amount: 30,
+		unit: 'minutes'
+	});
+
 	const filterString = writable<string>('');
+
 	const storeState = writable<{
 		showLogDetails: boolean;
 		searchError: string | undefined;
@@ -169,12 +174,35 @@ const createLogStore = () => {
 		});
 	});
 
+	const timerangeToPartial = (timerange: Timerange): { start: number; end: number } => {
+		switch (timerange.type) {
+			case 'absolute':
+				return {
+					start: timerange.from.getTime(),
+					end: timerange.from.getTime()
+				};
+			case 'relative':
+				return {
+					start: new Date().getTime() - timerange.amount * unitToMs(timerange.unit),
+					end: new Date().getTime()
+				};
+		}
+	};
+
+	const unitToMs = (unit: 'minutes' | 'hours'): number => {
+		switch (unit) {
+			case 'minutes':
+				return 60 * 1000;
+			case 'hours':
+				return 60 * 60 * 1000;
+		}
+	};
+
 	const search = (apps: string[], env: AwsEnv) => {
 		invoke('find_logs', {
 			apps,
 			env,
-			start: get(startDate).getTime(),
-			end: get(endDate).getTime(),
+			...timerangeToPartial(get(timerange)),
 			filter: get(filterString)
 		});
 		storeState.update((state) => {
@@ -192,8 +220,7 @@ const createLogStore = () => {
 		invoke('find_logs', {
 			apps,
 			env,
-			start: get(startDate).getTime(),
-			end: get(endDate).getTime(),
+			...timerangeToPartial(get(timerange)),
 			filter: get(filterString),
 			filename: `${apps.join('_')}-${env?.toLowerCase()}`
 		});
@@ -236,8 +263,7 @@ const createLogStore = () => {
 		search,
 		dumpLogs,
 		selectedLog,
-		startDate,
-		endDate,
+		timerange,
 		filterString,
 		storeState
 	};
@@ -246,8 +272,11 @@ const createLogStore = () => {
 export const logStore = createLogStore();
 listen('logged-out', () => {
 	logStore.selectedLog.set(undefined);
-	logStore.startDate.set(new Date(new Date().getTime() - 60 * 60 * 1000));
-	logStore.endDate.set(new Date());
+	logStore.timerange.set({
+		type: 'relative',
+		amount: 30,
+		unit: 'minutes'
+	});
 	logStore.filterString.set('');
 	logStore.storeState.set({
 		showLogDetails: false,
