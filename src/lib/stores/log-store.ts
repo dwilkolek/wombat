@@ -179,7 +179,7 @@ const createLogStore = () => {
 			case 'absolute':
 				return {
 					start: timerange.from.getTime(),
-					end: timerange.from.getTime()
+					end: timerange.to.getTime()
 				};
 			case 'relative':
 				return {

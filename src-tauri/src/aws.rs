@@ -11,7 +11,6 @@ use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
 use aws_sdk_sts as sts;
 use chrono::prelude::*;
-use ec2::types::Filter;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -573,7 +572,7 @@ pub async fn is_logged(profile: &str, config: &aws_config::SdkConfig) -> bool {
 
 pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
     let ec2_client = ec2::Client::new(config);
-    let filter = Filter::builder()
+    let filter = ec2::types::Filter::builder()
         .name("tag:Name")
         .values("*-bastion*")
         .build();
@@ -1329,14 +1328,13 @@ async fn find_stream_names_v2(
                     .copied()
                     .unwrap_or(i64::max_value());
                 let log_stream_start = stream
-                    .last_event_timestamp
+                    .first_event_timestamp
                     .or(stream.creation_time)
                     .unwrap_or(i64::max_value());
                 let log_stream_end = stream
                     .last_event_timestamp
                     .or(stream.last_ingestion_time)
-                    .unwrap_or(last_known_creation_time)
-                    + 60 * 1000;
+                    .map_or(i64::max_value(), |t| t + 60 * 1000);
 
                 let overlaps = range_overlap::has_incl_overlap(
                     log_stream_start,
@@ -1349,13 +1347,19 @@ async fn find_stream_names_v2(
                     last_creation_dates.insert(app.clone(), log_stream_end);
                 };
 
-                info!("matched: app={app}, overlaps={overlaps}, [{log_stream_start}:{log_stream_end}] overlaps with [{start_date}:{end_date}]");
+                info!(
+                    "matched: app={app}, overlaps={overlaps}, [{} -> {}] overlaps with criteria [{} -> {}]",
+                    i64_to_str(log_stream_start),
+                    i64_to_str(log_stream_end),
+                    i64_to_str(start_date),
+                    i64_to_str(end_date),
+                );
                 if overlaps {
                     info!("stream {stream_name} matches name & timestamp criteria");
                     stream_names.push(stream_name.to_owned());
                 }
 
-                if !overlaps && log_stream_start < start_date {
+                if log_stream_end < start_date {
                     done.insert(app.clone());
                 }
             }
@@ -1367,6 +1371,13 @@ async fn find_stream_names_v2(
     }
 
     Ok(stream_names)
+}
+
+fn i64_to_str(timestamp: i64) -> String {
+    DateTime::from_timestamp_millis(timestamp)
+        .unwrap()
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
 }
 
 pub async fn is_cli_logged(profile: &str) -> bool {
