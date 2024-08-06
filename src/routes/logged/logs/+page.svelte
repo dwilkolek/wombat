@@ -105,6 +105,16 @@
 					on:click={() => {
 						timerange.set({
 							type: 'relative',
+							amount: 2,
+							unit: 'hours'
+						});
+					}}>Last 2h</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					on:click={() => {
+						timerange.set({
+							type: 'relative',
 							amount: 4,
 							unit: 'hours'
 						});
