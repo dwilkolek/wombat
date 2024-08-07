@@ -132,6 +132,7 @@
 				<button
 					class="btn btn-sm btn-ghost"
 					on:click={() => {
+						tempRange = { ...range };
 						details.removeAttribute('open');
 					}}>Cancel</button
 				>
