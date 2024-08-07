@@ -1226,7 +1226,7 @@ pub async fn find_logs(
                     if let Some(limit) = limit {
                         if log_count > limit {
                             let msg = format!(
-                                "Search {} log stream(s) aborted, found {} logs. Reached limit of {} logs.",
+                                "Search in {} log stream(s) aborted, found {} logs. Reached limit of {} logs.",
                                 stream_names.len(), &log_count, &limit
                             )
                             .to_owned();
