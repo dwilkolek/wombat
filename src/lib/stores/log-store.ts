@@ -129,13 +129,13 @@ const createLogStore = () => {
 
 	const storeState = writable<{
 		showLogDetails: boolean;
-		searchError: string | undefined;
+		message: string | undefined;
 		isLookingForLogs: boolean;
 		searchStatus: 'success' | 'error' | 'aborted' | undefined;
 		logs: UiLogEntry[];
 	}>({
 		showLogDetails: false,
-		searchError: undefined,
+		message: undefined,
 		isLookingForLogs: false,
 		searchStatus: undefined,
 		logs: []
@@ -154,12 +154,13 @@ const createLogStore = () => {
 
 	listen<LogEntry[]>('new-log-found', (event) => processLogs(event.payload));
 
-	listen('find-logs-success', () => {
+	listen<string>('find-logs-success', (event) => {
 		storeState.update((state) => {
 			return {
 				...state,
 				isLookingForLogs: false,
-				searchStatus: 'success'
+				searchStatus: 'success',
+				message: event.payload
 			};
 		});
 	});
@@ -169,7 +170,17 @@ const createLogStore = () => {
 				...state,
 				isLookingForLogs: false,
 				searchStatus: 'error',
-				searchError: event.payload
+				message: event.payload
+			};
+		});
+	});
+
+	listen<string>('find-logs-message', (event) => {
+		console.log('message:', event.payload);
+		storeState.update((state) => {
+			return {
+				...state,
+				message: event.payload
 			};
 		});
 	});
@@ -209,7 +220,7 @@ const createLogStore = () => {
 			return {
 				...state,
 				isLookingForLogs: true,
-				searchError: undefined,
+				message: 'Search in progress...',
 				logs: [],
 				showLogDetails: false,
 				searchStatus: undefined
@@ -242,7 +253,8 @@ const createLogStore = () => {
 			return {
 				...state,
 				isLookingForLogs: false,
-				searchStatus: state.isLookingForLogs ? 'aborted' : state.searchStatus
+				searchStatus: state.isLookingForLogs ? 'aborted' : state.searchStatus,
+				message: 'Aborted'
 			};
 		});
 	};
@@ -280,7 +292,7 @@ listen('logged-out', () => {
 	logStore.filterString.set('');
 	logStore.storeState.set({
 		showLogDetails: false,
-		searchError: undefined,
+		message: undefined,
 		isLookingForLogs: false,
 		searchStatus: undefined,
 		logs: []

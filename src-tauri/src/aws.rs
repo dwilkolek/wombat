@@ -1072,10 +1072,11 @@ pub async fn service_detail(
     })
 }
 
-pub trait OnLogFound: Send {
+pub trait LogSearchMonitor: Send {
     fn notify(&mut self, logs: Vec<LogEntry>);
-    fn success(&mut self);
+    fn success(&mut self, msg: String);
     fn error(&mut self, msg: String);
+    fn message(&mut self, msg: String);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1086,7 +1087,7 @@ pub async fn find_logs(
     start_date: i64,
     end_date: i64,
     filter: Option<String>,
-    on_log_found: Arc<tokio::sync::Mutex<dyn OnLogFound>>,
+    log_search_monitor: Arc<tokio::sync::Mutex<dyn LogSearchMonitor>>,
     limit: Option<usize>,
     v2_log_stream_search: bool,
 ) -> Result<usize, BError> {
@@ -1104,33 +1105,62 @@ pub async fn find_logs(
     let mut log_count: usize = 0;
 
     let search_string = filter.clone().unwrap_or(String::from("<empty>"));
-
+    let mut stream_names = Vec::new();
     info!("limit: {:?}", &limit);
+    {
+        let mut notifier = log_search_monitor.lock().await;
+        notifier.message(String::from("Search log streams in progress..."));
+    }
     for group in groups {
         let group_name = group.log_group_name().unwrap_or_default();
         info!("log group: {}", &group_name);
         {
             info!("Looking (v2={v2_log_stream_search}) for {search_string} in {apps_dbg_str}");
             let log_streams_result = if v2_log_stream_search {
-                find_stream_names_v2(&client, group_name, &apps, start_date, end_date).await
+                find_stream_names_v2(
+                    &client,
+                    group_name,
+                    &apps,
+                    start_date,
+                    end_date,
+                    log_search_monitor.clone(),
+                )
+                .await
             } else {
-                find_stream_names_v1(&client, group_name, &apps, start_date, end_date).await
+                find_stream_names_v1(
+                    &client,
+                    group_name,
+                    &apps,
+                    start_date,
+                    end_date,
+                    log_search_monitor.clone(),
+                )
+                .await
             };
-            let stream_names = match log_streams_result {
-                Ok(stream_names) => stream_names,
+            (match log_streams_result {
+                Ok(names) => stream_names = names,
                 Err(error) => {
                     error!("search for log streams failed, cause={error}");
-                    let mut notifier = on_log_found.lock().await;
+                    let mut notifier = log_search_monitor.lock().await;
                     notifier.error(error);
                     return Result::Ok(0);
                 }
-            };
+            });
 
-            if stream_names.is_empty() {
-                let mut notifier = on_log_found.lock().await;
-                info!("log streams empty, returning");
-                notifier.success();
-                return Result::Ok(0);
+            {
+                let mut notifier = log_search_monitor.lock().await;
+                if stream_names.is_empty() {
+                    info!("log streams empty, returning");
+                    notifier.success(String::from(
+                        "No log streams found having logs in given timeframe.",
+                    ));
+                    return Result::Ok(0);
+                } else {
+                    notifier.message(format!(
+                        "Searching in {} log stream(s)...",
+                        stream_names.len()
+                    ));
+                }
             }
 
             info!(
@@ -1163,7 +1193,7 @@ pub async fn find_logs(
                             .unwrap_or("")
                             .to_owned();
 
-                        let mut notifier = on_log_found.lock().await;
+                        let mut notifier = log_search_monitor.lock().await;
                         notifier.error(format!("Error: {}", &message).to_owned());
 
                         return Result::Err(BError {
@@ -1177,7 +1207,7 @@ pub async fn find_logs(
                     let events = log_response_data.events.unwrap_or_default();
                     info!("found {} logs", &events.len());
                     log_count += events.len();
-                    let mut notifier = on_log_found.lock().await;
+                    let mut notifier = log_search_monitor.lock().await;
                     notifier.notify(
                         events
                             .into_iter()
@@ -1189,11 +1219,15 @@ pub async fn find_logs(
                             })
                             .collect(),
                     );
+                    notifier.message(format!(
+                        "Searching in {} log stream(s), found {log_count} logs...",
+                        stream_names.len()
+                    ));
                     if let Some(limit) = limit {
                         if log_count > limit {
                             let msg = format!(
-                                "Exceeded amount of logs. Limit {}/{}.",
-                                &log_count, &limit
+                                "Search {} log stream(s) aborted, found {} logs. Reached limit of {} logs.",
+                                stream_names.len(), &log_count, &limit
                             )
                             .to_owned();
                             warn!("exceeded max log count, Limit {log_count}/{limit}");
@@ -1210,8 +1244,11 @@ pub async fn find_logs(
     }
     info!("logs search finished");
 
-    let mut notifier = on_log_found.lock().await;
-    notifier.success();
+    let mut notifier = log_search_monitor.lock().await;
+    notifier.success(format!(
+        "Search in {} log stream(s) done. Found {log_count} logs.",
+        stream_names.len()
+    ));
     Result::Ok(log_count)
 }
 
@@ -1221,6 +1258,7 @@ async fn find_stream_names_v1(
     apps: &[String],
     start_date: i64,
     end_date: i64,
+    log_search_monitor: Arc<tokio::sync::Mutex<dyn LogSearchMonitor>>,
 ) -> Result<Vec<String>, String> {
     let mut stream_names = vec![];
     let mut streams_marker = None;
@@ -1269,7 +1307,15 @@ async fn find_stream_names_v1(
                             &stream.first_event_timestamp,
                             &stream.last_event_timestamp
                         );
+
                         stream_names.push(stream_name.to_owned());
+                        {
+                            let mut log_search_monitor = log_search_monitor.lock().await;
+                            log_search_monitor.message(format!(
+                                "Searching for log streams, found {} stream(s). Last: {stream_name}",
+                                stream_names.len()
+                            ));
+                        }
                         is_over_time = !overlap;
                         found_matching_stream = true
                     }
@@ -1289,6 +1335,7 @@ async fn find_stream_names_v2(
     apps: &[String],
     start_date: i64,
     end_date: i64,
+    log_search_monitor: Arc<tokio::sync::Mutex<dyn LogSearchMonitor>>,
 ) -> Result<Vec<String>, String> {
     let mut stream_names = vec![];
     let mut streams_marker = None;
@@ -1357,6 +1404,11 @@ async fn find_stream_names_v2(
                 if overlaps {
                     info!("stream {stream_name} matches name & timestamp criteria");
                     stream_names.push(stream_name.to_owned());
+                    let mut log_search_monitor = log_search_monitor.lock().await;
+                    log_search_monitor.message(format!(
+                        "Searching for log streams, found {} stream(s). Last: {stream_name}",
+                        stream_names.len()
+                    ));
                 }
 
                 if log_stream_end < start_date {
