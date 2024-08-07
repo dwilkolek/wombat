@@ -455,15 +455,18 @@ struct WindowNotifier {
     window: Window,
 }
 
-impl aws::OnLogFound for WindowNotifier {
+impl aws::LogSearchMonitor for WindowNotifier {
     fn notify(&mut self, logs: Vec<aws::LogEntry>) {
         let _ = self.window.emit("new-log-found", logs);
     }
-    fn success(&mut self) {
-        let _ = self.window.emit("find-logs-success", ());
+    fn success(&mut self, msg: String) {
+        let _ = self.window.emit("find-logs-success", msg);
     }
     fn error(&mut self, msg: String) {
         let _ = self.window.emit("find-logs-error", msg);
+    }
+    fn message(&mut self, msg: String) {
+        let _ = self.window.emit("find-logs-message", msg);
     }
 }
 
@@ -473,7 +476,7 @@ struct FileNotifier {
     filename_location: String,
 }
 
-impl aws::OnLogFound for FileNotifier {
+impl aws::LogSearchMonitor for FileNotifier {
     fn notify(&mut self, logs: Vec<aws::LogEntry>) {
         let writer = &mut self.writer;
         let mut data = "".to_owned();
@@ -497,7 +500,7 @@ impl aws::OnLogFound for FileNotifier {
             );
         }
     }
-    fn success(&mut self) {
+    fn success(&mut self, msg: String) {
         let now = SystemTime::now();
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
         let _ = self.window.emit(
@@ -509,7 +512,7 @@ impl aws::OnLogFound for FileNotifier {
                 message: format!("TRACE File: {}", self.filename_location),
             }],
         );
-        let _ = self.window.emit("find-logs-success", ());
+        let _ = self.window.emit("find-logs-success", msg);
         let _ = self.writer.flush();
     }
     fn error(&mut self, msg: String) {
@@ -526,6 +529,20 @@ impl aws::OnLogFound for FileNotifier {
         );
         let _ = self.window.emit("find-logs-error", msg);
         let _ = self.writer.flush();
+    }
+    fn message(&mut self, msg: String) {
+        let now = SystemTime::now();
+        let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+        let _ = self.window.emit(
+            "new-log-found",
+            vec![LogEntry {
+                log_stream_name: "-".to_owned(),
+                ingestion_time: timestamp.as_millis() as i64,
+                timestamp: timestamp.as_millis() as i64,
+                message: format!("INFO {}", msg.clone()),
+            }],
+        );
+        let _ = self.window.emit("find-logs-message", msg);
     }
 }
 
