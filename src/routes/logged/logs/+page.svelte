@@ -294,10 +294,9 @@
 	</div>
 </div>
 
-<div class="p-1 min-h-6">
-	{#if !!$storeState.searchError}{$storeState.searchError}{/if}
+<div class="relative flex items-center min-h-6">
 	{#if $storeState.isLookingForLogs}<progress
-			class={`progress w-full ${$storeState.searchError ? 'progress-error' : ''}`}
+			class={`progress w-full ${$storeState.searchStatus == 'error' ? 'progress-error' : ''}`}
 		></progress>{/if}
 	{#if !$storeState.isLookingForLogs}<progress
 			class={`progress w-full
@@ -307,6 +306,20 @@
 			value="100"
 			max="100"
 		></progress>{/if}
+	{#if !!$storeState.message}
+		<div class="absolute top-0 left-0 w-full flex justify-center">
+			<span
+				class={`px-4 rounded-md bg-base-300 text-sm border
+				${$storeState.searchStatus === undefined ? 'border-divider' : ''}
+     			${$storeState.searchStatus == 'aborted' ? 'border-warning' : ''}
+     			${$storeState.searchStatus == 'success' ? 'border-success' : ''}
+     			${$storeState.searchStatus == 'error' ? 'border-error' : ''}
+			`}
+			>
+				{$storeState.message}
+			</span>
+		</div>
+	{/if}
 </div>
 <div class="flex flex-col w-full gap-2">
 	<div
