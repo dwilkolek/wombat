@@ -35,10 +35,16 @@
 	export let onSelect: (range: Timerange) => void = () => {};
 	let tempRange: Timerange = { ...range };
 	let details: HTMLDetailsElement;
+	let open = false;
 </script>
 
 <details class="dropdown grow" bind:this={details}>
-	<summary class="btn btn-sm w-[450px]">
+	<summary
+		class="btn btn-sm w-[450px]"
+		on:click={() => {
+			open = true;
+		}}
+	>
 		{formatTimerange(range)}
 	</summary>
 	<div class="menu dropdown-content bg-base-300 rounded-box z-[1] p-2 shadow w-[450px] -my-8">
@@ -134,6 +140,7 @@
 					on:click={() => {
 						tempRange = { ...range };
 						details.removeAttribute('open');
+						open = false;
 					}}>Cancel</button
 				>
 				<button
@@ -141,9 +148,22 @@
 					on:click={() => {
 						details.removeAttribute('open');
 						onSelect(tempRange);
+						open = false;
 					}}>Select</button
 				>
 			</div>
 		</div>
 	</div>
 </details>
+{#if open}
+	<!-- svelte-ignore a11y-no-static-element-interactions -->
+	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<div
+		class="w-screen h-screen bottom-0 left-0 fixed bg-salte"
+		on:click={() => {
+			tempRange = { ...range };
+			details.removeAttribute('open');
+			open = false;
+		}}
+	></div>
+{/if}
