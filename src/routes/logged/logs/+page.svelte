@@ -156,7 +156,18 @@
 					<div>Loading filters...</div>
 				{:then filters}
 					{#each filters as filter}
-						{#if filter.services.some((ls) => $selectedServices.some((ecs) => ecs.name == ls))}
+						{@const enabledFor = filter.services.filter((ls) => ls.at(0) !== '!')}
+						{@const disabledFor =
+							filter.services
+								.find((ls) => ls.at(0) === '!')
+								?.substring(1)
+								?.split(',') ?? []}
+						{@const matches =
+							enabledFor.some((ls) => $selectedServices.some((ecs) => ecs.name === ls)) ||
+							$selectedServices.some(
+								(ecs) => disabledFor.length > 0 && !disabledFor.includes(ecs.name)
+							)}
+						{#if matches}
 							<button
 								class="btn btn-active btn-secondary btn-xs"
 								on:click={() => {
