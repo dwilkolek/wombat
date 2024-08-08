@@ -80,7 +80,8 @@ export type ServiceDetails = {
 	version: string;
 	cluster_arn: string;
 	env: AwsEnv;
-	timestamp: number;
+	timestamp: string;
+	task_registered_at: string;
 };
 
 export type ServiceDetailsMissing = {

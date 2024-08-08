@@ -4,7 +4,6 @@ import { listen } from '@tauri-apps/api/event';
 import type { AwsEnv, RdsInstance, ServiceDetails, ServiceDetailsMissing } from '$lib/types';
 import { ENVIRONMENTS } from './env-store';
 
-import { format } from 'date-fns';
 type ServiceDetailsPayload = {
 	app: string;
 	dbs: RdsInstance[];
@@ -77,7 +76,7 @@ export const serviceDetailStore = (app: string) =>
 					AwsEnv,
 					{ services: (ServiceDetails & ServiceDetailsMissing)[]; dbs: RdsInstance[] }
 				>(),
-				timestamp: format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')
+				timestamp: details.timestamp
 			};
 			for (const env of ENVIRONMENTS) {
 				const services = details.services

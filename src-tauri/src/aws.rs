@@ -90,6 +90,7 @@ pub struct ServiceDetails {
     pub version: String,
     pub cluster_arn: String,
     pub env: Env,
+    pub task_registered_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1054,6 +1055,7 @@ pub async fn service_detail(
 
     let task_def = task_def.task_definition().unwrap_or_log();
     let container_def = &task_def.container_definitions()[0];
+
     let version = container_def
         .image()
         .unwrap_or_log()
@@ -1067,6 +1069,10 @@ pub async fn service_detail(
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
+        task_registered_at: task_def
+            .registered_at
+            .and_then(|t| t.to_millis().ok())
+            .and_then(DateTime::from_timestamp_millis),
         version,
         env: Env::from_any(&service_arn),
     })
