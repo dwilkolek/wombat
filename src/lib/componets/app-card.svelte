@@ -116,7 +116,7 @@
 													class="flex flex-col tooltip tooltip-left"
 													data-tip={`Deployed at: ${
 														service.task_registered_at
-															? format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')
+															? format(service.task_registered_at, 'yyyy-MM-dd HH:mm:ss')
 															: ''
 													}`}
 												>
