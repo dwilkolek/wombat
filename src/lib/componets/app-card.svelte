@@ -12,6 +12,7 @@
 	import ServiceTaskStatus from './service-task-status.svelte';
 	import AppCardHr from './app-card-hr.svelte';
 	import RestartServiceBtn from './restart-service-btn.svelte';
+	import { format } from 'date-fns/format';
 	export let app: string;
 	export let displayConfig: {
 		envs: AwsEnv[] | null;
@@ -56,7 +57,7 @@
 			{#if details}
 				<div class="place-content-end text-xs text-slate-500 font-italic">
 					<div class="flex gap-2">
-						<span>Synchronized at: {details.timestamp}</span>
+						<span>Synchronized at: {format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')}</span>
 						<button
 							data-umami-event="app_refresh"
 							data-umami-event-uid={$userStore.id}
@@ -101,7 +102,7 @@
 						)}
 						<div class={`flex flex-col app-env-cell px-2`}>
 							<div class="font-medium text-xs italic flex gap-1 items-center">
-								<span class={`${hasInfraProfile ? '' : 'opacity-60'}`}>{enabled_env}:</span>
+								<span class={`${hasInfraProfile ? '' : 'opacity-60'}`}>{enabled_env}: </span>
 							</div>
 							<div class="flex gap-1 app-env-cell-stack">
 								{#if value}
@@ -111,8 +112,16 @@
 										<div class="flex flex-row items-center gap-1 px-1">
 											<ServiceCell {service} />
 											<div class="flex gap-2 justify-between items-center grow">
-												<span class="truncate">{service.version}</span>
-
+												<div
+													class="flex flex-col tooltip tooltip-left"
+													data-tip={`Deployed at: ${
+														service.task_registered_at
+															? format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')
+															: ''
+													}`}
+												>
+													{service.version}
+												</div>
 												<RestartServiceBtn {service} />
 												<AppCardHr {task} />
 												<ServiceTaskStatus {task} {service} />
