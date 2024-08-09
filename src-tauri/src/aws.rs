@@ -1286,18 +1286,16 @@ async fn find_stream_names(
                 .iter()
                 .find(|app| stream_name.starts_with(&format!("web/{}/", &app)));
             if let Some(app) = app {
-                let last_known_creation_time: i64 = last_creation_dates
-                    .get(app)
-                    .copied()
-                    .unwrap_or(i64::max_value());
+                let last_known_creation_time: i64 =
+                    last_creation_dates.get(app).copied().unwrap_or(i64::MAX);
                 let log_stream_start = stream
                     .first_event_timestamp
                     .or(stream.creation_time)
-                    .unwrap_or(i64::max_value());
+                    .unwrap_or(i64::MAX);
                 let log_stream_end = stream
                     .last_event_timestamp
                     .or(stream.last_ingestion_time)
-                    .map_or(i64::max_value(), |t| t + 60 * 1000);
+                    .map_or(i64::MAX, |t| t + 60 * 1000);
 
                 let overlaps = range_overlap::has_incl_overlap(
                     log_stream_start,
