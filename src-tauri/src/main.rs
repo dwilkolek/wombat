@@ -147,6 +147,11 @@ async fn favorite(
     )
 }
 
+#[tauri::command]
+async fn is_debug() -> bool {
+    cfg!(debug_assertions)
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn login(
@@ -1520,6 +1525,7 @@ async fn main() {
             chrome_extension_dir,
             browser_extension_health,
             cookie_jar_status,
+            is_debug,
             kv_put,
             kv_get,
             kv_delete
