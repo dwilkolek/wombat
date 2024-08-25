@@ -191,12 +191,7 @@
 				<ServiceMultiselect />
 			</div>
 			<div>
-				<TimerangeSelect
-					onSelect={(newRange) => {
-						timerange.set(newRange);
-					}}
-					range={$timerange}
-				/>
+				<TimerangeSelect range={timerange} />
 			</div>
 		</div>
 		<div class="w-full flex gap-2">
@@ -473,7 +468,7 @@
 			<div class={`h-[40vh] flex flex-col gap-2`}>
 				<div class={`text-sm overflow-auto h-[40vh]`}>
 					<div bind:this={jsonViewNode}>
-						<JsonView log={$selectedLog} />
+						<JsonView log={$selectedLog} nested={false} />
 					</div>
 				</div>
 			</div>

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { Timerange } from '$lib/types';
+	import type { Timerange, TimeUnit } from '$lib/types';
 	import { endOfDay, format, startOfDay } from 'date-fns';
+	import { get, type Writable } from 'svelte/store';
 
 	const withZeros = (v: number) => {
 		return v < 10 ? `0${v}` : v;
@@ -27,15 +28,47 @@
 		}
 	};
 
-	export let range: Timerange = {
-		type: 'relative',
-		amount: 30,
-		unit: 'minutes'
-	};
-	export let onSelect: (range: Timerange) => void = () => {};
-	let tempRange: Timerange = { ...range };
+	export let range: Writable<Timerange>;
+	let type = 'relative';
+	let from = startOfDay(new Date());
+	let to = endOfDay(new Date());
+	let amount = 30;
+	let unit: TimeUnit = 'minutes';
+
+	range.subscribe((r) => {
+		type = r.type;
+		switch (r.type) {
+			case 'absolute':
+				from = r.from;
+				to = r.to;
+				break;
+			case 'relative':
+				amount = r.amount;
+				unit = r.unit;
+				break;
+		}
+	});
 	let details: HTMLDetailsElement;
 	let open = false;
+
+	function reset() {
+		const storedRange = get(range);
+		type = storedRange.type;
+		from = startOfDay(new Date());
+		to = endOfDay(new Date());
+		amount = 30;
+		unit = 'minutes';
+		switch (storedRange.type) {
+			case 'absolute':
+				from = storedRange.from;
+				to = storedRange.to;
+				break;
+			case 'relative':
+				amount = storedRange.amount;
+				unit = storedRange.unit;
+				break;
+		}
+	}
 </script>
 
 <details class="dropdown grow" bind:this={details}>
@@ -45,66 +78,50 @@
 			open = true;
 		}}
 	>
-		{formatTimerange(range)}
+		{formatTimerange($range)}
 	</summary>
 	<div class="menu dropdown-content bg-base-300 rounded-box z-[1] p-2 shadow w-[450px] -my-8">
-		<!-- <div role="tablist" class="tabs tabs-boxed">
-			<a role="tab" class={`tab ${range.type == 'relative' ? 'tab-active' : ''}`}>Relative</a>
-			<a role="tab" class={`tab ${range.type == 'absolute' ? 'tab-active' : ''}`}>Absolute</a>
-		</div> -->
 		<div class="flex flex-col gap-2">
 			<div class="flex gap-2">
 				<button
-					class={`btn btn-sm ${tempRange.type == 'relative' ? 'btn-primary' : 'btn-ghost'}`}
+					class={`btn btn-sm ${type == 'relative' ? 'btn-primary' : 'btn-ghost'}`}
 					on:click={() => {
-						tempRange = {
-							type: 'relative',
-							amount: 30,
-							unit: 'minutes'
-						};
+						type = 'relative';
 					}}>Relative</button
 				>
 				<button
-					class={`btn btn-sm ${tempRange.type == 'absolute' ? 'btn-primary' : 'btn-ghost'}`}
+					class={`btn btn-sm ${type == 'absolute' ? 'btn-primary' : 'btn-ghost'}`}
 					on:click={() => {
-						tempRange = {
-							type: 'absolute',
-							from: startOfDay(new Date()),
-							to: endOfDay(new Date())
-						};
+						type = 'absolute';
 					}}>Absolute</button
 				>
 			</div>
-			{#if tempRange.type == 'relative'}
+			{#if type == 'relative'}
 				<div class="flex gap-2">
 					<div class="grow">
 						Amount: <input
 							type="number"
 							class="input input-sm input-bordered w-full"
 							on:change={(event) => {
-								if (tempRange.type == 'relative') {
-									tempRange = { ...tempRange, amount: parseInt(event.currentTarget.value) };
-								}
+								amount = parseInt(event.currentTarget.value);
 							}}
-							value={tempRange.amount}
+							value={amount}
 						/>
 					</div>
 					<div class="grow">
 						Unit: <select
 							class="input input-sm input-bordered w-full"
 							on:change={(event) => {
-								if (tempRange.type == 'relative') {
-									tempRange = { ...tempRange, unit: event.currentTarget.value };
-								}
+								unit = event.currentTarget.value;
 							}}
 						>
-							<option value="minutes" selected={tempRange.unit == 'minutes'}>Minute</option>
-							<option value="hours" selected={tempRange.unit == 'hours'}>Hour</option>
+							<option value="minutes" selected={unit == 'minutes'}>Minute</option>
+							<option value="hours" selected={unit == 'hours'}>Hour</option>
 						</select>
 					</div>
 				</div>
 			{/if}
-			{#if tempRange.type == 'absolute'}
+			{#if type == 'absolute'}
 				<div class="flex gap-2">
 					<div class="grow">
 						From: <input
@@ -112,11 +129,9 @@
 							placeholder="Start date"
 							class="input input-sm input-bordered w-full max-w-xs"
 							on:change={(event) => {
-								if (tempRange.type == 'absolute') {
-									tempRange = { ...tempRange, from: new Date(event.currentTarget.value) };
-								}
+								from = new Date(event.currentTarget.value);
 							}}
-							value={toLocalDateStr(tempRange.from)}
+							value={toLocalDateStr(from)}
 						/>
 					</div>
 					<div class="grow">
@@ -125,11 +140,9 @@
 							placeholder="End date"
 							class="input input-sm input-bordered w-full max-w-xs"
 							on:change={(event) => {
-								if (tempRange.type == 'absolute') {
-									tempRange = { ...tempRange, to: new Date(event.currentTarget.value) };
-								}
+								to = new Date(event.currentTarget.value);
 							}}
-							value={toLocalDateStr(tempRange.to)}
+							value={toLocalDateStr(to)}
 						/>
 					</div>
 				</div>
@@ -138,7 +151,7 @@
 				<button
 					class="btn btn-sm btn-ghost"
 					on:click={() => {
-						tempRange = { ...range };
+						reset();
 						details.removeAttribute('open');
 						open = false;
 					}}>Cancel</button
@@ -146,8 +159,22 @@
 				<button
 					class="btn btn-sm btn-success"
 					on:click={() => {
+						switch (type) {
+							case 'absolute':
+								range.set({
+									type,
+									from,
+									to
+								});
+								break;
+							case 'relative':
+								range.set({
+									type,
+									amount,
+									unit
+								});
+						}
 						details.removeAttribute('open');
-						onSelect(tempRange);
 						open = false;
 					}}>Select</button
 				>
@@ -161,7 +188,6 @@
 	<div
 		class="w-screen h-screen bottom-0 left-0 fixed bg-salte"
 		on:click={() => {
-			tempRange = { ...range };
 			details.removeAttribute('open');
 			open = false;
 		}}
