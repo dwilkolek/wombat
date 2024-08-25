@@ -69,11 +69,12 @@ function sendCookieToPopup(cookie) {
 }
 
 function notifyPopupDeskopCLientOnline() {
-	popupOpen &&
+	if (popupOpen) {
 		chrome.runtime.sendMessage({
 			action: 'desktopApp',
 			wombatVersion: wombatOpen
 		});
+	}
 }
 
 /* desktop */

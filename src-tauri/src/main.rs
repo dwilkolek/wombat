@@ -17,7 +17,8 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
-use tauri::Window;
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
@@ -64,7 +65,7 @@ struct AuthorizedUser {
 const CHECK_AUTH_AFTER: i64 = 5 * 60 * 1000; // every 5 minutes.
 
 async fn get_authorized(
-    window: &Window,
+    app_handle: &AppHandle,
     app_state: &Arc<Mutex<AppContext>>,
 ) -> Result<AuthorizedUser, String> {
     let mut app_ctx = app_state.lock().await;
@@ -81,7 +82,7 @@ async fn get_authorized(
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
                 if app_ctx.no_of_failed_logins == 2 {
-                    let _ = window.emit("KILL_ME", "".to_owned());
+                    let _ = app_handle.emit("KILL_ME", "".to_owned());
                 }
                 return Err("Authentication failed".to_owned());
             } else {
@@ -156,7 +157,7 @@ async fn is_debug() -> bool {
 #[tauri::command]
 async fn login(
     profile: &str,
-    window: Window,
+    app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
@@ -190,25 +191,25 @@ async fn login(
         app_state.active_profile = Some(aws_config_provider.active_wombat_profile.clone());
     }
 
-    let _ = window.emit("message", "Authenticating...");
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    let _ = app_handle.emit("message", "Authenticating...");
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("login", msg));
     };
 
-    let _ = window.emit("message", "Updating profile...");
+    let _ = app_handle.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile, environments, tracked_names);
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
 
-    let _ = window.emit("message", "Fetching databases...");
+    let _ = app_handle.emit("message", "Fetching databases...");
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
         rds_resolver_instance.init(cache_db.clone()).await;
         rds_resolver_instance.databases().await;
     }
 
-    let _ = window.emit("message", "Fetching clusters...");
+    let _ = app_handle.emit("message", "Fetching clusters...");
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
@@ -216,14 +217,14 @@ async fn login(
         clusters = cluster_resolver_instance.clusters().await;
     }
 
-    let _ = window.emit("message", "Fetching services...");
+    let _ = app_handle.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
         ecs_resolver_instance.init(cache_db.clone()).await;
         ecs_resolver_instance.services(clusters).await;
     }
 
-    let _ = window.emit("message", "Syncing global state...");
+    let _ = app_handle.emit("message", "Syncing global state...");
     let mut api = wombat_api_instance.0.write().await;
     let api_status = api.status().await;
     if let Err(status) = api_status {
@@ -238,7 +239,7 @@ async fn login(
     let cluster_resolver_instance = Arc::clone(&cluster_resolver_instance.0);
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
 
-    let _ = window.emit("message", "Setting refresh jobs...");
+    let _ = app_handle.emit("message", "Setting refresh jobs...");
     task_tracker.0.lock().await.aws_resource_refresher = Some(tokio::task::spawn(async move {
         tokio::time::sleep(Duration::from_secs(120)).await;
         {
@@ -263,7 +264,7 @@ async fn login(
         }
     }));
 
-    let _ = window.emit("message", "Success!");
+    let _ = app_handle.emit("message", "Success!");
 
     Ok(user_config.clone())
 }
@@ -323,12 +324,12 @@ async fn kv_delete(key: String, kv_store: tauri::State<'_, KVStoreInstance>) -> 
 
 #[tauri::command]
 async fn credentials(
-    window: Window,
+    app_handle: AppHandle,
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<DbSecret, BError> {
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("credentials", msg));
     };
 
@@ -361,12 +362,12 @@ async fn credentials(
 
 #[tauri::command]
 async fn stop_job(
-    window: Window,
+    app_handle: AppHandle,
     arn: &str,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), BError> {
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("stop_job", msg));
     };
     let mut tracker = async_task_tracker.0.lock().await;
@@ -374,7 +375,7 @@ async fn stop_job(
         let kill_result = handle.send(());
         if kill_result.is_ok() {
             info!("Killing dependant job, success: {}", kill_result.is_ok());
-            let _ = window.emit(
+            let _ = app_handle.emit(
                 "task-killed",
                 TaskKilled {
                     arn: arn.to_owned(),
@@ -457,26 +458,26 @@ async fn logout(
 }
 
 struct WindowNotifier {
-    window: Window,
+    app_handle: AppHandle,
 }
 
 impl aws::LogSearchMonitor for WindowNotifier {
     fn notify(&mut self, logs: Vec<aws::LogEntry>) {
-        let _ = self.window.emit("new-log-found", logs);
+        let _ = self.app_handle.emit("new-log-found", logs);
     }
     fn success(&mut self, msg: String) {
-        let _ = self.window.emit("find-logs-success", msg);
+        let _ = self.app_handle.emit("find-logs-success", msg);
     }
     fn error(&mut self, msg: String) {
-        let _ = self.window.emit("find-logs-error", msg);
+        let _ = self.app_handle.emit("find-logs-error", msg);
     }
     fn message(&mut self, msg: String) {
-        let _ = self.window.emit("find-logs-message", msg);
+        let _ = self.app_handle.emit("find-logs-message", msg);
     }
 }
 
 struct FileNotifier {
-    window: Window,
+    app_handle: AppHandle,
     writer: BufWriter<fs::File>,
     filename_location: String,
 }
@@ -494,7 +495,7 @@ impl aws::LogSearchMonitor for FileNotifier {
         if let Some(log) = logs.first() {
             let now = SystemTime::now();
             let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-            let _ = self.window.emit(
+            let _ = self.app_handle.emit(
                 "new-log-found",
                 vec![LogEntry {
                     log_stream_name: log.log_stream_name.to_owned(),
@@ -508,7 +509,7 @@ impl aws::LogSearchMonitor for FileNotifier {
     fn success(&mut self, msg: String) {
         let now = SystemTime::now();
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-        let _ = self.window.emit(
+        let _ = self.app_handle.emit(
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
@@ -517,13 +518,13 @@ impl aws::LogSearchMonitor for FileNotifier {
                 message: format!("TRACE File: {}", self.filename_location),
             }],
         );
-        let _ = self.window.emit("find-logs-success", msg);
+        let _ = self.app_handle.emit("find-logs-success", msg);
         let _ = self.writer.flush();
     }
     fn error(&mut self, msg: String) {
         let now = SystemTime::now();
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-        let _ = self.window.emit(
+        let _ = self.app_handle.emit(
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
@@ -532,13 +533,13 @@ impl aws::LogSearchMonitor for FileNotifier {
                 message: format!("ERROR {}", msg),
             }],
         );
-        let _ = self.window.emit("find-logs-error", msg);
+        let _ = self.app_handle.emit("find-logs-error", msg);
         let _ = self.writer.flush();
     }
     fn message(&mut self, msg: String) {
         let now = SystemTime::now();
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
-        let _ = self.window.emit(
+        let _ = self.app_handle.emit(
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
@@ -547,14 +548,14 @@ impl aws::LogSearchMonitor for FileNotifier {
                 message: format!("INFO {}", msg.clone()),
             }],
         );
-        let _ = self.window.emit("find-logs-message", msg);
+        let _ = self.app_handle.emit("find-logs-message", msg);
     }
 }
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn find_logs(
-    window: Window,
+    app_handle: AppHandle,
     apps: Vec<String>,
     env: Env,
     start: i64,
@@ -566,7 +567,7 @@ async fn find_logs(
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("find_logs", msg));
     };
 
@@ -601,7 +602,7 @@ async fn find_logs(
                 false => Some(filter),
             },
             match &filename {
-                None => Arc::new(Mutex::new(WindowNotifier { window })),
+                None => Arc::new(Mutex::new(WindowNotifier { app_handle })),
                 Some(filename) => {
                     let now = SystemTime::now();
                     let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
@@ -614,7 +615,7 @@ async fn find_logs(
                     let file = fs::File::create(pathbuf.clone()).unwrap_or_log();
 
                     Arc::new(Mutex::new(FileNotifier {
-                        window,
+                        app_handle,
                         writer: BufWriter::new(file),
                         filename_location: format!(
                             "{}",
@@ -678,12 +679,12 @@ async fn restart_service(
     cluster_arn: String,
     env: Env,
     service_name: String,
-    window: Window,
+    app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<String, BError> {
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("restart_service", msg));
     };
 
@@ -698,7 +699,7 @@ async fn restart_service(
     );
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     ecs_resolver_instance
-        .restart_service(window, aws_config, cluster_arn, service_name)
+        .restart_service(app_handle, aws_config, cluster_arn, service_name)
         .await
 }
 
@@ -715,14 +716,14 @@ async fn databases(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 async fn discover(
-    window: Window,
+    app_handle: AppHandle,
     name: &str,
     app_state: tauri::State<'_, AppContextState>,
     user_config: tauri::State<'_, UserConfigState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
 ) -> Result<Vec<String>, BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0).await {
         Err(msg) => return Err(BError::new("discover", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -774,7 +775,7 @@ async fn discover(
 
 #[tauri::command]
 async fn refresh_cache(
-    window: Window,
+    app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
@@ -786,7 +787,7 @@ async fn refresh_cache(
         app_state.last_auth_check = 0;
     }
 
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("refresh_cache", msg));
     };
 
@@ -804,14 +805,14 @@ async fn refresh_cache(
         rds_resolver_instance.refresh().await;
     }
 
-    window.emit("cache-refreshed", ()).unwrap_or_log();
+    app_handle.emit("cache-refreshed", ()).unwrap_or_log();
     Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn service_details(
-    window: Window,
+    app_handle: AppHandle,
     app: String,
     app_state: tauri::State<'_, AppContextState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
@@ -819,7 +820,7 @@ async fn service_details(
     rate_limitter: tauri::State<'_, ServiceDetailsRateLimiter>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
-    let authorized_user = match get_authorized(&window, &app_state.0).await {
+    let authorized_user = match get_authorized(&app_handle, &app_state.0).await {
         Err(msg) => return Err(BError::new("service_details", msg)),
         Ok(authorized_user) => authorized_user,
     };
@@ -902,7 +903,7 @@ async fn service_details(
             .collect();
     }
 
-    window
+    app_handle
         .emit(
             "new-service-details",
             ServiceDetailsPayload {
@@ -919,14 +920,14 @@ async fn service_details(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 async fn start_db_proxy(
-    window: Window,
+    app_handle: AppHandle,
     db: aws::RdsInstance,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<NewTaskParams, BError> {
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("start_db_proxy", msg));
     };
 
@@ -948,7 +949,7 @@ async fn start_db_proxy(
 
     let proxy_started = proxy::start_aws_ssm_proxy(
         db.arn.clone(),
-        window.clone(),
+        app_handle.clone(),
         bastion.instance_id,
         aws_profile,
         region,
@@ -973,7 +974,7 @@ async fn start_db_proxy(
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn start_service_proxy(
-    window: Window,
+    app_handle: AppHandle,
     service: aws::EcsService,
     infra_profile: Option<InfraProfile>,
     sso_profile: Option<SsoProfile>,
@@ -991,7 +992,7 @@ async fn start_service_proxy(
     }
 
     let aws_local_port = local_port + 10000;
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("start_service_proxy", msg));
     };
     let aws_config_provider = aws_config_provider.0.read().await;
@@ -1072,7 +1073,7 @@ async fn start_service_proxy(
     let host = format!("{}.service", service.name);
     let proxy_started = proxy::start_aws_ssm_proxy(
         service.arn,
-        window,
+        app_handle,
         bastion.instance_id,
         aws_profile,
         region,
@@ -1227,7 +1228,7 @@ async fn wombat_aws_profiles(
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 async fn open_dbeaver(
-    window: Window,
+    app_handle: AppHandle,
     db: aws::RdsInstance,
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1247,7 +1248,7 @@ async fn open_dbeaver(
                 )
         }
     }
-    if let Err(msg) = get_authorized(&window, &app_state.0).await {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("open_dbeaver", msg));
     };
 
@@ -1426,10 +1427,14 @@ async fn main() {
 
     let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let resource_path = app
-                .path_resolver()
-                .resolve_resource("../chrome-extension")
+                .path()
+                .resolve("../chrome-extension", BaseDirectory::Resource)
                 .expect("failed to chrome_extension resource");
             let chrome_extension_dir = user::chrome_extension_dir();
             if chrome_extension_dir.exists() {
@@ -1444,19 +1449,9 @@ async fn main() {
             }
 
             let handle = app.handle();
-            tauri::async_runtime::spawn(async move {
-                match tauri::updater::builder(handle).check().await {
-                    Ok(update) => {
-                        // if update.is_update_available() {
-                        //     update.download_and_install().await.unwrap();
-                        // }
-                        info!("update available: {}", update.is_update_available());
-                    }
-                    Err(e) => {
-                        warn!("failed to get update: {}", e);
-                    }
-                }
-            });
+            handle
+                .plugin(tauri_plugin_updater::Builder::new().build())
+                .expect("Failed to initialize updater plugin");
             Ok(())
         })
         .manage(AppContextState(Arc::new(Mutex::new(AppContext {
@@ -1532,47 +1527,47 @@ async fn main() {
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
-
-    app.run(|_app_handle, event| {
-        if let tauri::RunEvent::Updater(updater_event) = event {
-            match updater_event {
-                tauri::UpdaterEvent::UpdateAvailable {
-                    body,
-                    date,
-                    version,
-                } => {
-                    info!("update available {} {:?} {}", body, date, version);
-                }
-                // Emitted when the download is about to be started.
-                tauri::UpdaterEvent::Pending => {
-                    info!("update is pending!");
-                }
-                // tauri::UpdaterEvent::DownloadProgress {
-                //     chunk_length,
-                //     content_length,
-                // } => {
-                //     info!("downloaded {} of {:?}", chunk_length, content_length);
-                // }
-                // Emitted when the download has finished and the update is about to be installed.
-                tauri::UpdaterEvent::Downloaded => {
-                    info!("update has been downloaded!");
-                }
-                // Emitted when the update was installed. You can then ask to restart the app.
-                tauri::UpdaterEvent::Updated => {
-                    info!("app has been updated");
-                }
-                // Emitted when the app already has the latest version installed and an update is not needed.
-                tauri::UpdaterEvent::AlreadyUpToDate => {
-                    info!("app is already up to date");
-                }
-                // Emitted when there is an error with the updater. We suggest to listen to this event even if the default dialog is enabled.
-                tauri::UpdaterEvent::Error(error) => {
-                    info!("failed to update: {}", error);
-                }
-                _ => {}
-            }
-        }
-    });
+    app.run(|_handle, _event| {});
+    // app.run(|_app_handle, event| {
+    //     if let tauri::RunEvent::Updater(updater_event) = event {
+    //         match updater_event {
+    //             tauri::UpdaterEvent::UpdateAvailable {
+    //                 body,
+    //                 date,
+    //                 version,
+    //             } => {
+    //                 info!("update available {} {:?} {}", body, date, version);
+    //             }
+    //             // Emitted when the download is about to be started.
+    //             tauri::UpdaterEvent::Pending => {
+    //                 info!("update is pending!");
+    //             }
+    //             // tauri::UpdaterEvent::DownloadProgress {
+    //             //     chunk_length,
+    //             //     content_length,
+    //             // } => {
+    //             //     info!("downloaded {} of {:?}", chunk_length, content_length);
+    //             // }
+    //             // Emitted when the download has finished and the update is about to be installed.
+    //             tauri::UpdaterEvent::Downloaded => {
+    //                 info!("update has been downloaded!");
+    //             }
+    //             // Emitted when the update was installed. You can then ask to restart the app.
+    //             tauri::UpdaterEvent::Updated => {
+    //                 info!("app has been updated");
+    //             }
+    //             // Emitted when the app already has the latest version installed and an update is not needed.
+    //             tauri::UpdaterEvent::AlreadyUpToDate => {
+    //                 info!("app is already up to date");
+    //             }
+    //             // Emitted when there is an error with the updater. We suggest to listen to this event even if the default dialog is enabled.
+    //             tauri::UpdaterEvent::Error(error) => {
+    //                 info!("failed to update: {}", error);
+    //             }
+    //             _ => {}
+    //         }
+    //     }
+    // });
 }
 
 struct AppContext {

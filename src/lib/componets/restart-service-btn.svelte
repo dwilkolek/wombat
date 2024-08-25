@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invoke } from '@tauri-apps/api';
+	import { invoke } from '@tauri-apps/api/core';
 	import { deplyomentStore } from '$lib/stores/deployment-store';
 	import type { EcsService } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';

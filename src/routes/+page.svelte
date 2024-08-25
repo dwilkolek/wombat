@@ -1,32 +1,21 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
-	import { open } from '@tauri-apps/api/shell';
+	import { open } from '@tauri-apps/plugin-shell';
 	import { version } from '$app/environment';
-	import { fetch } from '@tauri-apps/api/http';
 	import { listen } from '@tauri-apps/api/event';
-	import { exit } from '@tauri-apps/api/process';
-	import { invoke } from '@tauri-apps/api';
+	import { exit } from '@tauri-apps/plugin-process';
+	import { invoke } from '@tauri-apps/api/core';
 	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
 	import { envImportance } from '$lib/stores/env-store';
 	import type { WombatAwsProfile } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
-	$: latest = fetch('https://api.github.com/repos/dwilkolek/wombat/releases/latest', {
-		headers: { 'User-Agent': 'wombat' }
-	}).then((r) => {
-		return (
-			(r as unknown as { data: undefined | { html_url: undefined | string } })?.data?.html_url ??
-			'/v0.0.0'
-		)
-			.split('/v')
-			.at(-1) as string;
-	});
+	import UpdateBtn from '$lib/componets/update-btn.svelte';
+
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
 	};
-	const openGithubPageRelease = () => {
-		open('https://github.com/dwilkolek/wombat/releases/latest');
-	};
+
 	const openExtInstallGuide = () => {
 		open(
 			'https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked'
@@ -215,25 +204,8 @@
 			</div>
 		</div>
 		<div class="flex flex-col justify-center items-center gap-2 my-2">
-			{#await latest then latest}
-				{#if (latest ?? '0.0.0')
-					.split('.')
-					.map((v, i) => parseInt(v) * Math.pow(1000, 3 - i))
-					.reduce((acc, v) => acc + v, 0) > version
-						.split('.')
-						.map((v, i) => parseInt(v) * Math.pow(1000, 3 - i))
-						.reduce((acc, v) => acc + v, 0)}
-					<a
-						class="underline text-accent"
-						href="https://github.com/dwilkolek/wombat/releases/latest"
-						on:click|preventDefault={() => {
-							openGithubPageRelease();
-						}}
-						target="_blank"
-						>New version v{latest} available!
-					</a>
-				{/if}
-			{/await}
+			<UpdateBtn />
+
 			<div>
 				<span>Source code:</span>
 				<a

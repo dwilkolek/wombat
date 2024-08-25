@@ -7,13 +7,13 @@
 		type SsoProfile,
 		type EcsService
 	} from '$lib/types';
-	import { ask, message } from '@tauri-apps/api/dialog';
+	import { ask, message } from '@tauri-apps/plugin-dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { type CustomHeader } from '$lib/types';
 	import { taskStore, type NewTaskParams } from '$lib/stores/task-store';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 	import { userStore } from '$lib/stores/user-store';
 	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
 
@@ -79,7 +79,7 @@
 					title: 'Access to PRODUCTION service.',
 					okLabel: 'Proceed',
 					cancelLabel: 'Abort',
-					type: 'warning'
+					kind: 'warning'
 				}
 			);
 			if (!response) {
@@ -323,7 +323,7 @@
 								if (
 									customHeaders.some((ch) => header.name.toLowerCase() == ch.name.toLowerCase())
 								) {
-									message(`Header name needs to be unique`, { title: 'Ooops!', type: 'error' });
+									message(`Header name needs to be unique`, { title: 'Ooops!', kind: 'error' });
 									throw Error('invalid header');
 								}
 								customHeaders = [...customHeaders, header];

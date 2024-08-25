@@ -5,7 +5,7 @@
 	import PsyduckIcon from '$lib/images/psyduck.png';
 	import PokeballIcon from '$lib/images/pokeball.png';
 	import { page } from '$app/stores';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';

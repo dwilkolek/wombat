@@ -1,5 +1,5 @@
-import { invoke } from '@tauri-apps/api';
-import type { InvokeArgs } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
+import type { InvokeArgs } from '@tauri-apps/api/core';
 import { writable } from 'svelte/store';
 
 export const error = writable<string | undefined>();

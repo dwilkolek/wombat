@@ -13,7 +13,7 @@ fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
 const tauriConfPath = './src-tauri/tauri.conf.json';
 const tauriConfJson = JSON.parse(fs.readFileSync(tauriConfPath).toString('utf8'));
-tauriConfJson['package']['version'] = safeNewVersion;
+tauriConfJson['version'] = safeNewVersion;
 fs.writeFileSync(tauriConfPath, JSON.stringify(tauriConfJson, null, 2));
 
 const chromeExtensionPath = './chrome-extension/background.js';

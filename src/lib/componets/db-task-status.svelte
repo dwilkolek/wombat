@@ -24,15 +24,14 @@
 					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
 				}`}
 				on:click={() => {
-					task &&
-						execute(
-							'open_dbeaver',
-							{
-								db,
-								port: port
-							},
-							false
-						);
+					execute(
+						'open_dbeaver',
+						{
+							db,
+							port: port
+						},
+						false
+					);
 				}}
 			>
 				{port}

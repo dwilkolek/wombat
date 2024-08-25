@@ -9,7 +9,7 @@ use std::process::Command;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use tauri::Window;
+use tauri::{AppHandle, Emitter};
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tracing_unwrap::ResultExt;
@@ -22,7 +22,7 @@ use warp_reverse_proxy::{extract_request_data_filter, proxy_to_and_forward_respo
 #[allow(clippy::too_many_arguments)]
 pub async fn start_aws_ssm_proxy(
     arn: String,
-    window: Window,
+    app_handle: AppHandle,
     bastion: String,
     profile: String,
     region: String,
@@ -129,7 +129,7 @@ pub async fn start_aws_ssm_proxy(
             let kill_result = handle.send(());
             info!("Killing dependant job, success: {}", kill_result.is_ok());
         }
-        window
+        app_handle
             .emit("task-killed", TaskKilled { arn: arn.clone() })
             .unwrap_or_log();
         kill_pid_on_port(local_port).await;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { userStore } from '$lib/stores/user-store';
-	import { invoke } from '@tauri-apps/api';
+	import { invoke } from '@tauri-apps/api/core';
 
 	export let service_arn: string;
 </script>
