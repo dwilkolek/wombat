@@ -152,11 +152,12 @@ export type CustomHeader = {
 	encodeBase64: boolean;
 };
 
+export type TimeUnit = 'minutes' | 'hours';
 export type Timerange =
 	| {
 			type: 'relative';
 			amount: number;
-			unit: 'minutes' | 'hours';
+			unit: TimeUnit;
 	  }
 	| {
 			type: 'absolute';
