@@ -40,7 +40,7 @@ impl WombatApi {
         if self.ping().await {
             wombat_api_status = Err("Not authenticated".to_string());
             if self.auth().await {
-                wombat_api_status = Err("Your client is outdated".to_string());
+                wombat_api_status = Err("Requirements not met".to_string());
                 if self.is_feature_enabled(REQUIRED_FEATURE).await {
                     wombat_api_status = Ok("Connected".to_string());
                 }
