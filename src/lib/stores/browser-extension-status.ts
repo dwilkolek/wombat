@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { type BrowserExtensionStatus } from '../types';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 let timeout: number | undefined = undefined;
 const createExtensionStatus = () => {
 	const state = writable<BrowserExtensionStatus>({ connected: false, version: undefined });

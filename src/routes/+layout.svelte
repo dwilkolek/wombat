@@ -2,7 +2,7 @@
 	import './styles.css';
 	import ErrorBox from '$lib/componets/error-box.svelte';
 	import { loading } from '$lib/stores/error-store';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 </script>
 
 <div>

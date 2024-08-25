@@ -3,8 +3,8 @@
 	import { taskStore } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
-	import { invoke } from '@tauri-apps/api';
-	import { ask } from '@tauri-apps/api/dialog';
+	import { invoke } from '@tauri-apps/api/core';
+	import { ask } from '@tauri-apps/plugin-dialog';
 
 	export let database: RdsInstance;
 
@@ -18,7 +18,7 @@
 					title: 'Access to PRODUCTION database.',
 					okLabel: 'Proceed',
 					cancelLabel: 'Abort',
-					type: 'warning'
+					kind: 'warning'
 				}
 			);
 			if (!response) {

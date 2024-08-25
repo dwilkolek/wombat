@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { userStore } from '$lib/stores/user-store';
-	import { open } from '@tauri-apps/api/shell';
+	import { open } from '@tauri-apps/plugin-shell';
 
 	let user = $userStore;
 	let dbeaver_path = user?.dbeaver_path ?? '';

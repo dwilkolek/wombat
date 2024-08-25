@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import type { AwsEnv, RdsInstance } from '$lib/types';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 
 const createDbStore = () => {
 	const innerStore = writable(new Map<AwsEnv, RdsInstance[]>());

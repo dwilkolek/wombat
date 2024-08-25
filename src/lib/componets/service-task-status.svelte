@@ -2,7 +2,7 @@
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { EcsService } from '$lib/types';
-	import { open } from '@tauri-apps/api/shell';
+	import { open } from '@tauri-apps/plugin-shell';
 
 	export let task: Task | undefined;
 	export let service: EcsService;
@@ -18,7 +18,7 @@
 			<button
 				class={`link text-sm`}
 				on:click|preventDefault={() => {
-					task && open('http://localhost:' + task.port);
+					open('http://localhost:' + task.port);
 				}}
 				data-umami-event="browser_ecs_proxy_open"
 				data-umami-event-uid={$userStore.id}

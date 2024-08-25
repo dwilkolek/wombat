@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { taskStore } from '$lib/stores/task-store';
-	import { AwsEnv, type CustomHeader } from '$lib/types';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import type { AwsEnv, CustomHeader } from '$lib/types';
+	import { invoke } from '@tauri-apps/api/core';
 	import CustomHeaderForm from './custom-header-form.svelte';
-	import { message } from '@tauri-apps/api/dialog';
+	import { message } from '@tauri-apps/plugin-dialog';
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
@@ -223,7 +223,7 @@
 						header={{ encodeBase64: false, name: '', value: '' }}
 						onAdd={(header) => {
 							if (customHeaders.some((ch) => header.name.toLowerCase() == ch.name.toLowerCase())) {
-								message(`Header name needs to be unique`, { title: 'Ooops!', type: 'error' });
+								message(`Header name needs to be unique`, { title: 'Ooops!', kind: 'error' });
 								throw Error('invalid header');
 							}
 							customHeaders = [...customHeaders, header];
