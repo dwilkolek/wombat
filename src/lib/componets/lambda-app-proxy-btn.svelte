@@ -2,9 +2,9 @@
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { TaskStatus, taskStore } from '$lib/stores/task-store';
 	import type { AwsEnv, CustomHeader } from '$lib/types';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 	import CustomHeaderForm from './custom-header-form.svelte';
-	import { message } from '@tauri-apps/api/dialog';
+	import { message } from '@tauri-apps/plugin-dialog';
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 

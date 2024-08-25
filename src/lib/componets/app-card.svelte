@@ -62,7 +62,7 @@
 							data-umami-event="app_refresh"
 							data-umami-event-uid={$userStore.id}
 							on:click|preventDefault={() => {
-								details && allServiceDetailsStore.refreshOne(details.app);
+								allServiceDetailsStore.refreshOne(details.app);
 							}}
 						>
 							<svg

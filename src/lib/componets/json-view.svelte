@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { toPng } from 'html-to-image';
 	import JsonView from '$lib/componets/json-view.svelte';
-	import { writeText } from '@tauri-apps/api/clipboard';
+	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import { readable, type Readable } from 'svelte/store';
 
 	export let log: Readable<object | undefined>;

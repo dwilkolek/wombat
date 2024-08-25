@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { writeText } from '@tauri-apps/api/clipboard';
+	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
-	import { ask, message } from '@tauri-apps/api/dialog';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { ask, message } from '@tauri-apps/plugin-dialog';
+	import { invoke } from '@tauri-apps/api/core';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { userStore } from '$lib/stores/user-store';
@@ -28,7 +28,7 @@
 				if (copyToClipboard) {
 					await writeText(credentials.password);
 				}
-			} catch (e) {
+			} catch {
 				message(
 					`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?`,
 					{ title: 'Ooops!', type: 'error' }

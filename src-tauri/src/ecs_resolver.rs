@@ -1,7 +1,7 @@
 use crate::{aws, cache_db, shared::BError};
 use log::{info, warn};
 use std::{collections::HashMap, sync::Arc};
-use tauri::Window;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "ecs";
@@ -60,7 +60,7 @@ impl EcsResolver {
 
     pub async fn restart_service(
         &self,
-        window: Window,
+        app_handle: AppHandle,
         config: aws_config::SdkConfig,
         cluster_arn: String,
         service_name: String,
@@ -92,7 +92,7 @@ impl EcsResolver {
                         };
                     }
 
-                    let _ = window.emit(
+                    let _ = app_handle.emit(
                         "deployment",
                         DeplyomentStatus {
                             deployment_id: deployment_id.to_owned(),

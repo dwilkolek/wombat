@@ -7,13 +7,13 @@
 		type SsoProfile,
 		type EcsService
 	} from '$lib/types';
-	import { ask, message } from '@tauri-apps/api/dialog';
+	import { ask, message } from '@tauri-apps/plugin-dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { type CustomHeader } from '$lib/types';
 	import { taskStore, type NewTaskParams, TaskStatus } from '$lib/stores/task-store';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { invoke } from '@tauri-apps/api/core';
 	import { userStore } from '$lib/stores/user-store';
 
 	export let service: EcsService;
