@@ -1257,6 +1257,14 @@ async fn find_stream_names(
     let mut streams_marker = None;
     let mut done = HashSet::new();
 
+    let look_for_first_streams =
+        (Utc::now() - DateTime::from_timestamp_millis(start_date).unwrap()).num_minutes() < 60;
+    let required_stream_count = apps.len() * if group_name.contains("-prod-") { 2 } else { 1 };
+    info!(
+        "looking for stream names: apps={}, look_for_first_streams={look_for_first_streams} required_stream_count={required_stream_count}",
+        apps.join(",")
+    );
+
     loop {
         let describe_log_streams_response = client
             .describe_log_streams()
@@ -1309,13 +1317,13 @@ async fn find_stream_names(
                 };
 
                 info!(
-                    "matched: app={app}, overlaps={overlaps}, [{} -> {}] overlaps with criteria [{} -> {}]",
+                    "matched: app={app}, overlaps={overlaps}, look_for_first_streams={look_for_first_streams} [{} -> {}] overlaps with criteria [{} -> {}]",
                     i64_to_str(log_stream_start),
                     i64_to_str(log_stream_end),
                     i64_to_str(start_date),
                     i64_to_str(end_date),
                 );
-                if overlaps {
+                if overlaps || look_for_first_streams {
                     info!("stream {stream_name} matches name & timestamp criteria");
                     stream_names.push(stream_name.to_owned());
                     let mut log_search_monitor = log_search_monitor.lock().await;
@@ -1325,13 +1333,13 @@ async fn find_stream_names(
                     ));
                 }
 
-                if log_stream_end < start_date {
+                if log_stream_end < start_date || look_for_first_streams {
                     done.insert(app.clone());
                 }
             }
         }
 
-        if apps.len() == done.len() || streams_marker.is_none() {
+        if required_stream_count == done.len() || streams_marker.is_none() {
             break;
         }
     }
