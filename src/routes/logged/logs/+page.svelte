@@ -86,7 +86,7 @@
 						timerange.set({
 							type: 'relative',
 							amount: 30,
-							unit: 'hours'
+							unit: 'minutes'
 						});
 					}}>Last 30m</button
 				>
@@ -468,7 +468,7 @@
 			<div class={`h-[40vh] flex flex-col gap-2`}>
 				<div class={`text-sm overflow-auto h-[40vh]`}>
 					<div bind:this={jsonViewNode}>
-						<JsonView log={$selectedLog} nested={false} />
+						<JsonView log={selectedLog} nested={false} />
 					</div>
 				</div>
 			</div>
