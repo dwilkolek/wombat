@@ -2,6 +2,7 @@
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
+	import { readable } from 'svelte/store';
 
 	$: logPromise = invoke<string>('kv_get', { key: $page.url.searchParams.get('kvKey') });
 </script>
@@ -16,7 +17,7 @@
 	{:then logString}
 		{@const log = JSON.parse(logString)}
 		<div class="p-2">
-			<JsonView {log} nested={false} />
+			<JsonView log={readable(log)} nested={false} />
 		</div>
 	{/await}
 </div>
