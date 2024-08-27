@@ -2,38 +2,11 @@
 	import { toPng } from 'html-to-image';
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { writeText } from '@tauri-apps/api/clipboard';
-	export let log: object;
-	export let nested: boolean | null | undefined;
-	const priorityList = [
-		'app',
-		'level',
-		'timestamp',
-		'logger',
-		'message',
-		'thread',
-		'context',
-		'mdc'
-	];
-	const objToList = (obj: object): { key: string; value: unknown }[] => {
-		return Object.entries(obj).map(([k, v]) => {
-			return { key: k, value: v };
-		});
-	};
-	$: entries = objToList(log).sort((a, b) => {
-		const akey = a.key.split('.')[0];
-		const bkey = b.key.split('.')[0];
-		const aPos =
-			priorityList.indexOf(akey) > -1
-				? priorityList.indexOf(akey)
-				: 100 + JSON.stringify(a.value).length;
-		const bPos =
-			priorityList.indexOf(bkey) > -1
-				? priorityList.indexOf(bkey)
-				: 100 + JSON.stringify(b.value).length;
-		return aPos - bPos;
-	});
+	import { readable, type Readable } from 'svelte/store';
 
-	let container: HTMLDivElement;
+	export let log: Readable<object | undefined>;
+	export let nested: boolean | null | undefined;
+
 	enum Tag {
 		std,
 		dots,
@@ -46,19 +19,60 @@
 	} {
 		return { lines: [], sinceLastSpecial: 0, seenSpecial: false };
 	}
-	$: regeneratePng = () => {
+	function regeneratePng(): Promise<string> {
 		return new Promise<string>((resolve) => {
 			setTimeout(async () => {
-				const dataUrl = await toPng(container);
-				resolve(dataUrl);
+				if (container) {
+					const dataUrl = await toPng(container);
+					resolve(dataUrl);
+				}
 			}, 500);
 		});
-	};
+	}
+	function objToList(obj: object): { key: string; value: unknown }[] {
+		return Object.entries(obj).map(([k, v]) => {
+			return { key: k, value: v };
+		});
+	}
+	const priorityList = [
+		'app',
+		'level',
+		'timestamp',
+		'logger',
+		'message',
+		'thread',
+		'context',
+		'mdc'
+	];
+
+	let entries: { key: string; value: unknown }[] = [];
+
+	let container: HTMLDivElement;
+	let pngPromise = regeneratePng();
+
 	$: showCompactBtn =
 		!nested && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'));
 	$: compactStacktrace = true;
 	$: activeTags = compactStacktrace ? [Tag.std, Tag.dots] : [Tag.ext, Tag.std];
-	$: pngPromise = regeneratePng();
+
+	log.subscribe((log) => {
+		entries = objToList(log ?? {}).sort((a, b) => {
+			const akey = a.key.split('.')[0];
+			const bkey = b.key.split('.')[0];
+			const aPos =
+				priorityList.indexOf(akey) > -1
+					? priorityList.indexOf(akey)
+					: 100 + JSON.stringify(a.value).length;
+			const bPos =
+				priorityList.indexOf(bkey) > -1
+					? priorityList.indexOf(bkey)
+					: 100 + JSON.stringify(b.value).length;
+			return aPos - bPos;
+		});
+		if (!nested) {
+			pngPromise = regeneratePng();
+		}
+	});
 </script>
 
 <div class={`pr-36`}>
@@ -194,7 +208,7 @@
 									<span class="break-all">{value}</span>
 								{/if}
 							{:else if typeof value == 'object' && value != null}
-								<JsonView log={value} nested={true} />
+								<JsonView log={readable(value)} nested={true} />
 							{:else}
 								<span class="break-all">{JSON.stringify(value)}</span>
 							{/if}
