@@ -1,4 +1,4 @@
-use crate::shared::{self, BError, Env};
+use crate::shared::{arn_to_name, cluster_arn_to_name, BError, Env, TrackedName};
 use aws_config::{
     profile::{ProfileFileLoadError, ProfileSet},
     BehaviorVersion,
@@ -14,11 +14,7 @@ use chrono::prelude::*;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::{HashMap, HashSet},
-    error::Error,
-    sync::Arc,
-};
+use std::{collections::HashMap, error::Error, sync::Arc};
 use tokio::{process::Command, sync::RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use wait_timeout::ChildExt;
@@ -86,7 +82,7 @@ pub struct EcsService {
 pub struct ServiceDetails {
     pub timestamp: DateTime<Utc>,
     pub arn: String,
-    pub name: shared::TrackedName,
+    pub name: TrackedName,
     pub version: String,
     pub cluster_arn: String,
     pub env: Env,
@@ -97,7 +93,7 @@ pub struct ServiceDetails {
 pub struct ServiceDetailsMissing {
     pub timestamp: DateTime<Utc>,
     pub arn: String,
-    pub name: shared::TrackedName,
+    pub name: TrackedName,
     pub error: String,
     pub env: Env,
 }
@@ -847,7 +843,7 @@ pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
     for cluster_arn in cluster_arns {
         let env = Env::from_any(cluster_arn);
         clusters.push(Cluster {
-            name: shared::cluster_arn_to_name(cluster_arn),
+            name: cluster_arn_to_name(cluster_arn),
             arn: cluster_arn.clone(),
             env,
         });
@@ -886,7 +882,7 @@ pub async fn get_deploment_status(
     });
 
     match rollout_state {
-        Err(err) => Err(shared::BError::new("deployment_status", err.to_string())),
+        Err(err) => Err(BError::new("deployment_status", err.to_string())),
         Ok(rollout_state) => {
             rollout_state.ok_or(BError::new("deployment_status", "missing deployment"))
         }
@@ -916,10 +912,7 @@ pub async fn restart_service(
                 .and_then(|deployment| deployment.id());
             match deployment_id {
                 Some(deployment_id) => Ok(deployment_id.to_owned()),
-                None => Err(shared::BError::new(
-                    "restart_service",
-                    "missing deployment id",
-                )),
+                None => Err(BError::new("restart_service", "missing deployment id")),
             }
         }
         Err(err) => {
@@ -928,7 +921,7 @@ pub async fn restart_service(
                 service_name, cluster_arn, err
             );
             error!("Error: {error_msg}");
-            Err(shared::BError::new("restart_service", error_msg))
+            Err(BError::new("restart_service", error_msg))
         }
     }
 }
@@ -1016,7 +1009,7 @@ pub async fn service_detail(
             &service_arn, error_str
         );
         return Err(ServiceDetailsMissing {
-            name: shared::arn_to_name(&service_arn),
+            name: arn_to_name(&service_arn),
             timestamp: Utc::now(),
             env: Env::from_any(&service_arn),
             error: "Failed to describe service".to_owned(),
@@ -1044,7 +1037,7 @@ pub async fn service_detail(
             &service_arn, error_str
         );
         return Err(ServiceDetailsMissing {
-            name: shared::arn_to_name(&service_arn),
+            name: arn_to_name(&service_arn),
             timestamp: Utc::now(),
             env: Env::from_any(&service_arn),
             error: "Failed to fetch task definition".to_owned(),
@@ -1065,7 +1058,7 @@ pub async fn service_detail(
         .to_owned();
 
     Ok(ServiceDetails {
-        name: shared::arn_to_name(&service_arn),
+        name: arn_to_name(&service_arn),
         timestamp: Utc::now(),
         arn: service_arn.to_owned(),
         cluster_arn: service.cluster_arn().unwrap_or_log().to_owned(),
@@ -1255,13 +1248,13 @@ async fn find_stream_names(
 ) -> Result<Vec<String>, String> {
     let mut stream_names = vec![];
     let mut streams_marker = None;
-    let mut done = HashSet::new();
 
+    let log_stream_update_frequency_in_h = 4;
     let look_for_first_streams =
-        (Utc::now() - DateTime::from_timestamp_millis(start_date).unwrap()).num_minutes() < 60;
-    let required_stream_count = apps.len() * if group_name.contains("-prod-") { 2 } else { 1 };
+        (Utc::now() - DateTime::from_timestamp_millis(start_date).unwrap()).num_hours()
+            <= log_stream_update_frequency_in_h;
     info!(
-        "looking for stream names: apps={}, look_for_first_streams={look_for_first_streams} required_stream_count={required_stream_count}",
+        "looking for stream names: apps={}, look_for_first_streams={look_for_first_streams}",
         apps.join(",")
     );
 
@@ -1338,14 +1331,10 @@ async fn find_stream_names(
                         stream_names.len()
                     ));
                 }
-
-                if log_stream_end < start_date || look_for_first_streams {
-                    done.insert(app.clone());
-                }
             }
         }
 
-        if required_stream_count <= done.len() || streams_marker.is_none() || outdated_streams {
+        if streams_marker.is_none() || outdated_streams {
             break;
         }
     }
