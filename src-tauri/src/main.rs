@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance, SsoProfile};
+use aws::{Cluster, DbSecret, InfraProfile, LogEntry, LogMessageKey, RdsInstance, SsoProfile};
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
@@ -552,6 +552,137 @@ impl aws::LogSearchMonitor for FileNotifier {
     }
 }
 
+struct HtmlReportNotifier {
+    app_handle: AppHandle,
+    writer: BufWriter<fs::File>,
+    filename_location: String,
+    logs: Vec<aws::LogEntry>,
+}
+
+impl HtmlReportNotifier {
+    fn generate_report(&self) -> String {
+        let mut days = HashMap::new();
+
+        for log in self.logs.iter() {
+            let day = shared::to_date_str(log.timestamp);
+            if !days.contains_key(&day) {
+                days.insert(day.clone(), HashMap::new());
+            }
+            let groups = days.get_mut(&day).unwrap();
+            let json_message = serde_json::from_str::<LogMessageKey>(&log.message);
+            dbg!(&log.message, &json_message);
+            if let Ok(key) = json_message {
+                let jsondata = serde_json::to_string(log).unwrap_or_log();
+                if !groups.contains_key(&key) {
+                    groups.insert(key.clone(), vec![]);
+                }
+                let group_value = groups.get_mut(&key).unwrap();
+                group_value.push(jsondata);
+            }
+        }
+        let mut html = "<html>
+            <head>
+            </head>
+            <body>"
+            .to_owned();
+        for day in days.iter() {
+            html.push_str("<div class=\"day\">");
+            html.push_str(&format!("<h1>{}</h1>", day.0));
+            for group in day.1.iter() {
+                let group_key = group.0;
+                let group_logs = group.1;
+                let header = format!(
+                    "<h2>{} count={}  app={} level={}</h2>",
+                    group_key.message,
+                    group_logs.len(),
+                    group_key.app,
+                    group_key.level,
+                );
+                let entries = group_logs
+                    .iter()
+                    .map(|m| format!("<pre>{m}</pre>"))
+                    .collect::<Vec<_>>()
+                    .join("<br>");
+                html.push_str(&format!("{header}<br>{entries}"));
+            }
+
+            html.push_str("</div>");
+        }
+
+        html.push_str(
+            "</body>
+            </html>",
+        );
+
+        html
+    }
+}
+
+impl aws::LogSearchMonitor for HtmlReportNotifier {
+    fn notify(&mut self, logs: Vec<aws::LogEntry>) {
+        if let Some(log) = logs.first() {
+            let now = SystemTime::now();
+            let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+            let _ = self.app_handle.emit(
+                "new-log-found",
+                vec![LogEntry {
+                    log_stream_name: log.log_stream_name.to_owned(),
+                    ingestion_time: log.ingestion_time,
+                    timestamp: timestamp.as_millis() as i64,
+                    message: format!("INFO Recorded {} logs", logs.len()),
+                }],
+            );
+        }
+        self.logs.extend(logs);
+    }
+    fn success(&mut self, msg: String) {
+        let now = SystemTime::now();
+        let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+        let _ = self.app_handle.emit(
+            "new-log-found",
+            vec![LogEntry {
+                log_stream_name: "-".to_owned(),
+                ingestion_time: timestamp.as_millis() as i64,
+                timestamp: timestamp.as_millis() as i64,
+                message: format!("TRACE File: {}", self.filename_location),
+            }],
+        );
+        let _ = self.app_handle.emit("find-logs-success", msg);
+        self.writer.write_all(self.generate_report().as_bytes());
+        let _ = self.writer.flush();
+    }
+    fn error(&mut self, msg: String) {
+        let now = SystemTime::now();
+        let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+        let _ = self.app_handle.emit(
+            "new-log-found",
+            vec![LogEntry {
+                log_stream_name: "-".to_owned(),
+                ingestion_time: timestamp.as_millis() as i64,
+                timestamp: timestamp.as_millis() as i64,
+                message: format!("ERROR {}", msg),
+            }],
+        );
+        let _ = self.app_handle.emit("find-logs-error", msg);
+        self.writer.write_all(self.generate_report().as_bytes());
+        let _ = self.writer.flush();
+    }
+    fn message(&mut self, msg: String) {
+        let now = SystemTime::now();
+        let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
+        let _ = self.app_handle.emit(
+            "new-log-found",
+            vec![LogEntry {
+                log_stream_name: "-".to_owned(),
+                ingestion_time: timestamp.as_millis() as i64,
+                timestamp: timestamp.as_millis() as i64,
+                message: format!("INFO {}", msg.clone()),
+            }],
+        );
+        let _ = self.app_handle.emit("find-logs-message", msg);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn find_logs(
@@ -562,6 +693,7 @@ async fn find_logs(
     end: i64,
     filter: String,
     filename: Option<String>,
+    is_html_report: Option<bool>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -611,16 +743,16 @@ async fn find_logs(
                     let logs_dir = user.logs_dir.as_ref().unwrap_or_log().clone();
                     fs::create_dir_all(&logs_dir).unwrap_or_log();
                     let pathbuf =
-                        logs_dir.join(format!("{}-{}.log", filename, timestamp.as_millis()));
+                        logs_dir.join(format!("{}-{}.html", filename, timestamp.as_millis()));
                     let file = fs::File::create(pathbuf.clone()).unwrap_or_log();
-
-                    Arc::new(Mutex::new(FileNotifier {
+                    Arc::new(Mutex::new(HtmlReportNotifier {
                         app_handle,
                         writer: BufWriter::new(file),
                         filename_location: format!(
                             "{}",
                             fs::canonicalize(&pathbuf).unwrap_or_log().display()
                         ),
+                        logs: Vec::new(),
                     }))
                 }
             },
