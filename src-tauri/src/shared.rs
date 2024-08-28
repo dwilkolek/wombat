@@ -194,3 +194,12 @@ pub fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<
     }
     Ok(())
 }
+
+pub fn to_date_str(millis: i64) -> String {
+    return format!(
+        "{}",
+        DateTime::from_timestamp_millis(millis)
+            .unwrap()
+            .format("%Y-%m-%d")
+    );
+}

@@ -110,6 +110,13 @@ pub struct LogEntry {
     pub message: String,
 }
 
+#[derive(Deserialize, Debug, Clone, Hash, Eq, PartialEq)]
+pub struct LogMessageKey {
+    pub app: String,
+    pub level: String,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SupportLevel {
     Full,
@@ -1287,6 +1294,8 @@ async fn find_stream_names(
         let streams = data.log_streams.unwrap_or_default();
         let mut last_creation_dates = HashMap::new();
 
+        let mut outdated_streams = false;
+
         for stream in streams {
             let stream_name = stream.log_stream_name.unwrap_or_default();
 
@@ -1311,6 +1320,12 @@ async fn find_stream_names(
                     start_date,
                     end_date,
                 );
+
+                outdated_streams = outdated_streams
+                    || (DateTime::from_timestamp_millis(start_date).unwrap()
+                        - DateTime::from_timestamp_millis(log_stream_end).unwrap())
+                    .num_days()
+                        > 30;
 
                 if last_known_creation_time > log_stream_end {
                     last_creation_dates.insert(app.clone(), log_stream_end);
@@ -1338,8 +1353,7 @@ async fn find_stream_names(
                 }
             }
         }
-
-        if required_stream_count == done.len() || streams_marker.is_none() {
+        if required_stream_count <= done.len() || streams_marker.is_none() || outdated_streams {
             break;
         }
     }
