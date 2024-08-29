@@ -1309,8 +1309,8 @@ async fn find_stream_names(
                 outdated_streams = outdated_streams
                     || (DateTime::from_timestamp_millis(start_date).unwrap()
                         - DateTime::from_timestamp_millis(log_stream_end).unwrap())
-                    .num_days()
-                        > 7;
+                    .num_hours()
+                        > 12;
                 if last_known_creation_time > log_stream_end {
                     last_creation_dates.insert(app.clone(), log_stream_end);
                 };
