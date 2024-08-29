@@ -8,10 +8,12 @@
 	import { ask } from '@tauri-apps/api/dialog';
 
 	export let database: RdsInstance;
-
-	$: isStartButtonDisabled = $taskStore.some(
-		(t) => t.arn == database.arn && t.status == TaskStatus.STARTING
+	$: prodProxyDisabled = database.env === AwsEnv.PROD && !$featuresStore.prodActionsEnabled;
+	$: isStarting = $taskStore.some((t) => t.arn == database.arn && t.status == TaskStatus.STARTING);
+	$: missingInfraProfile = !$wombatProfileStore.infraProfiles.some(
+		({ app, env }) => app == database.normalized_name && env == database.env
 	);
+	$: isStartButtonDisabled = prodProxyDisabled || isStarting || missingInfraProfile;
 
 	const startDbProxy = async () => {
 		if (database?.env == AwsEnv.PROD) {
@@ -34,8 +36,8 @@
 	};
 </script>
 
-{#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database.normalized_name && env == database.env)}
-	<div class="tooltip tooltip-left" data-tip="Start proxy">
+{#if $featuresStore.devWay || !isStartButtonDisabled}
+	<div class="tooltip tooltip-left" data-tip={'Start proxy'}>
 		<button
 			data-umami-event="rds_proxy_start"
 			data-umami-event-uid={$userStore.id}
@@ -73,7 +75,16 @@
 		</button>
 	</div>
 {:else}
-	<div class="tooltip tooltip-left" data-tip={`Missing aws profile: ${database.normalized_name}`}>
+	<div
+		class="tooltip tooltip-left"
+		data-tip={isStarting
+			? 'Starting...'
+			: missingInfraProfile
+				? `Missing aws profile: ${database.normalized_name}`
+				: prodProxyDisabled
+					? 'Actions against prod disabled'
+					: 'Disabled'}
+	>
 		<button class="flex flex-row gap-1 opacity-30" disabled>
 			<div class="w-5 h-5 relative">
 				<svg

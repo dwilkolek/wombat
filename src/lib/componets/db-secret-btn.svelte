@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { writeText } from '@tauri-apps/api/clipboard';
-	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
+	import { AwsEnv, type DatabaseCredentials, type RdsInstance } from '$lib/types';
 	import { ask, message } from '@tauri-apps/api/dialog';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
@@ -8,6 +8,12 @@
 	import { userStore } from '$lib/stores/user-store';
 	export let database: RdsInstance | undefined;
 
+	$: disableBecauseMissingProdActionsFs =
+		database?.env === AwsEnv.PROD && !$featuresStore.prodActionsEnabled;
+	$: missingInfraProfile = !$wombatProfileStore.infraProfiles.some(
+		({ app, env }) => app == database?.normalized_name && env == database?.env
+	);
+	$: isDisabled = disableBecauseMissingProdActionsFs || missingInfraProfile;
 	const credentialsHandler = async () => {
 		let answer = await ask(
 			'Are you alone and not sharing screen?\nAccess to credentials is recorded.\nRequires access to Secret Manager.',
@@ -39,7 +45,7 @@
 </script>
 
 {#if database}
-	{#if $featuresStore.devWay || $wombatProfileStore.infraProfiles.some(({ app, env }) => app == database?.normalized_name && env == database?.env)}
+	{#if $featuresStore.devWay || !isDisabled}
 		<div class="tooltip tooltip-left" data-tip="Search for secret">
 			<button
 				on:click={credentialsHandler}
@@ -61,7 +67,14 @@
 			</button>
 		</div>
 	{:else}
-		<div class="tooltip tooltip-left" data-tip={`Missing aws profile: ${database.normalized_name}`}>
+		<div
+			class="tooltip tooltip-left"
+			data-tip={disableBecauseMissingProdActionsFs
+				? 'Actions against prod disabled'
+				: missingInfraProfile
+					? `Missing aws profile: ${database.normalized_name}`
+					: 'Disabled'}
+		>
 			<button class="opacity-30" disabled>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

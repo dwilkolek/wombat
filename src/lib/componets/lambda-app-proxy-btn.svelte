@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { TaskStatus, taskStore } from '$lib/stores/task-store';
-	import type { AwsEnv, CustomHeader } from '$lib/types';
+	import { AwsEnv, type CustomHeader } from '$lib/types';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/api/dialog';
@@ -11,8 +11,10 @@
 	export let app: string;
 	export let env: AwsEnv;
 	const lambdaArn = `lambdaApp::${app}::${env.toLowerCase()}`;
+	$: prodProxyDisabled = env === AwsEnv.PROD && !$featuresStore.prodActionsEnabled;
 	$: isStartButtonDisabled =
 		!$featuresStore.lambdaApps ||
+		prodProxyDisabled ||
 		$taskStore.some((t) => t.arn == lambdaArn && t.status == TaskStatus.STARTING);
 
 	$: port = $taskStore?.find((t) => {
@@ -74,7 +76,9 @@
 	<div
 		class="tooltip tooltip-left h-[20px]"
 		data-tip={isStartButtonDisabled
-			? 'Missing lambda-apps permission to start proxy'
+			? prodProxyDisabled
+				? 'Not allowed to start proxy to prod environment'
+				: 'Missing lambda-apps permission to start proxy'
 			: 'Start proxy'}
 	>
 		<button

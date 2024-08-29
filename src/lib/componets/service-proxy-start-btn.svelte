@@ -38,9 +38,13 @@
 	$: matchingInfraProfiles =
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
 		[];
+
+	$: disableBecauseMissingProdActionsFs =
+		service.env === AwsEnv.PROD && !$featuresStore.prodActionsEnabled;
+	$: isStarting = $taskStore.some((t) => t.arn == service.arn && t.status == TaskStatus.STARTING);
+	$: missingInfraProfile = matchingInfraProfiles.length === 0;
 	$: isStartButtonDisabled =
-		matchingInfraProfiles.length === 0 ||
-		$taskStore.some((t) => t.arn == service.arn && t.status == TaskStatus.STARTING);
+		disableBecauseMissingProdActionsFs || missingInfraProfile || isStarting;
 
 	$: proxyAuthConfigsForThisService = $proxyAuthConfigsStore.filter(
 		(config) => config.env == service.env && config.toApp == service.name
@@ -105,11 +109,19 @@
 
 <div
 	class="tooltip tooltip-left h-[20px]"
-	data-tip={isStartButtonDisabled ? 'Missing role allowing to setup proxy' : 'Start proxy'}
+	data-tip={isStartButtonDisabled
+		? disableBecauseMissingProdActionsFs
+			? 'Actions against prod disabled'
+			: missingInfraProfile
+				? 'Missing role allowing to setup proxy'
+				: isStarting
+					? 'Starting'
+					: 'Disabled'
+		: 'Start proxy'}
 >
 	<button
 		disabled={isStartButtonDisabled}
-		class={`flex flex-row gap-1 items-center cursor-pointer ${isStartButtonDisabled ? 'opacity-30' : ''}`}
+		class={`flex flex-row gap-1 items-center ${isStartButtonDisabled ? 'opacity-30' : 'cursor-pointer'}`}
 		on:click={() => dialog.show()}
 	>
 		<div class="w-5 h-5 relative">
