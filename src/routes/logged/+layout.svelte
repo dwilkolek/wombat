@@ -3,6 +3,7 @@
 	import WombatIcon from '$lib/images/128x128.png';
 	import PikachuIcon from '$lib/images/pikachu.png';
 	import PsyduckIcon from '$lib/images/psyduck.png';
+	import PokeballIcon from '$lib/images/pokeball.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { execute } from '$lib/stores/error-store';
@@ -22,6 +23,8 @@
 		}
 	};
 	$: userConfig = $userStore;
+
+	$: refetchFsPromise = featuresStore.refreshFeatures();
 </script>
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between px-3 sticky top-0 z-50">
@@ -81,11 +84,23 @@
 			</span>
 		</div>
 
-		{#if $featuresStore.devWay}
-			<img class="h-6" alt="dev-way" src={PikachuIcon} />
-		{:else}
-			<img class="h-6" alt="platform-way" src={PsyduckIcon} />
-		{/if}
+		{#await refetchFsPromise}
+			<button disabled={true}>
+				<img class="h-6" alt="In progress" src={PokeballIcon} />
+			</button>
+		{:then}
+			<button
+				on:click={() => {
+					refetchFsPromise = featuresStore.refreshFeatures();
+				}}
+			>
+				{#if $featuresStore.devWay}
+					<img class="h-6" alt="dev-way" src={PikachuIcon} />
+				{:else}
+					<img class="h-6" alt="platform-way" src={PsyduckIcon} />
+				{/if}
+			</button>
+		{/await}
 
 		<div class="flex items-center gap-2">
 			<span>{userConfig.last_used_profile}</span>
