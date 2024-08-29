@@ -12,9 +12,10 @@
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { type CustomHeader } from '$lib/types';
-	import { taskStore, type NewTaskParams, TaskStatus } from '$lib/stores/task-store';
+	import { taskStore, type NewTaskParams } from '$lib/stores/task-store';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import { userStore } from '$lib/stores/user-store';
+	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
 
 	export let service: EcsService;
 	let dialog: HTMLDialogElement;
@@ -38,9 +39,8 @@
 	$: matchingInfraProfiles =
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
 		[];
-	$: isStartButtonDisabled =
-		matchingInfraProfiles.length === 0 ||
-		$taskStore.some((t) => t.arn == service.arn && t.status == TaskStatus.STARTING);
+
+	$: disabledReason = startEcsProxyDisabledReason(service);
 
 	$: proxyAuthConfigsForThisService = $proxyAuthConfigsStore.filter(
 		(config) => config.env == service.env && config.toApp == service.name
@@ -103,13 +103,10 @@
 	};
 </script>
 
-<div
-	class="tooltip tooltip-left h-[20px]"
-	data-tip={isStartButtonDisabled ? 'Missing role allowing to setup proxy' : 'Start proxy'}
->
+<div class="tooltip tooltip-left h-[20px]" data-tip={$disabledReason ?? 'Start proxy'}>
 	<button
-		disabled={isStartButtonDisabled}
-		class={`flex flex-row gap-1 items-center cursor-pointer ${isStartButtonDisabled ? 'opacity-30' : ''}`}
+		disabled={!!$disabledReason}
+		class={`flex flex-row gap-1 items-center ${$disabledReason ? 'opacity-30' : 'cursor-pointer'}`}
 		on:click={() => dialog.show()}
 	>
 		<div class="w-5 h-5 relative">
