@@ -1,21 +1,18 @@
 <script lang="ts">
 	import { featuresStore } from '$lib/stores/feature-store';
-	import { TaskStatus, taskStore } from '$lib/stores/task-store';
+	import { taskStore } from '$lib/stores/task-store';
 	import { AwsEnv, type CustomHeader } from '$lib/types';
 	import { invoke } from '@tauri-apps/api/tauri';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/api/dialog';
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
 
 	export let app: string;
 	export let env: AwsEnv;
 	const lambdaArn = `lambdaApp::${app}::${env.toLowerCase()}`;
-	$: prodProxyDisabled = env === AwsEnv.PROD && !$featuresStore.prodActionsEnabled;
-	$: isStartButtonDisabled =
-		!$featuresStore.lambdaApps ||
-		prodProxyDisabled ||
-		$taskStore.some((t) => t.arn == lambdaArn && t.status == TaskStatus.STARTING);
+	$: disabledReason = startLambdaProxyDisabledReason(lambdaArn, env);
 
 	$: port = $taskStore?.find((t) => {
 		return t.arn === lambdaArn;
@@ -73,17 +70,10 @@
 </script>
 
 {#if !port}
-	<div
-		class="tooltip tooltip-left h-[20px]"
-		data-tip={isStartButtonDisabled
-			? prodProxyDisabled
-				? 'Not allowed to start proxy to prod environment'
-				: 'Missing lambda-apps permission to start proxy'
-			: 'Start proxy'}
-	>
+	<div class="tooltip tooltip-left h-[20px]" data-tip={$disabledReason ?? 'Start proxy'}>
 		<button
-			disabled={isStartButtonDisabled}
-			class={`flex flex-row gap-1 items-center cursor-pointer ${isStartButtonDisabled ? 'opacity-30' : ''}`}
+			disabled={!!$disabledReason}
+			class={`flex flex-row gap-1 items-center cursor-pointer ${$disabledReason ? 'opacity-30' : ''}`}
 			on:click={() => dialog.show()}
 		>
 			<div class="w-5 h-5 relative">
