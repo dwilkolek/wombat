@@ -51,6 +51,10 @@
 	let details: HTMLDetailsElement;
 	let open = false;
 
+	function setTimeUnit(value: string) {
+		unit = value as TimeUnit;
+	}
+
 	function reset() {
 		const storedRange = get(range);
 		type = storedRange.type;
@@ -111,9 +115,7 @@
 					<div class="grow">
 						Unit: <select
 							class="input input-sm input-bordered w-full"
-							on:change={(event) => {
-								unit = event.currentTarget.value;
-							}}
+							on:change={(event) => setTimeUnit(event.currentTarget.value)}
 						>
 							<option value="minutes" selected={unit == 'minutes'}>Minute</option>
 							<option value="hours" selected={unit == 'hours'}>Hour</option>
