@@ -1,6 +1,10 @@
 {
 	"name": "wombat",
 	"version": "4.2.22",
+	"engines": {
+		"npm": ">=10.0.0",
+		"node": ">=20.0.0"
+	},
 	"scripts": {
 		"start": "tauri dev",
 		"dev": "vite dev",
@@ -9,48 +13,57 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
+		"eslint": "eslint",
 		"format": "prettier --write .",
 		"tauri": "tauri",
 		"bump-version": "node bump-version.js"
 	},
 	"dependencies": {
-		"@tauri-apps/api": "1.6.0",
+		"@tauri-apps/api": "^2.0.0-rc.4",
+		"@tauri-apps/plugin-clipboard-manager": "^2.0.0-rc.0",
+		"@tauri-apps/plugin-dialog": "^2.0.0-rc.0",
+		"@tauri-apps/plugin-process": "^2.0.0-rc.0",
+		"@tauri-apps/plugin-shell": "^2.0.0-rc.0",
+		"@tauri-apps/plugin-updater": "^2.0.0-rc.0",
 		"daisyui": "4.12.10",
 		"date-fns": "3.6.0",
 		"html-to-image": "^1.11.11"
 	},
 	"devDependencies": {
-		"@fontsource/fira-mono": "5.0.13",
+		"@eslint/eslintrc": "^3.1.0",
+		"@eslint/js": "^9.9.1",
+		"@fontsource/fira-mono": "5.0.14",
 		"@neoconfetti/svelte": "2.2.1",
-		"@sveltejs/adapter-auto": "3.2.2",
-		"@sveltejs/adapter-static": "3.0.2",
-		"@sveltejs/kit": "2.5.20",
-		"@tauri-apps/cli": "1.6.0",
+		"@sveltejs/adapter-auto": "3.2.4",
+		"@sveltejs/adapter-static": "3.0.4",
+		"@sveltejs/kit": "2.5.25",
+		"@tauri-apps/cli": "^2.0.0-rc.8",
 		"@types/cookie": "0.6.0",
 		"@types/gtag.js": "0.0.20",
-		"@typescript-eslint/eslint-plugin": "7.13.1",
-		"@typescript-eslint/parser": "7.13.1",
+		"@typescript-eslint/eslint-plugin": "8.3.0",
+		"@typescript-eslint/parser": "8.3.0",
 		"autoprefixer": "10.4.20",
-		"eslint": "8.57.0",
+		"eslint": "9.9.1",
 		"eslint-config-prettier": "9.1.0",
 		"eslint-plugin-svelte": "2.43.0",
-		"postcss": "8.4.40",
+		"globals": "^15.9.0",
+		"postcss": "8.4.41",
 		"postcss-load-config": "6.0.1",
 		"prettier": "3.3.3",
 		"prettier-plugin-svelte": "3.2.6",
-		"svelte": "4.2.18",
-		"svelte-check": "3.8.5",
+		"svelte": "4.2.19",
+		"svelte-check": "3.8.6",
 		"svelte-icon": "2.1.1",
 		"svelte-preprocess": "6.0.2",
-		"tailwindcss": "3.4.7",
-		"tslib": "2.6.3",
+		"tailwindcss": "3.4.10",
+		"tslib": "2.7.0",
 		"typescript": "5.5.4",
-		"vite": "5.3.5"
+		"vite": "5.4.2"
 	},
 	"type": "module",
 	"optionalDependencies": {
-		"@rollup/rollup-darwin-arm64": "^4.18.0",
-		"@rollup/rollup-linux-x64-gnu": "^4.18.0",
-		"@rollup/rollup-win32-x64-msvc": "^4.18.0"
+		"@rollup/rollup-darwin-arm64": "^4.21.0",
+		"@rollup/rollup-linux-x64-gnu": "^4.21.0",
+		"@rollup/rollup-win32-x64-msvc": "^4.21.0"
 	}
 }

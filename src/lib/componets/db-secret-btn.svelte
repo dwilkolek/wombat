@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { writeText } from '@tauri-apps/api/clipboard';
-	import { type DatabaseCredentials, type RdsInstance } from '$lib/types';
-	import { ask, message } from '@tauri-apps/api/dialog';
-	import { invoke } from '@tauri-apps/api/tauri';
+	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
+	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
+	import { ask, message } from '@tauri-apps/plugin-dialog';
+	import { invoke } from '@tauri-apps/api/core';
 	import { userStore } from '$lib/stores/user-store';
 	import { getRdsSecretDisabledReason } from '$lib/stores/reasons';
 
@@ -16,7 +16,7 @@
 				title: 'Are you alone?',
 				okLabel: "It's safe!",
 				cancelLabel: 'No',
-				type: 'warning'
+				kind: 'warning'
 			}
 		);
 		if (answer) {
@@ -29,10 +29,10 @@
 				if (copyToClipboard) {
 					await writeText(credentials.password);
 				}
-			} catch (e) {
+			} catch {
 				message(
 					`Credentials not found for ${database?.name}.\n Did you configure profile for ${database?.name} database?`,
-					{ title: 'Ooops!', type: 'error' }
+					{ title: 'Ooops!', kind: 'error' }
 				);
 			}
 		}
