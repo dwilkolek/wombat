@@ -16,12 +16,13 @@ type LogStyle = {
 };
 
 type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'TRACE' | 'DEBUG' | 'UNKNOWN';
+export type LogData = { [key: string]: unknown };
 type UiLogEntry = {
 	id: number;
 	message: string;
 	level: LogLevel;
 	timestamp: number;
-	data: object;
+	data: LogData;
 	style: LogStyle;
 	app: string;
 };
@@ -119,7 +120,7 @@ function logStyle(level: LogLevel): LogStyle {
 	}
 }
 const createLogStore = () => {
-	const selectedLog = writable<object | undefined>(undefined);
+	const selectedLog = writable<LogData | undefined>(undefined);
 	const timerange = writable<Timerange>({
 		type: 'relative',
 		amount: 30,

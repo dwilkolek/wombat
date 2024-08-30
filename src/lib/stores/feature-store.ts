@@ -3,7 +3,8 @@ import { listen } from '@tauri-apps/api/event';
 import { writable } from 'svelte/store';
 
 const createFeatureStore = () => {
-	const features = writable({
+	const defaultFs = {
+		loading: true,
 		devWay: false,
 		restartEcsService: false,
 		startEcsProxy: false,
@@ -13,9 +14,11 @@ const createFeatureStore = () => {
 		proxyCustomHeaders: false,
 		lambdaApps: false,
 		prodActionsEnabled: false
-	});
+	};
+	const features = writable(defaultFs);
 
 	async function refreshFeatures() {
+		features.set(defaultFs);
 		return Promise.all([
 			invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
 			invoke<boolean>('is_feature_enabled', { feature: 'restart-ecs-service' }),
@@ -39,6 +42,7 @@ const createFeatureStore = () => {
 				prodActionsEnabled
 			]) => {
 				const newFs = {
+					loading: false,
 					devWay,
 					restartEcsService,
 					startEcsProxy,

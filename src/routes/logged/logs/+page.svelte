@@ -4,7 +4,7 @@
 	import { serviceStore } from '$lib/stores/service-store';
 	import { invoke } from '@tauri-apps/api/core';
 	import { beforeNavigate } from '$app/navigation';
-	import { logStore } from '$lib/stores/log-store';
+	import { logStore, type LogData } from '$lib/stores/log-store';
 	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
 	import { userStore } from '$lib/stores/user-store';
 	import JsonView from '$lib/componets/json-view.svelte';
@@ -33,7 +33,7 @@
 	};
 	$: filters = invoke<LogFilter[]>('log_filters');
 
-	const openLogInNewWindow = async (log: unknown) => {
+	const openLogInNewWindow = async (log: LogData) => {
 		const key = await invoke<string>('kv_put', { value: JSON.stringify(log) });
 
 		try {
@@ -49,7 +49,7 @@
 				minWidth: 1440,
 				title: `${log['app'] ?? 'Unknown'} #${key}`
 			});
-			view.once('tauri://error', function (args) {
+			view.once('tauri://error', function (args: unknown) {
 				console.warn('error', args);
 			});
 		} catch (e) {
@@ -440,7 +440,11 @@
 						data-umami-event="log_open_in_window"
 						data-umami-event-uid={$userStore.id}
 						class="btn btn-circle btn-xs"
-						on:click={() => openLogInNewWindow($selectedLog)}
+						on:click={() => {
+							if ($selectedLog) {
+								openLogInNewWindow($selectedLog);
+							}
+						}}
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
