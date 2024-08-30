@@ -2,7 +2,7 @@
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { AwsEnv } from '$lib/types';
-	import { open } from '@tauri-apps/api/shell';
+	import { open } from '@tauri-apps/plugin-shell';
 
 	export let task: Task | undefined;
 	export let app: string;
@@ -21,7 +21,7 @@
 				data-umami-event-uid={$userStore.id}
 				class={`link text-sm`}
 				on:click|preventDefault={() => {
-					task && open('http://localhost:' + task.port);
+					open('http://localhost:' + task.port);
 				}}
 			>
 				{task.port}</button

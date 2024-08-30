@@ -1,5 +1,5 @@
 import type { AwsEnv, Timerange } from '$lib/types';
-import { invoke } from '@tauri-apps/api';
+import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { format } from 'date-fns';
 import { writable, get } from 'svelte/store';
@@ -38,7 +38,7 @@ function transformLog(newLog: LogEntry) {
 				isString = true;
 			}
 		}
-	} catch (e) {
+	} catch {
 		isString = true;
 	}
 	let app = '-';

@@ -1,6 +1,6 @@
 import type { ProxyAuthConfig } from '$lib/types';
 import { listen } from '@tauri-apps/api/event';
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from '@tauri-apps/api/core';
 import { writable } from 'svelte/store';
 
 const createProxyAuthConfigsStore = () => {
