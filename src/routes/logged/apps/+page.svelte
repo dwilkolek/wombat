@@ -28,7 +28,7 @@
 </svelte:head>
 <div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
 	<form
-		class="flex flex-row gap-1 mb-2"
+		class="flex flex-row gap-2 mb-2"
 		on:submit|preventDefault={async () => {
 			discovered = invoke('discover', { name: discoverValue });
 		}}
@@ -41,10 +41,10 @@
 			spellcheck="false"
 			placeholder="Discover by name"
 			bind:value={discoverValue}
-			class="input input-bordered w-full max-w-xs"
+			class="input input-bordered w-full max-w-xs input-sm"
 		/>
 		<button
-			class="btn btn-primary"
+			class="btn btn-primary btn-sm"
 			type="submit"
 			data-umami-event="app_search_start"
 			data-umami-event-uid={$userStore.id}
@@ -53,7 +53,7 @@
 		</button>
 		{#if discovered}
 			<button
-				class="btn btn-secondary"
+				class="btn btn-secondary btn-sm"
 				type="button"
 				data-umami-event="app_search_reset"
 				data-umami-event-uid={$userStore.id}

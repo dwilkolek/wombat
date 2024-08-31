@@ -23,8 +23,6 @@
 		}
 	};
 	$: userConfig = $userStore;
-
-	$: refetchFsPromise = featuresStore.refreshFeatures();
 </script>
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between px-3 sticky top-0 z-50">
@@ -84,15 +82,15 @@
 			</span>
 		</div>
 
-		{#await refetchFsPromise}
+		{#if $featuresStore.loading}
 			<button disabled={true}>
 				<img class="h-6" alt="In progress" src={PokeballIcon} />
 			</button>
-		{:then}
+		{:else}
 			<button
-				on:click={() => {
-					refetchFsPromise = featuresStore.refreshFeatures();
-				}}
+				on:click={featuresStore.refreshFeatures}
+				data-umami-event="fs_refresh"
+				data-umami-event-uid={userConfig.id}
 			>
 				{#if $featuresStore.devWay}
 					<img class="h-6" alt="dev-way" src={PikachuIcon} />
@@ -100,7 +98,7 @@
 					<img class="h-6" alt="platform-way" src={PsyduckIcon} />
 				{/if}
 			</button>
-		{/await}
+		{/if}
 
 		<div class="flex items-center gap-2">
 			<span>{userConfig.last_used_profile}</span>
