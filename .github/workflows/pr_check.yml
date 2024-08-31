@@ -60,7 +60,9 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
       - name: lint
-        run: npm run lint
+        run: |
+          npm run lint
+          npm run check
       - uses: tauri-apps/tauri-action@v0
         env:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
