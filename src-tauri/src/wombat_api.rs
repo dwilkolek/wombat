@@ -107,6 +107,23 @@ impl WombatApi {
         false
     }
 
+    pub async fn all_features_enabled(&self) -> Vec<String> {
+        log::info!("checking all_features_enabled");
+        if let Some(client) = self.client() {
+            let response = client
+                .get(format!("{}/api/features", self.url))
+                .send()
+                .await;
+            if let Ok(response) = response {
+                if let Ok(body) = response.json::<Vec<String>>().await {
+                    return body;
+                }
+            }
+        }
+
+        Vec::new()
+    }
+
     pub async fn log_filters(&self) -> Vec<LogFilter> {
         log::info!("getting log filters");
         if let Some(client) = self.client() {
