@@ -2,6 +2,20 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { writable } from 'svelte/store';
 
+const featureMap: { [key: string]: string } = {
+	'dev-way': 'devWay',
+	'restart-ecs-service': 'restartEcsService',
+	'start-ecs-proxy': 'startEcsProxy',
+	'start-rds-proxy': 'startRdsProxy',
+	'start-lambda-proxy': 'startLambdaProxy',
+	'get-rds-secret': 'getRdsSecret',
+	'proxy-custom-headers': 'proxyCustomHeaders',
+	'lambda-apps': 'lambdaApps',
+	'ecs-prod-actions': 'ecsProdActions',
+	'rds-prod-actions': 'rdsProdActions',
+	'lambda-prod-actions': 'lambdaProdActions'
+};
+
 const createFeatureStore = () => {
 	const defaultFs = {
 		loading: true,
@@ -13,49 +27,31 @@ const createFeatureStore = () => {
 		getRdsSecret: false,
 		proxyCustomHeaders: false,
 		lambdaApps: false,
-		prodActionsEnabled: false
+		ecsProdActions: false,
+		rdsProdActions: false,
+		lambdaProdActions: false
 	};
 	const features = writable(defaultFs);
 
 	async function refreshFeatures() {
 		features.set(defaultFs);
-		return Promise.all([
-			invoke<boolean>('is_feature_enabled', { feature: 'dev-way' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'restart-ecs-service' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'start-ecs-proxy' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'start-rds-proxy' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'start-lambda-proxy' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'get-rds-secret' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'proxy-custom-headers' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'lambda-apps' }),
-			invoke<boolean>('is_feature_enabled', { feature: 'prod-actions-enabled' })
-		]).then(
-			([
-				devWay,
-				restartEcsService,
-				startEcsProxy,
-				startRdsProxy,
-				startLambdaProxy,
-				getRdsSecret,
-				proxyCustomHeaders,
-				lambdaApps,
-				prodActionsEnabled
-			]) => {
+		invoke<string[]>('all_features_enabled').then((fs) => {
+			features.update((prev) => {
 				const newFs = {
+					...prev,
 					loading: false,
-					devWay,
-					restartEcsService,
-					startEcsProxy,
-					startRdsProxy,
-					startLambdaProxy,
-					getRdsSecret,
-					proxyCustomHeaders,
-					lambdaApps,
-					prodActionsEnabled
+					...fs.reduce((acc, v) => {
+						if (!featureMap[v]) {
+							console.warn(`Unknown feature: ${v}`);
+							return acc;
+						}
+						return { ...acc, [featureMap[v] ?? v]: true };
+					}, {})
 				};
-				features.set(newFs);
-			}
-		);
+				console.log(newFs);
+				return newFs;
+			});
+		});
 	}
 	refreshFeatures();
 	listen('cache-refreshed', () => {
