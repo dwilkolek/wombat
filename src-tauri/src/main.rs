@@ -1182,6 +1182,14 @@ async fn is_feature_enabled(
 }
 
 #[tauri::command]
+async fn all_features_enabled(
+    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+) -> Result<Vec<String>, BError> {
+    let wombat_api = wombat_api_instance.0.read().await;
+    Ok(wombat_api.all_features_enabled().await)
+}
+
+#[tauri::command]
 async fn check_dependencies(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
@@ -1511,6 +1519,7 @@ async fn main() {
             log_filters,
             proxy_auth_configs,
             is_feature_enabled,
+            all_features_enabled,
             ping,
             check_dependencies,
             available_infra_profiles,
