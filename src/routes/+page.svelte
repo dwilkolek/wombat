@@ -11,6 +11,7 @@
 	import type { WombatAwsProfile } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	import UpdateBtn from '$lib/componets/update-btn.svelte';
+	import FeatureBtn from '$lib/componets/feature-btn.svelte';
 
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
@@ -218,9 +219,9 @@
 					>https://github.com/dwilkolek/wombat v{version}
 				</a>
 			</div>
-			<div class="flex gap-1">
-				<span>User Id:</span>
-				<pre>{userId}</pre>
+			<div class="flex gap-1 items-center">
+				<FeatureBtn />
+				<span class="text-sm">User Id: {userId}</span>
 			</div>
 		</div>
 	</div>

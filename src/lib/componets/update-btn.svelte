@@ -79,7 +79,7 @@
 				{/if}
 			</button>
 		{:else}
-			<span>You're up to date, thanks! 🎉</span>
+			<span>🎉 You're up to date, thanks!</span>
 		{/if}
 	{/await}
 </div>
