@@ -1014,17 +1014,6 @@ async fn start_service_proxy(
         })];
 
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
-        // let source_app_profile = proxy_auth_config.from_app.clone();
-        // let (mut source_app_profile, mut source_app_config) = aws_config_provider
-        //     .app_config(&source_app_profile, &service.env)
-        //     .await
-        //     .expect("Missing sdk_config to setup auth interceptor");
-        // if aws_config_provider.dev_way {
-        //     (source_app_profile, source_app_config) =
-        //         aws_config_provider.sso_config(&service.env).await;
-        // }
-        //
-
         let (source_app_profile, source_app_config) = aws_config_provider
             .with_dev_way_check(&infra_profile, &sso_profile)
             .await
@@ -1537,46 +1526,6 @@ async fn main() {
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");
     app.run(|_handle, _event| {});
-    // app.run(|_app_handle, event| {
-    //     if let tauri::RunEvent::Updater(updater_event) = event {
-    //         match updater_event {
-    //             tauri::UpdaterEvent::UpdateAvailable {
-    //                 body,
-    //                 date,
-    //                 version,
-    //             } => {
-    //                 info!("update available {} {:?} {}", body, date, version);
-    //             }
-    //             // Emitted when the download is about to be started.
-    //             tauri::UpdaterEvent::Pending => {
-    //                 info!("update is pending!");
-    //             }
-    //             // tauri::UpdaterEvent::DownloadProgress {
-    //             //     chunk_length,
-    //             //     content_length,
-    //             // } => {
-    //             //     info!("downloaded {} of {:?}", chunk_length, content_length);
-    //             // }
-    //             // Emitted when the download has finished and the update is about to be installed.
-    //             tauri::UpdaterEvent::Downloaded => {
-    //                 info!("update has been downloaded!");
-    //             }
-    //             // Emitted when the update was installed. You can then ask to restart the app.
-    //             tauri::UpdaterEvent::Updated => {
-    //                 info!("app has been updated");
-    //             }
-    //             // Emitted when the app already has the latest version installed and an update is not needed.
-    //             tauri::UpdaterEvent::AlreadyUpToDate => {
-    //                 info!("app is already up to date");
-    //             }
-    //             // Emitted when there is an error with the updater. We suggest to listen to this event even if the default dialog is enabled.
-    //             tauri::UpdaterEvent::Error(error) => {
-    //                 info!("failed to update: {}", error);
-    //             }
-    //             _ => {}
-    //         }
-    //     }
-    // });
 }
 
 struct AppContext {
@@ -1652,19 +1601,6 @@ async fn check_login_and_trigger(
     if !aws::is_logged(profile, config).await {
         info!("Trigger log in into AWS");
         aws::cli_login(profile);
-        // let mut child = Command::new("aws")
-        //     .args(["sso", "login", "--profile", profile])
-        //     .spawn()
-        //     .expect("failed to execute process");
-
-        // let one_sec = Duration::from_secs(30);
-        // let _ = match child.wait_timeout(one_sec).unwrap() {
-        //     Some(status) => status.code(),
-        //     None => {
-        //         child.kill().unwrap();
-        //         child.wait().unwrap().code()
-        //     }
-        // };
 
         if !aws::is_logged(profile, config).await {
             return Err(BError::new("login", "Failed to log in"));
