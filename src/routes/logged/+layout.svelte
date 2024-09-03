@@ -1,17 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import WombatIcon from '$lib/images/128x128.png';
-	import PikachuIcon from '$lib/images/pikachu.png';
-	import PsyduckIcon from '$lib/images/psyduck.png';
-	import PokeballIcon from '$lib/images/pokeball.png';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/core';
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';
-	import { featuresStore } from '$lib/stores/feature-store';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	import { version } from '$app/environment';
+	import FeatureBtn from '$lib/componets/feature-btn.svelte';
 
 	const logout = async () => {
 		try {
@@ -82,23 +79,7 @@
 			</span>
 		</div>
 
-		{#if $featuresStore.loading}
-			<button disabled={true}>
-				<img class="h-6" alt="In progress" src={PokeballIcon} />
-			</button>
-		{:else}
-			<button
-				on:click={featuresStore.refreshFeatures}
-				data-umami-event="fs_refresh"
-				data-umami-event-uid={userConfig.id}
-			>
-				{#if $featuresStore.devWay}
-					<img class="h-6" alt="dev-way" src={PikachuIcon} />
-				{:else}
-					<img class="h-6" alt="platform-way" src={PsyduckIcon} />
-				{/if}
-			</button>
-		{/if}
+		<FeatureBtn />
 
 		<div class="flex items-center gap-2">
 			<span>{userConfig.last_used_profile}</span>
