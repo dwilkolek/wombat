@@ -8,7 +8,7 @@ use crate::{aws, wombat_api::WombatApi};
 pub async fn check_dependencies(
     wombat_api: &mut WombatApi,
     aws_config_provider: &aws::AwsConfigProvider,
-    required_feature: &str
+    required_feature: &str,
 ) -> HashMap<String, Result<String, String>> {
     let mut dependecies = HashMap::new();
 

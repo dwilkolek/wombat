@@ -124,7 +124,10 @@ async fn browser_extension_health(
     browser_ext_instance: tauri::State<'_, BrowserExtensionInstance>,
 ) -> Result<shared::BrowserExtensionStatus, ()> {
     let browser_ext = browser_ext_instance.0.lock().await;
-    Ok(browser_ext.to_status(requirements::NOT_SUPPORTED_BROWSER_EXTENSION, requirements::EXPECTED_BROWSER_EXTENSION))
+    Ok(browser_ext.to_status(
+        requirements::NOT_SUPPORTED_BROWSER_EXTENSION,
+        requirements::EXPECTED_BROWSER_EXTENSION,
+    ))
 }
 
 #[tauri::command]
@@ -1186,7 +1189,12 @@ async fn check_dependencies(
 ) -> Result<HashMap<String, Result<String, String>>, ()> {
     let mut wombat_api = wombat_api_instance.0.write().await;
     let aws_config_provider = aws_config_provider.0.read().await;
-    Ok(dependency_check::check_dependencies(&mut wombat_api, &aws_config_provider, requirements::REQUIRED_FEATURE).await)
+    Ok(dependency_check::check_dependencies(
+        &mut wombat_api,
+        &aws_config_provider,
+        requirements::REQUIRED_FEATURE,
+    )
+    .await)
 }
 
 #[tauri::command]
