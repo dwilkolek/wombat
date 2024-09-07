@@ -97,18 +97,14 @@
 				<li>enables proxing to lambda services like commenting service</li>
 				<li>closes page after confirming identity by Snowflake JDBC driver</li>
 			</ul>
-
 			<a
 				on:click|preventDefault={() => {
 					openExtInstallGuide();
 				}}
 				target="_blank"
-				href="https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked"
-				>👉 <span class="underline text-amber-300 hover:text-amber-500">Installation guide</span></a
+				href="https://chromewebstore.google.com/detail/"
+				>👉 <span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span></a
 			>
-			{#await invoke('chrome_extension_dir') then dir}
-				<pre class="text-xs ml-6">{dir}</pre>
-			{/await}
 		</div>
 	</div>
 	<div class="hero-content flex-col">
@@ -194,12 +190,15 @@
 							<div class="text-rose-500">Required dependency is missing</div>
 						{/if}
 					{/await}
+
+					{#if $browserExtensionStatus.state === BrowserExtensionState.Outdated && ($browserExtensionStatus.version ?? '4.0').startsWith('4.')}
+						<p class="text-amber-500 mt-1">Please use extension from Chrome web store</p>
+					{/if}
 				</form>
 			</div>
 		</div>
 		<div class="flex flex-col justify-center items-center gap-2 my-2">
 			<UpdateBtn />
-
 			<div>
 				<span>Source code:</span>
 				<a

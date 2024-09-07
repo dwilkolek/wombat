@@ -1,73 +1,64 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
-    "frontendDist": "../build",
-    "devUrl": "http://localhost:5173"
-  },
-  "bundle": {
-    "active": true,
-    "category": "DeveloperTool",
-    "copyright": "",
-    "targets": "all",
-    "externalBin": [],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.ico"
-    ],
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
-    },
-    "longDescription": "",
-    "macOS": {
-      "entitlements": null,
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null
-    },
-    "resources": [
-      "../chrome-extension"
-    ],
-    "shortDescription": "",
-    "linux": {
-      "deb": {
-        "depends": []
-      }
-    },
-    "createUpdaterArtifacts": "v1Compatible"
-  },
-  "productName": "Wombat",
-  "version": "4.2.25",
-  "identifier": "eu.wilkolek.wombat",
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBOTI4MDNCMTY0RTU4NDMKUldSRFdFNFdPNENTR290QmhzTy9ZNUR1UEtTWEIrRndBdGF1OGZDYTBtTWRsdUt6b3dmd2hGV2QK",
-      "endpoints": [
-        "https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "basicUi"
-      }
-    }
-  },
-  "app": {
-    "windows": [
-      {
-        "fullscreen": false,
-        "resizable": true,
-        "title": "Wombat - in combat",
-        "width": 1440,
-        "height": 900
-      }
-    ],
-    "security": {
-      "csp": null
-    }
-  }
+	"$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+	"build": {
+		"beforeBuildCommand": "npm run build",
+		"beforeDevCommand": "npm run dev",
+		"frontendDist": "../build",
+		"devUrl": "http://localhost:5173"
+	},
+	"bundle": {
+		"active": true,
+		"category": "DeveloperTool",
+		"copyright": "",
+		"targets": "all",
+		"externalBin": [],
+		"icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+		"windows": {
+			"certificateThumbprint": null,
+			"digestAlgorithm": "sha256",
+			"timestampUrl": ""
+		},
+		"longDescription": "",
+		"macOS": {
+			"entitlements": null,
+			"exceptionDomain": "",
+			"frameworks": [],
+			"providerShortName": null,
+			"signingIdentity": null
+		},
+		"resources": ["../chrome-extension"],
+		"shortDescription": "",
+		"linux": {
+			"deb": {
+				"depends": []
+			}
+		},
+		"createUpdaterArtifacts": "v1Compatible"
+	},
+	"productName": "Wombat",
+	"version": "4.2.25",
+	"identifier": "eu.wilkolek.wombat",
+	"plugins": {
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBOTI4MDNCMTY0RTU4NDMKUldSRFdFNFdPNENTR290QmhzTy9ZNUR1UEtTWEIrRndBdGF1OGZDYTBtTWRsdUt6b3dmd2hGV2QK",
+			"endpoints": ["https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"],
+			"windows": {
+				"installMode": "basicUi"
+			}
+		}
+	},
+	"app": {
+		"windows": [
+			{
+				"fullscreen": false,
+				"resizable": true,
+				"title": "Wombat - in combat",
+				"width": 1440,
+				"height": 900
+			}
+		],
+		"security": {
+			"csp": null
+		}
+	}
 }

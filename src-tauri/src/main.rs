@@ -17,8 +17,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
@@ -1438,20 +1437,14 @@ async fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let resource_path = app
-                .path()
-                .resolve("../chrome-extension", BaseDirectory::Resource)
-                .expect("failed to chrome_extension resource");
             let chrome_extension_dir = user::chrome_extension_dir();
             if chrome_extension_dir.exists() {
-                let _ = fs::remove_dir(&chrome_extension_dir);
-            }
-
-            let cope_result = shared::copy_dir_all(resource_path, chrome_extension_dir);
-            if cope_result.is_err() {
-                warn!("Chrome extension copy failed, reason: {:?}", cope_result)
-            } else {
-                info!("Chrome extension copy sucessful")
+                match fs::remove_dir_all(&chrome_extension_dir) {
+                    Ok(_) => info!("chrome_extension plugin removed"),
+                    Err(reason) => {
+                        error!("chrome_extension plugin was not removed, reason={}", reason)
+                    }
+                }
             }
 
             let handle = app.handle();
