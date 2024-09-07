@@ -2,8 +2,6 @@ use futures::TryFutureExt;
 use log::info;
 use serde::{Deserialize, Serialize};
 
-pub static REQUIRED_FEATURE: &str = "wombat-4.2.22";
-
 pub struct WombatApi {
     user_id: uuid::Uuid,
     user: String,
@@ -35,13 +33,13 @@ impl WombatApi {
         false
     }
 
-    pub async fn status(&mut self) -> Result<String, String> {
+    pub async fn status(&mut self, required_feature: &str) -> Result<String, String> {
         let mut wombat_api_status = Err("Not connected".to_string());
         if self.ping().await {
             wombat_api_status = Err("Not authenticated".to_string());
             if self.auth().await {
                 wombat_api_status = Err("Requirements not met".to_string());
-                if self.is_feature_enabled(REQUIRED_FEATURE).await {
+                if self.is_feature_enabled(required_feature).await {
                     wombat_api_status = Ok("Connected".to_string());
                 }
             }
