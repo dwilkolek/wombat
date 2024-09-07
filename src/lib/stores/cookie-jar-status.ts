@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { type CookieJarStatus } from '../types';
+import { BrowserExtensionState, type CookieJarStatus } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import { browserExtensionStatus } from './browser-extension-status';
 let timeout: number | undefined = undefined;
@@ -13,7 +13,7 @@ const createCookieJarStatus = () => {
 			clearTimeout(timeout);
 
 			browserExtensionStatus.subscribe((browserExtension) => {
-				browserExtensionConnected = browserExtension.connected;
+				browserExtensionConnected = browserExtension.state != BrowserExtensionState.Disconnected;
 			});
 			invoke<CookieJarStatus>('cookie_jar_status').then((res) => {
 				state.set(res);

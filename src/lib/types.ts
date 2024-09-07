@@ -3,8 +3,14 @@ export type SupportLevel = 'Full' | 'Partial' | 'None';
 export type SsoProfiles = { [key in AwsEnv]?: SsoProfile };
 export type CookieHealth = 'Ok' | 'Stale' | 'Old';
 export type CookieHealthMap = { [key in AwsEnv]?: CookieHealth };
+export enum BrowserExtensionState {
+	Disconnected = 'Disconnected',
+	NotSupported = 'NotSupported',
+	Outdated = 'Outdated',
+	UpToDate = 'UpToDate'
+}
 export type BrowserExtensionStatus = {
-	connected: boolean;
+	state: BrowserExtensionState;
 	version: string | undefined;
 };
 

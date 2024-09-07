@@ -15,12 +15,41 @@ pub struct BrowserExtension {
     pub last_health_check: DateTime<Utc>,
 }
 impl BrowserExtension {
-    pub fn to_status(&self) -> BrowserExtensionStatus {
+    pub fn to_status(
+        &self,
+        not_supported_version: &str,
+        expected_version: &str,
+    ) -> BrowserExtensionStatus {
+        let version = self.version.clone().unwrap_or("0.0.0".to_owned());
+        let numbered_version = version_to_number(&version);
+        let state = if (Utc::now() - self.last_health_check).num_seconds() < 10 {
+            if numbered_version >= version_to_number(expected_version) {
+                BrowserExtensionState::UpToDate
+            } else if numbered_version <= version_to_number(not_supported_version) {
+                BrowserExtensionState::NotSupported
+            } else {
+                BrowserExtensionState::Outdated
+            }
+        } else {
+            BrowserExtensionState::Disconnected
+        };
         BrowserExtensionStatus {
-            connected: (Utc::now() - self.last_health_check).num_seconds() < 10,
+            state,
             version: self.version.clone(),
         }
     }
+}
+
+fn version_to_number(version: &str) -> u32 {
+    version
+        .split(".")
+        .enumerate()
+        .map(|(i, v)| {
+            v.parse::<u32>()
+                .map(|num| num * 1000_u32.pow((2 - i).try_into().unwrap()))
+                .unwrap_or(0)
+        })
+        .sum()
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -70,8 +99,16 @@ pub struct CookieJarStatus {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum BrowserExtensionState {
+    Disconnected,
+    NotSupported,
+    Outdated,
+    UpToDate,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct BrowserExtensionStatus {
-    pub connected: bool,
+    pub state: BrowserExtensionState,
     pub version: Option<String>,
 }
 

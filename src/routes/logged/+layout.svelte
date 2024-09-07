@@ -6,9 +6,9 @@
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';
-	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	import { version } from '$app/environment';
 	import FeatureBtn from '$lib/componets/feature-btn.svelte';
+	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
 
 	const logout = async () => {
 		try {
@@ -60,23 +60,8 @@
 			App: {version}
 		</div>
 		<div class="flex items-center gap-1 text-sm">
-			{#if $browserExtensionStatus.connected}
-				{#if $browserExtensionStatus.version == version}
-					<div class="bg-lime-500 w-2 h-2 rounded" />
-				{:else}
-					<div class="bg-amber-500 w-2 h-2 rounded" />
-				{/if}
-			{:else}
-				<div class="bg-rose-500 w-2 h-2 rounded" />
-			{/if}
-			<span> Browser extension: </span>
-			<span class="">
-				{#if $browserExtensionStatus.connected}
-					v{$browserExtensionStatus.version}
-				{:else}
-					Disconnected
-				{/if}
-			</span>
+			<span>Browser extension</span>
+			<BrowserExtensionDot />
 		</div>
 
 		<FeatureBtn />
