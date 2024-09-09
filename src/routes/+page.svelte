@@ -14,14 +14,11 @@
 	import FeatureBtn from '$lib/componets/feature-btn.svelte';
 	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
 
+	const browserExtensionUrl =
+		'https://chromewebstore.google.com/detail/wombat-plugin/genpoikemhehdicnplfojdolhdhofonp';
+
 	const openGithubPage = () => {
 		open('https://github.com/dwilkolek/wombat');
-	};
-
-	const openExtInstallGuide = () => {
-		open(
-			'https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked'
-		);
 	};
 
 	const { wombatAwsProfiles } = availableProfilesStore;
@@ -99,10 +96,10 @@
 			</ul>
 			<a
 				on:click|preventDefault={() => {
-					openExtInstallGuide();
+					open(browserExtensionUrl);
 				}}
 				target="_blank"
-				href="https://chromewebstore.google.com/detail/wombat-plugin/genpoikemhehdicnplfojdolhdhofonp"
+				href={browserExtensionUrl}
 				>👉 <span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span></a
 			>
 		</div>
