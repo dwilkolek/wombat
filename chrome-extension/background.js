@@ -1,8 +1,8 @@
 /* global */
 /** @type {Array.<Cookie>} */
 let cookies = [];
-const extVersion = '4.2.24';
-let syncEnabled = false;
+const extVersion = '5.0.2';
+let syncEnabled = true;
 class Cookie {
 	constructor(name, value, env) {
 		this.name = name;
@@ -28,26 +28,6 @@ const cookiesConfig = [
 		env: 'PROD'
 	}
 ];
-
-/**
-    @param {String} name
-    @param {String} env
-    @returns {String}
-*/
-function storageCookieKey(name, env) {
-	return `v2-${name}-${env}`;
-}
-
-chrome.storage.local.get(
-	cookiesConfig.map((e) => storageCookieKey(e.name, e.env)),
-	(v) => {
-		console.log('restored cookies', v);
-		Object.entries(v).forEach((cv) => {
-			cookies.push(cv[1]);
-		});
-		syncEnabled = true;
-	}
-);
 
 function now() {
 	return new Date().getTime();
@@ -180,7 +160,6 @@ setInterval(function () {
 			cookies = cookies.filter((c) => c.name != name || c.env != env);
 			cookies.push(cookie);
 
-			chrome.storage.local.set({ [storageCookieKey(cookie.name, cookie.env)]: cookie });
 			console.log('updating session key', cookie);
 			sendCookieToDesktop(cookie);
 			sendCookieToPopup(cookie);
