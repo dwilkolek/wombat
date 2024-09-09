@@ -43,7 +43,7 @@
 		"createUpdaterArtifacts": "v1Compatible"
 	},
 	"productName": "Wombat",
-	"version": "4.2.26",
+	"version": "4.2.27",
 	"identifier": "eu.wilkolek.wombat",
 	"plugins": {
 		"updater": {
