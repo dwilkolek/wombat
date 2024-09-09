@@ -94,7 +94,7 @@
 			<ul class="list-disc ml-6">
 				<li>automates <span class="text-orange-300">aws sso login</span> process</li>
 				<li>automates github sign-in confirmation process</li>
-				<li>enables proxing to lambda services like commenting service</li>
+				<li>enables proxying to lambda services like commenting service</li>
 				<li>closes page after confirming identity by Snowflake JDBC driver</li>
 			</ul>
 			<a
@@ -102,7 +102,7 @@
 					openExtInstallGuide();
 				}}
 				target="_blank"
-				href="https://chromewebstore.google.com/detail/"
+				href="https://chromewebstore.google.com/detail/wombat-plugin/genpoikemhehdicnplfojdolhdhofonp"
 				>👉 <span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span></a
 			>
 		</div>
