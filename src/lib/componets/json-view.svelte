@@ -208,7 +208,9 @@
 									<span class="break-all">{value}</span>
 								{/if}
 							{:else if typeof value == 'object' && value != null}
-								<JsonView log={readable(value)} nested={true} />
+								{#key value}
+									<JsonView log={readable(value)} nested={true} />
+								{/key}
 							{:else}
 								<span class="break-all">{JSON.stringify(value)}</span>
 							{/if}
