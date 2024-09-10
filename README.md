@@ -108,9 +108,3 @@ source_profile = <profile>-demo
 #### Bump version
 
 `npm run bump-version x.x.x`
-
-#### Publish chrome extension
-
-Zip contets of `chrome-extension` and upload in chrome web store dev console.
-
-Remember to check `requirements.rs`, `manifest.json` and `background.js`.
