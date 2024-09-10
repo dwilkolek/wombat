@@ -11,19 +11,19 @@ pub struct BrowserExtension {
     pub version: Option<String>,
     pub reported_version: Option<String>,
     pub last_health_check: DateTime<Utc>,
+    pub expected_version: String,
+    pub last_supported_version: String,
 }
 impl BrowserExtension {
     pub fn to_status(
         &self,
-        not_supported_version: &str,
-        expected_version: &str,
     ) -> BrowserExtensionStatus {
         let version = self.version.clone().unwrap_or("0.0.0".to_owned());
         let numbered_version = version_to_number(&version);
         let state = if (Utc::now() - self.last_health_check).num_seconds() < 10 {
-            if numbered_version >= version_to_number(expected_version) {
+            if numbered_version >= version_to_number(&self.expected_version) {
                 BrowserExtensionState::UpToDate
-            } else if numbered_version <= version_to_number(not_supported_version) {
+            } else if numbered_version < version_to_number(&self.last_supported_version) {
                 BrowserExtensionState::NotSupported
             } else {
                 BrowserExtensionState::Outdated

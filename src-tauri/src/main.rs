@@ -123,10 +123,7 @@ async fn browser_extension_health(
     browser_ext_instance: tauri::State<'_, BrowserExtensionInstance>,
 ) -> Result<shared::BrowserExtensionStatus, ()> {
     let browser_ext = browser_ext_instance.0.lock().await;
-    Ok(browser_ext.to_status(
-        requirements::NOT_SUPPORTED_BROWSER_EXTENSION,
-        requirements::EXPECTED_BROWSER_EXTENSION,
-    ))
+    Ok(browser_ext.to_status())
 }
 
 #[tauri::command]
@@ -1393,6 +1390,8 @@ async fn main() {
         last_health_check: Utc::now() - chrono::Duration::days(100),
         version: None,
         reported_version: None,
+        last_supported_version: requirements::LAST_SUPPORTED_BROWSER_EXTENSION.to_owned(),
+        expected_version: requirements::EXPECTED_BROWSER_EXTENSION.to_owned(),
     }));
     let wombat_api = wombat_api::WombatApi::new(
         app_config.wombat_api_url.clone(),
