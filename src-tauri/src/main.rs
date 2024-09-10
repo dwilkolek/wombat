@@ -1390,7 +1390,7 @@ async fn main() {
         last_health_check: Utc::now() - chrono::Duration::days(100),
         version: None,
         reported_version: None,
-        not_supported_version: requirements::NOT_SUPPORTED_BROWSER_EXTENSION.to_owned(),
+        last_supported_version: requirements::LAST_SUPPORTED_BROWSER_EXTENSION.to_owned(),
         expected_version: requirements::EXPECTED_BROWSER_EXTENSION.to_owned(),
     }));
     let wombat_api = wombat_api::WombatApi::new(

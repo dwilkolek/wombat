@@ -38,10 +38,10 @@
 		buttonText = event.payload;
 	});
 
-	let dependenciesPromise = invoke<{ [key: string]: { Ok: string } & { Err: string } }>(
-		'check_dependencies'
-	);
-
+	function checkDependencies() {
+		return invoke<{ [key: string]: { Ok: string } & { Err: string } }>('check_dependencies');
+	}
+	let dependenciesPromise = checkDependencies();
 	listen<string>('KILL_ME', () => {
 		exit(1);
 	});
@@ -184,7 +184,19 @@
 								>
 							</div>
 						{:else}
-							<div class="text-rose-500">Required dependency is missing</div>
+							<div class="form-control mt-6">
+								<button
+									data-umami-event="recheck_dependencies"
+									data-umami-event-uid={userId}
+									class="btn btn-warning"
+									type="button"
+									on:click={() => {
+										dependenciesPromise = checkDependencies();
+									}}
+								>
+									Requirements not met. Check again!</button
+								>
+							</div>
 						{/if}
 					{/await}
 

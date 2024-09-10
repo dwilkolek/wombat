@@ -20,7 +20,7 @@ const createExtensionStatus = () => {
 						title: 'Browser Extension',
 						kind: 'error'
 					});
-					exit(1);
+					await exit(1);
 				}
 				if (BrowserExtensionState.Disconnected != res.state) {
 					scheduleNext(10000);
