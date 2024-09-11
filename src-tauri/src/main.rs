@@ -111,13 +111,7 @@ async fn ping() -> Result<(), ()> {
     info!("Ping");
     Ok(())
 }
-#[tauri::command]
-async fn chrome_extension_dir() -> Result<String, ()> {
-    Ok(user::chrome_extension_dir()
-        .into_os_string()
-        .into_string()
-        .unwrap())
-}
+
 #[tauri::command]
 async fn browser_extension_health(
     browser_ext_instance: tauri::State<'_, BrowserExtensionInstance>,
@@ -1516,7 +1510,6 @@ async fn main() {
             available_sso_profiles,
             wombat_aws_profiles,
             start_lambda_app_proxy,
-            chrome_extension_dir,
             browser_extension_health,
             cookie_jar_status,
             is_debug,

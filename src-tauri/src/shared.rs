@@ -40,7 +40,7 @@ impl BrowserExtension {
 
 fn version_to_number(version: &str) -> u32 {
     version
-        .split(".")
+        .split('.')
         .enumerate()
         .map(|(i, v)| {
             v.parse::<u32>()
