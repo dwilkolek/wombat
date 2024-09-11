@@ -1511,7 +1511,6 @@ async fn main() {
             available_sso_profiles,
             wombat_aws_profiles,
             start_lambda_app_proxy,
-            chrome_extension_dir,
             browser_extension_health,
             cookie_jar_status,
             is_debug,
