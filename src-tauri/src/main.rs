@@ -1395,7 +1395,11 @@ async fn main() {
     );
 
     let wombat_api = Arc::new(RwLock::new(wombat_api));
-
+    let wombat_api_ref_clone = wombat_api.clone();
+    tokio::task::spawn(async move {
+       let mut wombat_api_ref_clone =  wombat_api_ref_clone.write().await;
+       wombat_api_ref_clone.auth().await;
+    });
     tokio::task::spawn(rest_api::serve(
         cookie_jar.clone(),
         browser_ext.clone(),
