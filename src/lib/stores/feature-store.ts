@@ -35,22 +35,21 @@ const createFeatureStore = () => {
 
 	async function refreshFeatures() {
 		features.set(defaultFs);
-		invoke<string[]>('all_features_enabled').then((fs) => {
-			features.update((prev) => {
-				const newFs = {
-					...prev,
-					loading: false,
-					...fs.reduce((acc, v) => {
-						if (!featureMap[v]) {
-							console.warn(`Unknown feature: ${v}`);
-							return acc;
-						}
-						return { ...acc, [featureMap[v] ?? v]: true };
-					}, {})
-				};
-				console.log(newFs);
-				return newFs;
-			});
+		const fs = await invoke<string[]>('all_features_enabled');
+		features.update((prev) => {
+			const newFs = {
+				...prev,
+				loading: false,
+				...fs.reduce((acc, v) => {
+					if (!featureMap[v]) {
+						console.warn(`Unknown feature: ${v}`);
+						return acc;
+					}
+					return { ...acc, [featureMap[v] ?? v]: true };
+				}, {})
+			};
+			console.log(newFs);
+			return newFs;
 		});
 	}
 	refreshFeatures();
