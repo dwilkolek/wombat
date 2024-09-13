@@ -168,7 +168,7 @@ async fn login(
     {
         let mut aws_config_provider = aws_config_provider.0.write().await;
 
-        let wombat_api = wombat_api_instance.0.read().await;
+        let mut wombat_api = wombat_api_instance.0.lock().await;
         let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
         aws_config_provider.login(profile.to_owned(), is_enabled);
 
@@ -219,7 +219,7 @@ async fn login(
     }
 
     let _ = app_handle.emit("message", "Syncing global state...");
-    let mut api = wombat_api_instance.0.write().await;
+    let mut api = wombat_api_instance.0.lock().await;
     let api_status = api.status(requirements::REQUIRED_FEATURE).await;
     if let Err(status) = api_status {
         return Err(BError::new(
@@ -1138,7 +1138,7 @@ async fn start_lambda_app_proxy(
 async fn log_filters(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<Vec<wombat_api::LogFilter>, BError> {
-    let wombat_api = wombat_api_instance.0.read().await;
+    let mut wombat_api = wombat_api_instance.0.lock().await;
     let filters = wombat_api.log_filters().await;
     Ok(filters)
 }
@@ -1147,7 +1147,7 @@ async fn log_filters(
 async fn proxy_auth_configs(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<Vec<wombat_api::ProxyAuthConfig>, BError> {
-    let wombat_api = wombat_api_instance.0.read().await;
+    let mut wombat_api = wombat_api_instance.0.lock().await;
     let configs = wombat_api.get_proxy_auth_configs().await;
 
     Ok(configs)
@@ -1158,7 +1158,7 @@ async fn is_feature_enabled(
     feature: &str,
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<bool, BError> {
-    let wombat_api = wombat_api_instance.0.read().await;
+    let mut wombat_api = wombat_api_instance.0.lock().await;
     let is_enabled = wombat_api.is_feature_enabled(feature).await;
 
     Ok(is_enabled)
@@ -1168,7 +1168,7 @@ async fn is_feature_enabled(
 async fn all_features_enabled(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<Vec<String>, BError> {
-    let wombat_api = wombat_api_instance.0.read().await;
+    let mut wombat_api = wombat_api_instance.0.lock().await;
     Ok(wombat_api.all_features_enabled().await)
 }
 
@@ -1177,7 +1177,7 @@ async fn check_dependencies(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<HashMap<String, Result<String, String>>, ()> {
-    let mut wombat_api = wombat_api_instance.0.write().await;
+    let mut wombat_api = wombat_api_instance.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     Ok(dependency_check::check_dependencies(
         &mut wombat_api,
@@ -1394,11 +1394,11 @@ async fn main() {
         user.id,
     );
 
-    let wombat_api = Arc::new(RwLock::new(wombat_api));
+    let wombat_api = Arc::new(Mutex::new(wombat_api));
     let wombat_api_ref_clone = wombat_api.clone();
     tokio::task::spawn(async move {
-       let mut wombat_api_ref_clone =  wombat_api_ref_clone.write().await;
-       wombat_api_ref_clone.auth().await;
+        let mut wombat_api_ref_clone = wombat_api_ref_clone.lock().await;
+        wombat_api_ref_clone.auth().await;
     });
     tokio::task::spawn(rest_api::serve(
         cookie_jar.clone(),
@@ -1554,7 +1554,7 @@ struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 
-struct WombatApiInstance(Arc<RwLock<wombat_api::WombatApi>>);
+struct WombatApiInstance(Arc<Mutex<wombat_api::WombatApi>>);
 struct BrowserExtensionInstance(Arc<Mutex<BrowserExtension>>);
 struct CookieJarInstance(Arc<Mutex<CookieJar>>);
 struct KVStoreInstance(Arc<Mutex<KVStore>>);
