@@ -1,3 +1,5 @@
+use base64::Engine;
+use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -48,12 +50,19 @@ impl WombatApi {
     }
 
     pub async fn auth(&mut self) -> bool {
+        let token_is_valid = self
+            .jwt
+            .as_ref()
+            .map(|token| Claims::from_token(token))
+            .is_some_and(|claims| claims.is_valid());
+        if token_is_valid {
+            return true;
+        }
+
+        info!("Invalid wombat jwt token, getting new one");
         let client = reqwest::Client::new();
         let to = format!("{}{}", &self.url, "/api/login");
         log::info!("authenticating with: {}", &to);
-        if self.jwt.is_some() {
-            return true;
-        }
         let response = client
             .post(to)
             .basic_auth(self.user.clone(), Some(self.password.clone()))
@@ -64,12 +73,18 @@ impl WombatApi {
             if response.status() == reqwest::StatusCode::OK {
                 let jwt = response.text().await;
                 if let Ok(jwt) = jwt {
+                    info!(
+                        "JWT token valid untill {}",
+                        Claims::from_token(&jwt)
+                            .expiry_date()
+                            .format("%Y-%m-%d %H:%M:%S")
+                            .to_string()
+                    );
                     self.jwt = Some(jwt);
                     return true;
                 }
             }
         }
-
         false
     }
 
@@ -88,8 +103,9 @@ impl WombatApi {
         None
     }
 
-    pub async fn is_feature_enabled(&self, feature: &str) -> bool {
+    pub async fn is_feature_enabled(&mut self, feature: &str) -> bool {
         log::info!("checking feature {}", feature);
+        self.auth().await;
         if let Some(client) = self.client() {
             let response = client
                 .get(format!("{}/api/features/{}", self.url, feature))
@@ -105,8 +121,9 @@ impl WombatApi {
         false
     }
 
-    pub async fn all_features_enabled(&self) -> Vec<String> {
+    pub async fn all_features_enabled(&mut self) -> Vec<String> {
         log::info!("checking all_features_enabled");
+        self.auth().await;
         if let Some(client) = self.client() {
             let response = client
                 .get(format!("{}/api/features", self.url))
@@ -122,8 +139,9 @@ impl WombatApi {
         Vec::new()
     }
 
-    pub async fn log_filters(&self) -> Vec<LogFilter> {
+    pub async fn log_filters(&mut self) -> Vec<LogFilter> {
         log::info!("getting log filters");
+        self.auth().await;
         if let Some(client) = self.client() {
             let body = client
                 .get(format!("{}/api/log-filters", self.url))
@@ -141,8 +159,9 @@ impl WombatApi {
         vec![]
     }
 
-    pub async fn get_proxy_auth_configs(&self) -> Vec<ProxyAuthConfig> {
+    pub async fn get_proxy_auth_configs(&mut self) -> Vec<ProxyAuthConfig> {
         log::info!("getting proxy auth configs");
+        self.auth().await;
         if let Some(client) = self.client() {
             let body = client
                 .get(format!("{}/api/proxy-auth-configs", self.url))
@@ -160,7 +179,8 @@ impl WombatApi {
         vec![]
     }
 
-    pub async fn report_versions(&self, browser_extension: Option<String>) -> bool {
+    pub async fn report_versions(&mut self, browser_extension: Option<String>) -> bool {
+        self.auth().await;
         if let Some(client) = self.client() {
             let result = client
                 .post(format!("{}/api/versions", self.url))
@@ -223,4 +243,32 @@ pub struct ProxyAuthConfig {
     pub secret_name: String,
 
     pub require_sso_profile: bool,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct Claims {
+    app_user_id: String,
+    email: String,
+    role: String,
+    exp: i64,
+}
+
+impl Claims {
+    fn from_token(token: &str) -> Self {
+        let parts = token.split('.').collect::<Vec<&str>>();
+        let payload = parts.get(1).unwrap();
+        let decoded = base64::engine::general_purpose::STANDARD_NO_PAD
+            .decode(*payload)
+            .unwrap();
+        serde_json::from_slice::<Claims>(&decoded).unwrap()
+    }
+
+    fn expiry_date(&self) -> DateTime<Utc> {
+        chrono::DateTime::from_timestamp(self.exp, 1000).unwrap()
+    }
+
+    fn is_valid(&self) -> bool {
+        chrono::Utc::now() < self.expiry_date()
+    }
 }

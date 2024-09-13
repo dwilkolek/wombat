@@ -15,9 +15,7 @@ pub struct BrowserExtension {
     pub last_supported_version: String,
 }
 impl BrowserExtension {
-    pub fn to_status(
-        &self,
-    ) -> BrowserExtensionStatus {
+    pub fn to_status(&self) -> BrowserExtensionStatus {
         let version = self.version.clone().unwrap_or("0.0.0".to_owned());
         let numbered_version = version_to_number(&version);
         let state = if (Utc::now() - self.last_health_check).num_seconds() < 10 {
