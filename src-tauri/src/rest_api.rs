@@ -53,14 +53,14 @@ async fn delete_cookie(
 async fn health(
     version: String,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
-    wombat_api: std::sync::Arc<tokio::sync::RwLock<WombatApi>>,
+    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) -> Result<warp::reply::Response, warp::Rejection> {
     let mut browser_ext = browser_ext.lock().await;
     browser_ext.last_health_check = chrono::Utc::now();
     let new_version = Some(version.clone());
     browser_ext.version = Some(version.clone());
     if browser_ext.reported_version != new_version {
-        let wombat_api = wombat_api.read().await;
+        let mut wombat_api = wombat_api.lock().await;
         if wombat_api.report_versions(new_version.clone()).await {
             browser_ext.reported_version = Some(version.clone());
         }
@@ -101,9 +101,9 @@ fn with_browser_extension(
 }
 
 fn with_wombat_api(
-    wombat_api: std::sync::Arc<tokio::sync::RwLock<WombatApi>>,
+    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) -> impl Filter<
-    Extract = (std::sync::Arc<tokio::sync::RwLock<WombatApi>>,),
+    Extract = (std::sync::Arc<tokio::sync::Mutex<WombatApi>>,),
     Error = std::convert::Infallible,
 > + Clone {
     warp::any().map(move || wombat_api.clone())
@@ -112,7 +112,7 @@ fn with_wombat_api(
 pub async fn serve(
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
-    wombat_api: std::sync::Arc<tokio::sync::RwLock<WombatApi>>,
+    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) {
     warp::serve(
         warp::put()
