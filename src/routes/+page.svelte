@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
-	import { open } from '@tauri-apps/plugin-shell';
 	import { version } from '$app/environment';
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/plugin-process';
@@ -13,13 +12,6 @@
 	import UpdateBtn from '$lib/componets/update-btn.svelte';
 	import FeatureBtn from '$lib/componets/feature-btn.svelte';
 	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
-
-	const browserExtensionUrl =
-		'https://chromewebstore.google.com/detail/wombat-plugin/genpoikemhehdicnplfojdolhdhofonp';
-
-	const openGithubPage = () => {
-		open('https://github.com/dwilkolek/wombat');
-	};
 
 	const { wombatAwsProfiles } = availableProfilesStore;
 	let { login } = userStore;
@@ -95,11 +87,8 @@
 				<li>closes page after confirming identity by Snowflake JDBC driver</li>
 			</ul>
 			<a
-				on:click|preventDefault={() => {
-					open(browserExtensionUrl);
-				}}
 				target="_blank"
-				href={browserExtensionUrl}
+				href="https://chromewebstore.google.com/detail/wombat-plugin/genpoikemhehdicnplfojdolhdhofonp"
 				>👉 <span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span></a
 			>
 		</div>
@@ -210,13 +199,7 @@
 			<UpdateBtn />
 			<div>
 				<span>Source code:</span>
-				<a
-					class="underline"
-					href="https://github.com/dwilkolek/wombat"
-					on:click|preventDefault={() => {
-						openGithubPage();
-					}}
-					target="_blank"
+				<a class="underline" href="https://github.com/dwilkolek/wombat" target="_blank"
 					>https://github.com/dwilkolek/wombat v{version}
 				</a>
 			</div>
