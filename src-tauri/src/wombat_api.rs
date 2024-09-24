@@ -49,13 +49,15 @@ impl WombatApi {
         wombat_api_status
     }
 
-    pub async fn auth(&mut self) -> bool {
-        let token_is_valid = self
-            .jwt
+    pub fn is_token_valid(&self) -> bool {
+        self.jwt
             .as_ref()
             .map(|token| Claims::from_token(token))
-            .is_some_and(|claims| claims.is_valid());
-        if token_is_valid {
+            .is_some_and(|claims| claims.is_valid())
+    }
+
+    pub async fn auth(&mut self) -> bool {
+        if self.is_token_valid() {
             return true;
         }
 
@@ -180,7 +182,9 @@ impl WombatApi {
     }
 
     pub async fn report_versions(&mut self, browser_extension: Option<String>) -> bool {
-        self.auth().await;
+        if !self.is_token_valid() {
+            return false;
+        }
         if let Some(client) = self.client() {
             let result = client
                 .post(format!("{}/api/versions", self.url))
