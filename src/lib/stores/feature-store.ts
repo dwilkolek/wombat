@@ -13,7 +13,9 @@ const featureMap: { [key: string]: string } = {
 	'lambda-apps': 'lambdaApps',
 	'ecs-prod-actions': 'ecsProdActions',
 	'rds-prod-actions': 'rdsProdActions',
-	'lambda-prod-actions': 'lambdaProdActions'
+	'lambda-prod-actions': 'lambdaProdActions',
+	'tasks-page': 'tasksPage',
+	'user-session-proxy': 'userSessionProxy'
 };
 
 const createFeatureStore = () => {
@@ -29,7 +31,9 @@ const createFeatureStore = () => {
 		lambdaApps: false,
 		ecsProdActions: false,
 		rdsProdActions: false,
-		lambdaProdActions: false
+		lambdaProdActions: false,
+		tasksPage: false,
+		userSessionProxy: false
 	};
 	const features = writable(defaultFs);
 

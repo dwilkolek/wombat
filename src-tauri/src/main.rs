@@ -1083,6 +1083,59 @@ async fn start_service_proxy(
     }
 }
 
+#[tauri::command]
+async fn start_user_session_proxy(
+    address: String,
+    env: Env,
+    headers: HashMap<String, String>,
+    cookie_jar: tauri::State<'_, CookieJarInstance>,
+    user_config: tauri::State<'_, UserConfigState>,
+    async_task_tracker: tauri::State<'_, AsyncTaskManager>,
+) -> Result<NewTaskParams, BError> {
+    let local_port;
+    {
+        let mut user_config = user_config.0.lock().await;
+        local_port = user_config.get_user_session_proxy_port(&address);
+    }
+
+    let arn = format!("cookieSessionProxy::{address}::{env}");
+
+    let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
+        vec![Box::new(proxy::StaticHeadersInterceptor {
+            path_prefix: String::from(""),
+            headers,
+        })];
+
+    interceptors.push(Box::new(proxy_authenticators::CookieAutheticator {
+        env: env.clone(),
+        jar: cookie_jar.0.clone(),
+    }));
+
+    let handle = proxy::start_proxy_to_adress(
+        local_port,
+        address.clone(),
+        Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
+    )
+    .await;
+
+    async_task_tracker
+        .0
+        .lock()
+        .await
+        .task_handlers
+        .insert(arn.clone(), handle);
+
+    info!(
+        "Started cookie session proxy with id={arn} with cookie forom env={env} to {}",
+        &address
+    );
+
+    Ok(NewTaskParams {
+        port: local_port,
+        proxy_auth_config: None,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
 async fn start_lambda_app_proxy(
@@ -1514,6 +1567,7 @@ async fn main() {
             available_sso_profiles,
             wombat_aws_profiles,
             start_lambda_app_proxy,
+            start_user_session_proxy,
             browser_extension_health,
             cookie_jar_status,
             is_debug,

@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import type { ProxyAuthConfig } from '$lib/types';
+import { invoke } from '@tauri-apps/api/core';
 
 type TaskKilled = {
 	arn: string;
@@ -61,6 +62,10 @@ const createTaskStore = () => {
 			return tasks.filter((t) => t.arn != event.payload.arn);
 		});
 	});
-	return { subscribe: tasks.subscribe, startTask };
+
+	const stopTask = async (arn: string) => {
+		return invoke('stop_job', { arn });
+	};
+	return { subscribe: tasks.subscribe, startTask, stopTask };
 };
 export const taskStore = createTaskStore();
