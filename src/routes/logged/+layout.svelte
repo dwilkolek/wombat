@@ -9,6 +9,7 @@
 	import { version } from '$app/environment';
 	import FeatureBtn from '$lib/componets/feature-btn.svelte';
 	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
+	import { featuresStore } from '$lib/stores/feature-store';
 
 	const logout = async () => {
 		try {
@@ -46,7 +47,13 @@
 					>Lambda Apps
 				</a>
 			</li>
-
+			{#if $featuresStore.tasksPage}
+				<li>
+					<a class={$page.url.pathname === '/logged/tasks' ? 'active' : ''} href="/logged/tasks"
+						>Tasks
+					</a>
+				</li>
+			{/if}
 			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a

@@ -72,6 +72,16 @@ export function startLambdaProxyDisabledReason(lambdaArn: string, env: AwsEnv) {
 		}
 	);
 }
+export function startUserSessionProxyDisabledReason(address: string) {
+	return derived([featuresStore, taskStore], ([{ userSessionProxy }, taskStore]) => {
+		if (!userSessionProxy) {
+			return 'User session proxy disabled';
+		}
+		if (taskStore.some((t) => t.arn == address && t.status == TaskStatus.STARTING)) {
+			return 'Starting...';
+		}
+	});
+}
 
 export function restartEcsDisabledReason(service: EcsService) {
 	return derived(

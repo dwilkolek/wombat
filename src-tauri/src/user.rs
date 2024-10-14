@@ -31,6 +31,7 @@ pub struct UserConfig {
     db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
     lambda_app_proxy_port_map: Option<HashMap<TrackedName, HashMap<Env, u16>>>,
+    user_session_proxy_port_map: Option<HashMap<String, u16>>,
     pub dbeaver_path: Option<String>,
     pub logs_dir: Option<PathBuf>,
     pub preferences: Option<HashMap<String, WombatAwsProfilePreferences>>,
@@ -60,6 +61,7 @@ impl UserConfig {
                 db_proxy_port_map: HashMap::new(),
                 service_proxy_port_map: HashMap::new(),
                 lambda_app_proxy_port_map: Some(HashMap::new()),
+                user_session_proxy_port_map: Some(HashMap::new()),
 
                 dbeaver_path: None,
                 logs_dir: Some(UserConfig::logs_path()),
@@ -79,6 +81,9 @@ impl UserConfig {
         }
         if user_config.lambda_app_proxy_port_map.is_none() {
             user_config.lambda_app_proxy_port_map = Some(HashMap::new());
+        }
+        if user_config.user_session_proxy_port_map.is_none() {
+            user_config.user_session_proxy_port_map = Some(HashMap::new());
         }
 
         user_config
@@ -189,6 +194,27 @@ impl UserConfig {
             self.save()
         }
         port.0
+    }
+
+    pub fn get_user_session_proxy_port(&mut self, address: &str) -> u16 {
+        let from_port = 55000;
+        let range = 100;
+        let map = self.user_session_proxy_port_map.as_mut().unwrap();
+        if let Some(port) = map.get(address) {
+            return *port;
+        }
+
+        let used_ports: Vec<u16> = map.values().copied().collect();
+
+        let mut possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
+        while used_ports.iter().any(|p| *p == possible_port) {
+            possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
+        }
+
+        map.insert(address.to_owned(), possible_port);
+        self.save();
+
+        possible_port
     }
 
     pub fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
