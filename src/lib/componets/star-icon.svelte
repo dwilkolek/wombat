@@ -1,25 +1,29 @@
 <script lang="ts">
-	export let state: boolean;
+	interface Props {
+		isSelected: boolean;
+	}
+
+	let { isSelected }: Props = $props();
 	// export let size = '1.8em';
 	let selected = '#fcd703';
 	let notSelected = 'rgba(252, 215, 3, 0.5)';
-	let transition = state ? notSelected : selected;
-	let color = state ? selected : notSelected;
+	let transition = isSelected ? notSelected : selected;
+	let color = $state(isSelected ? selected : notSelected);
 </script>
 
-<!-- svelte-ignore a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	on:mouseover={() => {
+	onmouseover={() => {
 		color = transition;
 	}}
-	on:mouseout={() => {
-		color = state ? selected : notSelected;
+	onmouseout={() => {
+		color = isSelected ? selected : notSelected;
 	}}
-	on:focus={() => {
+	onfocus={() => {
 		color = transition;
 	}}
-	on:blur={() => {
-		color = state ? selected : notSelected;
+	onblur={() => {
+		color = isSelected ? selected : notSelected;
 	}}
 >
 	<svg

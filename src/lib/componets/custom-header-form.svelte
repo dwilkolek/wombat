@@ -1,12 +1,24 @@
 <script lang="ts">
+	import { preventDefault } from 'svelte/legacy';
+
 	import { userStore } from '$lib/stores/user-store';
 	import type { CustomHeader } from '$lib/types';
 
-	export let onRemove: (name: string) => void = () => {};
-	export let onAdd: (header: CustomHeader) => void = () => {};
-	export let added: boolean = false;
-	export let header: CustomHeader;
-	export let disabled: boolean;
+	interface Props {
+		onRemove?: (name: string) => void;
+		onAdd?: (header: CustomHeader) => void;
+		added?: boolean;
+		header: CustomHeader;
+		disabled: boolean;
+	}
+
+	let {
+		onRemove = () => {},
+		onAdd = () => {},
+		added = false,
+		header = $bindable(),
+		disabled
+	}: Props = $props();
 </script>
 
 <form class="flex items-center justify-between gap-2">
@@ -54,12 +66,13 @@
 			class="btn btn-circle btn-xs btn-success"
 			data-umami-event="custom_header_add"
 			data-umami-event-uid={$userStore.id}
-			on:click={() => {
+			onclick={() => {
 				onAdd({ ...header });
 				header.name = '';
 				header.value = '';
 				header.encodeBase64 = false;
 			}}
+			aria-label="Add header"
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -78,7 +91,11 @@
 			data-umami-event-uid={$userStore.id}
 			class="btn btn-circle btn-xs btn-error"
 			{disabled}
-			on:click|preventDefault={() => onRemove(header.name)}
+			onclick={(e) => {
+				e.preventDefault();
+				onRemove(header.name);
+			}}
+			aria-label="Remove header"
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

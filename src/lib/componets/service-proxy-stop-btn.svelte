@@ -2,16 +2,21 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { invoke } from '@tauri-apps/api/core';
 
-	export let service_arn: string;
+	interface Props {
+		service_arn: string;
+	}
+
+	let { service_arn }: Props = $props();
 </script>
 
 <div class="tooltip tooltip-left flex" data-tip="Stop proxy to service">
 	<button
-		on:click={async () => {
+		onclick={async () => {
 			await invoke('stop_job', { arn: service_arn });
 		}}
 		data-umami-event="ecs_proxy_stop"
 		data-umami-event-uid={$userStore.id}
+		aria-label="Stop proxy to service"
 	>
 		<div class="w-5 h-5 relative">
 			<svg

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { preventDefault } from 'svelte/legacy';
+
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
 	import { version } from '$app/environment';
@@ -16,10 +18,10 @@
 	const { wombatAwsProfiles } = availableProfilesStore;
 	let { login } = userStore;
 
-	let profile: WombatAwsProfile | undefined;
-	let userId: string = $userStore.id ?? '';
-	let loading = false;
-	let buttonText = 'Start';
+	let profile: WombatAwsProfile | undefined = $state();
+	let userId: string = $state($userStore.id ?? '');
+	let loading = $state(false);
+	let buttonText = $state('Start');
 	userStore.subscribe((user) => {
 		wombatAwsProfiles.subscribe((profiles) => {
 			profile = profiles.find((p) => p?.name == user.last_used_profile);
@@ -33,7 +35,7 @@
 	function checkDependencies() {
 		return invoke<{ [key: string]: { Ok: string } & { Err: string } }>('check_dependencies');
 	}
-	let dependenciesPromise = checkDependencies();
+	let dependenciesPromise = $state(checkDependencies());
 	listen<string>('KILL_ME', () => {
 		exit(1);
 	});
@@ -51,9 +53,9 @@
 				{#each entries as dep}
 					<div class="flex items-center gap-1 text-sm">
 						{#if dep[1].Ok}
-							<div class="bg-lime-500 w-2 h-2 rounded" />
+							<div class="bg-lime-500 w-2 h-2 rounded"></div>
 						{:else}
-							<div class="bg-rose-500 w-2 h-2 rounded" />
+							<div class="bg-rose-500 w-2 h-2 rounded"></div>
 						{/if}
 						<span>
 							{dep[0]} :
@@ -101,7 +103,7 @@
 		<div class="card flex-shrink-0 w-full shadow-2xl bg-base-100">
 			<div class="card-body">
 				<form
-					on:submit|preventDefault={async () => {
+					onsubmit={preventDefault(async () => {
 						try {
 							loading = true;
 							await login(profile);
@@ -112,7 +114,7 @@
 							buttonText = 'Start Again';
 							loading = false;
 						}
-					}}
+					})}
 				>
 					<div class="form-control">
 						<label class="label" for="aws-profile">
@@ -179,7 +181,7 @@
 									data-umami-event-uid={userId}
 									class="btn btn-warning"
 									type="button"
-									on:click={() => {
+									onclick={() => {
 										dependenciesPromise = checkDependencies();
 									}}
 								>

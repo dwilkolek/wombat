@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { run, preventDefault } from 'svelte/legacy';
+
 	import { ENVIRONMENTS } from '$lib/stores/env-store';
 	import { startUserSessionProxyDisabledReason } from '$lib/stores/reasons';
 	import { taskStore } from '$lib/stores/task-store';
@@ -6,18 +8,21 @@
 	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api/core';
 
-	$: app = '';
-	$: env = ENVIRONMENTS.at(0) ?? AwsEnv.DEV;
+	let app = $state('');
+
+	let env = $state(ENVIRONMENTS.at(0) ?? AwsEnv.DEV);
 	function buildArn(address: string) {
 		return `cookieSessionProxy::${address}::${env.toLowerCase()}`;
 	}
-	$: address = `https://${app}${env == AwsEnv.PROD ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`;
-	$: reason = startUserSessionProxyDisabledReason(address);
+	let address = $derived(
+		`https://${app}${env == AwsEnv.PROD ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`
+	);
+	let reason = $derived(startUserSessionProxyDisabledReason(address));
 </script>
 
 <form
 	class="flex flex-row gap-2 mb-2"
-	on:submit|preventDefault={async () => {
+	onsubmit={preventDefault(async () => {
 		await taskStore.startTask({ name: address, arn: buildArn(address) }, async () => {
 			console.log({
 				address,
@@ -45,7 +50,7 @@
 			});
 		});
 		app = '';
-	}}
+	})}
 >
 	<input
 		type="text"

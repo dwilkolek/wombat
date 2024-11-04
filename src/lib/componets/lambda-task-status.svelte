@@ -1,13 +1,19 @@
 <script lang="ts">
+	import { preventDefault } from 'svelte/legacy';
+
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { AwsEnv } from '$lib/types';
 	import { open } from '@tauri-apps/plugin-shell';
 
-	export let task: Task | undefined;
-	export let app: string;
-	export let env: AwsEnv;
-	$: port = $userStore.lambda_app_proxy_port_map?.[app]?.[env] ?? '?';
+	interface Props {
+		task: Task | undefined;
+		app: string;
+		env: AwsEnv;
+	}
+
+	let { task, app, env }: Props = $props();
+	let port = $derived($userStore.lambda_app_proxy_port_map?.[app]?.[env] ?? '?');
 </script>
 
 {#if task}
@@ -20,9 +26,9 @@
 				data-umami-event="browser_lambda_app_proxy_open"
 				data-umami-event-uid={$userStore.id}
 				class={`link text-sm`}
-				on:click|preventDefault={() => {
+				onclick={preventDefault(() => {
 					open('http://localhost:' + task.port);
-				}}
+				})}
 			>
 				{task.port}</button
 			>

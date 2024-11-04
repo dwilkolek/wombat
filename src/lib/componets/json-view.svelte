@@ -4,8 +4,12 @@
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import { readable, type Readable } from 'svelte/store';
 
-	export let log: Readable<object | undefined>;
-	export let nested: boolean | null | undefined;
+	interface Props {
+		log: Readable<object | undefined>;
+		nested: boolean | null | undefined;
+	}
+
+	let { log, nested }: Props = $props();
 
 	enum Tag {
 		std,
@@ -45,15 +49,17 @@
 		'mdc'
 	];
 
-	let entries: { key: string; value: unknown }[] = [];
+	let entries: { key: string; value: unknown }[] = $state([]);
 
-	let container: HTMLDivElement;
-	let pngPromise = regeneratePng();
+	let container: HTMLDivElement | undefined = $state();
+	let pngPromise = $state(regeneratePng());
 
-	$: showCompactBtn =
-		!nested && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'));
-	$: compactStacktrace = true;
-	$: activeTags = compactStacktrace ? [Tag.std, Tag.dots] : [Tag.ext, Tag.std];
+	let showCompactBtn = $derived(
+		!nested && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'))
+	);
+	let compactStacktrace = $state(true);
+
+	let activeTags = $derived(compactStacktrace ? [Tag.std, Tag.dots] : [Tag.ext, Tag.std]);
 
 	log.subscribe((log) => {
 		entries = objToList(log ?? {}).sort((a, b) => {
@@ -81,7 +87,7 @@
 			<div class="flex flex-col gap-2 p-2">
 				{#if showCompactBtn}<button
 						class="btn btn-active btn-primary btn-xs"
-						on:click={() => {
+						onclick={() => {
 							compactStacktrace = !compactStacktrace;
 							pngPromise = regeneratePng();
 						}}>{compactStacktrace ? 'Show Full' : 'Show Compact'}</button
@@ -89,7 +95,7 @@
 				{/if}
 				<button
 					class="btn btn-active btn-primary btn-xs"
-					on:click={async () => {
+					onclick={async () => {
 						await writeText(JSON.stringify(log, null, 2));
 					}}>Copy raw json</button
 				>
@@ -99,7 +105,7 @@
 						Loading preview
 					{:then dataUrl}
 						Right click bellow to copy as image
-						<!-- svelte-ignore a11y-missing-attribute -->
+						<!-- svelte-ignore a11y_missing_attribute -->
 						<img class="invert object-fit object-center h-16 w-36" src={dataUrl} />
 					{/await}
 				</div>

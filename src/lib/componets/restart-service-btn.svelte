@@ -1,13 +1,19 @@
 <script lang="ts">
+	import { preventDefault } from 'svelte/legacy';
+
 	import { invoke } from '@tauri-apps/api/core';
 	import { deplyomentStore } from '$lib/stores/deployment-store';
 	import type { EcsService } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';
 	import { restartEcsDisabledReason } from '$lib/stores/reasons';
 
-	export let service: EcsService;
+	interface Props {
+		service: EcsService;
+	}
 
-	$: disabledReason = restartEcsDisabledReason(service);
+	let { service }: Props = $props();
+
+	let disabledReason = $derived(restartEcsDisabledReason(service));
 </script>
 
 <span class="tooltip tooltip-left flex" data-tip={$disabledReason?.message ?? 'Restart service'}>
@@ -33,8 +39,9 @@
 		{/if}
 		{#if deployment.rollout_status == 'Completed'}
 			<button
+				aria-label="Clear ECS restart state"
 				class="text-lime-500"
-				on:click={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
+				onclick={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
 				data-umami-event="ecs_restart_clear"
 				data-umami-event-uid={$userStore.id}
 			>
@@ -56,8 +63,9 @@
 		{/if}
 		{#if deployment.rollout_status == 'Failed'}
 			<button
+				aria-label="Clear ECS restart state"
 				class="text-rose-700"
-				on:click={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
+				onclick={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
 				data-umami-event="ecs_restart_clear"
 				data-umami-event-uid={$userStore.id}
 				><svg
@@ -78,18 +86,18 @@
 		{/if}
 	{:else}
 		<button
+			aria-label="Restart ECS"
 			data-umami-event="ecs_task_restart_start"
 			data-umami-event-uid={$userStore.id}
 			disabled={!!$disabledReason}
 			class={$disabledReason ? 'opacity-30' : ''}
-			on:click|preventDefault={(e) => {
+			onclick={preventDefault(() => {
 				invoke('restart_service', {
 					env: service.env,
 					clusterArn: service.cluster_arn,
 					serviceName: service.name
 				});
-				e.currentTarget.disabled = true;
-			}}
+			})}
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

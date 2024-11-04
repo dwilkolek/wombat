@@ -4,8 +4,12 @@
 	import DbSecretBtn from './db-secret-btn.svelte';
 	import DbProxyStartBtn from './db-proxy-start-btn.svelte';
 	import DbProxyStopBtn from './db-proxy-stop-btn.svelte';
-	export let database: RdsInstance;
-	$: port = $taskStore.find((t) => t.arn == database?.arn)?.port;
+	interface Props {
+		database: RdsInstance;
+	}
+
+	let { database }: Props = $props();
+	let port = $derived($taskStore.find((t) => t.arn == database?.arn)?.port);
 </script>
 
 {#if !port}

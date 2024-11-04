@@ -5,14 +5,18 @@
 	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import type { AppPage } from './+page';
 
-	export let data: AppPage;
+	interface Props {
+		data: AppPage;
+	}
 
-	$: detailsStorr = serviceDetailStore(data.app);
-	$: details = $detailsStorr;
+	let { data }: Props = $props();
 
-	$: isFavourite = (name: string): boolean => {
+	let detailsStorr = $derived(serviceDetailStore(data.app));
+	let details = $derived($detailsStorr);
+
+	let isFavourite = $derived((name: string): boolean => {
 		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
-	};
+	});
 </script>
 
 <svelte:head>
@@ -25,18 +29,18 @@
 		class="text-md"
 		data-umami-event="favorite_app_toggle"
 		data-umami-event-uid={$userStore.id}
-		on:click={() => {
+		onclick={() => {
 			userStore.favoriteTrackedName(data.app);
 		}}
 	>
-		<StarIcon state={isFavourite(data.app)} />
+		<StarIcon isSelected={isFavourite(data.app)} />
 	</button>
 	<h1 class="inline text-xl">
 		{data.app}
 	</h1>
 </div>
 {#if !details}
-	<span class="loading loading-dots loading-lg" />
+	<span class="loading loading-dots loading-lg"></span>
 {/if}
 <div class="flex flex-col">
 	{#if details}
