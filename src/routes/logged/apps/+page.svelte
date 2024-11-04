@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import { AwsEnv } from '$lib/types';
 	import { invoke } from '@tauri-apps/api/core';
@@ -31,9 +29,10 @@
 <div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
 	<form
 		class="flex flex-row gap-2 mb-2"
-		onsubmit={preventDefault(async () => {
+		onsubmit={async (e) => {
+			e.preventDefault();
 			discovered = invoke('discover', { name: discoverValue });
-		})}
+		}}
 	>
 		<input
 			type="text"

@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { taskStore } from '$lib/stores/task-store';
 	import type { AwsEnv, CustomHeader } from '$lib/types';
@@ -169,9 +167,10 @@
 					</h2>
 					<button
 						class="btn btn-circle btn-sm"
-						onclick={preventDefault(() => {
+						onclick={(e) => {
+							e.preventDefault();
 							dialog?.close();
-						})}
+						}}
 						aria-label="Close dialog"
 					>
 						<svg
@@ -246,7 +245,10 @@
 					data-umami-event="lambda_app_proxy_start"
 					data-umami-event-uid={$userStore.id}
 					class="btn btn-active btn-accent btn-sm"
-					onclick={preventDefault(() => startProxy())}
+					onclick={(e) => {
+						e.preventDefault();
+						startProxy();
+					}}
 				>
 					Start proxy</button
 				>

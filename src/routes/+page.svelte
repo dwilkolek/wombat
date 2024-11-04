@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { goto } from '$app/navigation';
 	import { userStore } from '$lib/stores/user-store';
 	import { version } from '$app/environment';
@@ -103,8 +101,9 @@
 		<div class="card flex-shrink-0 w-full shadow-2xl bg-base-100">
 			<div class="card-body">
 				<form
-					onsubmit={preventDefault(async () => {
+					onsubmit={async (e) => {
 						try {
+							e.preventDefault();
 							loading = true;
 							await login(profile);
 							loading = false;
@@ -114,7 +113,7 @@
 							buttonText = 'Start Again';
 							loading = false;
 						}
-					})}
+					}}
 				>
 					<div class="form-control">
 						<label class="label" for="aws-profile">

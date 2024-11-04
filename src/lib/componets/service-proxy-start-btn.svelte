@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { proxyAuthConfigsStore } from '$lib/stores/proxy-auth-configs-store';
 	import {
 		AwsEnv,
@@ -165,9 +163,10 @@
 					</h2>
 					<button
 						class="btn btn-circle btn-sm"
-						onclick={preventDefault(() => {
+						onclick={(e) => {
+							e.preventDefault();
 							dialog?.close();
-						})}
+						}}
 						aria-label="Close modal"
 					>
 						<svg
@@ -353,14 +352,15 @@
 					class="btn btn-active btn-accent btn-sm"
 					data-umami-event="ecs_proxy_start"
 					data-umami-event-uid={$userStore.id}
-					onclick={preventDefault(() => {
+					onclick={(e) => {
+						e.preventDefault();
 						startProxy(
 							useSSOProfile ? undefined : selectedInfraProfile,
 							useSSOProfile ? selectedSsoProxy : undefined,
 							selectedAuthInterceptor,
 							customHeaders
 						);
-					})}
+					}}
 				>
 					Start proxy</button
 				>

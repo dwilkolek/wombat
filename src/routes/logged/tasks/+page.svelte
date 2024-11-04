@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import UserSessionProxyBtn from '$lib/componets/user-session-proxy-btn.svelte';
 	import { TaskStatus, taskStore } from '$lib/stores/task-store';
 </script>
@@ -63,9 +61,10 @@
 							{#if task.status == TaskStatus.RUNNING}
 								running
 								<button
-									onclick={preventDefault(async () => {
+									onclick={async (e) => {
+										e.preventDefault();
 										await taskStore.stopTask(task.arn);
-									})}>X</button
+									}}>X</button
 								>
 							{/if}
 							{#if task.status == TaskStatus.FAILED}

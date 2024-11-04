@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { goto } from '$app/navigation';
 	import WombatIcon from '$lib/images/128x128.png';
 	import { page } from '$app/stores';
@@ -18,8 +16,9 @@
 
 	let { children }: Props = $props();
 
-	const logout = async () => {
+	const logout = async (e: Event) => {
 		try {
+			e.preventDefault();
 			await invoke('logout');
 			emit('logged-out');
 			goto('/');
@@ -108,8 +107,8 @@
 		<button
 			data-umami-event="logout"
 			data-umami-event-uid={userConfig.id}
-			onclick={preventDefault(logout)}
-			onkeypress={preventDefault(logout)}
+			onclick={logout}
+			onkeypress={logout}
 			class="px-2 cursor-pointer"
 			aria-label="Logout"
 		>

@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { userStore } from '$lib/stores/user-store';
 	import { open } from '@tauri-apps/plugin-shell';
 
@@ -16,10 +14,11 @@
 <div class="mx-auto">
 	<form
 		class="flex flex-col justify-items-center gap-2"
-		onsubmit={preventDefault(() => {
+		onsubmit={(e) => {
+			e.preventDefault();
 			userStore.setDbeaverPath(dbeaver_path);
 			userStore.setLogsDir(logs_dir);
-		})}
+		}}
 	>
 		<div class="form-control">
 			<div class=" rounded p-4">
@@ -48,9 +47,10 @@
 						Install <a
 							class="link link-accent"
 							href="https://dbeaver.io/"
-							onclick={preventDefault(() => {
+							onclick={(e) => {
+								e.preventDefault();
 								open('https://dbeaver.io/');
-							})}>dbeaver</a
+							}}>dbeaver</a
 						>
 						to be able to open connection to database directly from Wombat<br /><br />
 						MacOS:

@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { invoke } from '@tauri-apps/api/core';
 	import { deplyomentStore } from '$lib/stores/deployment-store';
 	import type { EcsService } from '$lib/types';
@@ -91,13 +89,14 @@
 			data-umami-event-uid={$userStore.id}
 			disabled={!!$disabledReason}
 			class={$disabledReason ? 'opacity-30' : ''}
-			onclick={preventDefault(() => {
+			onclick={(e) => {
+				e.preventDefault();
 				invoke('restart_service', {
 					env: service.env,
 					clusterArn: service.cluster_arn,
 					serviceName: service.name
 				});
-			})}
+			}}
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

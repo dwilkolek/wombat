@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { EcsService } from '$lib/types';
@@ -23,9 +21,10 @@
 		{#if task.status !== TaskStatus.STARTING}
 			<button
 				class={`link text-sm`}
-				onclick={preventDefault(() => {
+				onclick={(e) => {
+					e.preventDefault();
 					open('http://localhost:' + task.port);
-				})}
+				}}
 				data-umami-event="browser_ecs_proxy_open"
 				data-umami-event-uid={$userStore.id}
 			>

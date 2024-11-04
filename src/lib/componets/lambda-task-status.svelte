@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { AwsEnv } from '$lib/types';
@@ -26,9 +24,10 @@
 				data-umami-event="browser_lambda_app_proxy_open"
 				data-umami-event-uid={$userStore.id}
 				class={`link text-sm`}
-				onclick={preventDefault(() => {
+				onclick={(e) => {
+					e.preventDefault();
 					open('http://localhost:' + task.port);
-				})}
+				}}
 			>
 				{task.port}</button
 			>

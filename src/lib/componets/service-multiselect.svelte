@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { run } from 'svelte/legacy';
-
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { activeProfilePreferences } from '$lib/stores/user-store';
 	import { serviceStore } from '$lib/stores/service-store';
@@ -31,7 +29,7 @@
 				});
 		})
 	);
-	run(() => {
+	$effect(() => {
 		if (inputElement) {
 			setTimeout(() => {
 				inputElement?.focus();

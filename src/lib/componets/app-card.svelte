@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 
 	import { allServiceDetailsStore, serviceDetailStore } from '$lib/stores/service-details-store';
@@ -68,9 +66,10 @@
 							aria-label="Refresh"
 							data-umami-event="app_refresh"
 							data-umami-event-uid={$userStore.id}
-							onclick={preventDefault(() => {
+							onclick={(e) => {
+								e.preventDefault();
 								allServiceDetailsStore.refreshOne(details.app);
-							})}
+							}}
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"

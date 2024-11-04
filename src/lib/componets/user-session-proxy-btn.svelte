@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { run, preventDefault } from 'svelte/legacy';
-
 	import { ENVIRONMENTS } from '$lib/stores/env-store';
 	import { startUserSessionProxyDisabledReason } from '$lib/stores/reasons';
 	import { taskStore } from '$lib/stores/task-store';
@@ -22,7 +20,8 @@
 
 <form
 	class="flex flex-row gap-2 mb-2"
-	onsubmit={preventDefault(async () => {
+	onsubmit={async (e) => {
+		e.preventDefault();
 		await taskStore.startTask({ name: address, arn: buildArn(address) }, async () => {
 			console.log({
 				address,
@@ -50,7 +49,7 @@
 			});
 		});
 		app = '';
-	})}
+	}}
 >
 	<input
 		type="text"

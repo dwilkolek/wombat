@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { userStore } from '$lib/stores/user-store';
 	import type { CustomHeader } from '$lib/types';
 
