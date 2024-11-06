@@ -158,7 +158,7 @@ export type CustomHeader = {
 	encodeBase64: boolean;
 };
 
-export type TimeUnit = 'minutes' | 'hours';
+export type TimeUnit = 'minutes' | 'hours' | 'days';
 export type Timerange =
 	| {
 			type: 'relative';
