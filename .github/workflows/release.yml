@@ -45,10 +45,15 @@ jobs:
           WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
           WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
           WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: 'pnpm'
       - name: install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -64,11 +69,11 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
       - name: install frontend dependencies
-        run: npm ci
-      - name: lint & check
+        run: pnpm install --frozen-lockfile
+      - name: lint
         run: |
-          npm run lint
-          npm run check
+          pnpm lint
+          pnpm check
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
