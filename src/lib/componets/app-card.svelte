@@ -13,20 +13,24 @@
 	import AppCardHr from './app-card-hr.svelte';
 	import RestartServiceBtn from './restart-service-btn.svelte';
 	import { format } from 'date-fns/format';
-	export let app: string;
-	export let displayConfig: {
-		envs: AwsEnv[] | null;
-		favorite: boolean | null;
-	};
+	interface Props {
+		app: string;
+		displayConfig: {
+			envs: AwsEnv[] | null;
+			favorite: boolean | null;
+		};
+	}
 
-	$: detailsStorr = serviceDetailStore(app);
-	$: details = $detailsStorr;
+	let { app, displayConfig }: Props = $props();
 
-	$: tasks = $taskStore;
+	let detailsStorr = $derived(serviceDetailStore(app));
+	let details = $derived($detailsStorr);
 
-	$: isFavourite = (name: string): boolean => {
+	let tasks = $derived($taskStore);
+
+	let isFavourite = $derived((name: string): boolean => {
 		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
-	};
+	});
 </script>
 
 {#if displayConfig.favorite == null || isFavourite(app) === displayConfig.favorite}
@@ -37,11 +41,11 @@
 					class="text-xs"
 					data-umami-event="favorite_app_toggle"
 					data-umami-event-uid={$userStore.id}
-					on:click={() => {
+					onclick={() => {
 						userStore.favoriteTrackedName(app);
 					}}
 				>
-					<StarIcon state={isFavourite(app)} />
+					<StarIcon isSelected={isFavourite(app)} />
 				</button>
 				<span class="inline text-base">
 					<a class="hover:text-accent underline" href={`/logged/apps/${app}`}>
@@ -59,9 +63,11 @@
 					<div class="flex gap-2">
 						<span>Synchronized at: {format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')}</span>
 						<button
+							aria-label="Refresh"
 							data-umami-event="app_refresh"
 							data-umami-event-uid={$userStore.id}
-							on:click|preventDefault={() => {
+							onclick={(e) => {
+								e.preventDefault();
 								allServiceDetailsStore.refreshOne(details.app);
 							}}
 						>
@@ -86,7 +92,7 @@
 		</div>
 
 		{#if !details}
-			<span class="loading loading-dots loading-lg" />
+			<span class="loading loading-dots loading-lg"></span>
 		{/if}
 
 		{#if details}

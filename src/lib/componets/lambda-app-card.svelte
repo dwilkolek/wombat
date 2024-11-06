@@ -5,9 +5,13 @@
 	import LambdaTaskStatus from './lambda-task-status.svelte';
 	import LambdaAppProxyBtn from './lambda-app-proxy-btn.svelte';
 	import { cookieJar } from '$lib/stores/cookie-jar-status';
-	export let app: string;
+	interface Props {
+		app: string;
+	}
 
-	$: tasks = $taskStore;
+	let { app }: Props = $props();
+
+	let tasks = $derived($taskStore);
 </script>
 
 <div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
@@ -33,25 +37,25 @@
 						<div
 							class={`bg-lime-400 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'Cookie is fresh, <5min'}
-						/>
+						></div>
 					{/if}
 					{#if $cookieJar.cookieHealth[enabled_env] == 'Stale'}
 						<div
 							class={`bg-amber-300 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'Cookie is stale, >5min'}
-						/>
+						></div>
 					{/if}
 					{#if $cookieJar.cookieHealth[enabled_env] == 'Old'}
 						<div
 							class={`bg-red-500 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'Cookie is old, >10min'}
-						/>
+						></div>
 					{/if}
 					{#if !$cookieJar.cookieHealth[enabled_env]}
 						<div
 							class={`bg-gray-500 h-[8px] w-[8px] rounded tooltip tooltip-top`}
 							data-tip={'No cookie 🤷‍♂️'}
-						/>
+						></div>
 					{/if}
 					<span class="italic">{enabled_env}:</span>
 				</div>

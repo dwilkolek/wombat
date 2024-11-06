@@ -11,16 +11,16 @@
 	import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import TimerangeSelect from '$lib/componets/timerange-select.svelte';
 
-	$: activeCluser = clusterStore.activeCluser;
+	let activeCluser = $derived(clusterStore.activeCluser);
 
-	$: selectedServices = serviceStore.selectedServices;
+	let selectedServices = $derived(serviceStore.selectedServices);
 
-	$: clusters = clusterStore.clusters;
+	let clusters = $derived(clusterStore.clusters);
 
-	$: timerange = logStore.timerange;
-	$: filterString = logStore.filterString;
-	$: selectedLog = logStore.selectedLog;
-	$: storeState = logStore.storeState;
+	let timerange = $derived(logStore.timerange);
+	let filterString = $derived(logStore.filterString);
+	let selectedLog = $derived(logStore.selectedLog);
+	let storeState = $derived(logStore.storeState);
 
 	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });
@@ -31,7 +31,7 @@
 		services: string[];
 		label: string;
 	};
-	$: filters = invoke<LogFilter[]>('log_filters');
+	let filters = $derived(invoke<LogFilter[]>('log_filters'));
 
 	const openLogInNewWindow = async (log: LogData) => {
 		const key = await invoke<string>('kv_put', { value: JSON.stringify(log) });
@@ -57,7 +57,7 @@
 		}
 	};
 
-	let jsonViewNode: HTMLElement;
+	let jsonViewNode: HTMLElement | undefined = $state();
 </script>
 
 <svelte:head>
@@ -72,7 +72,7 @@
 			<div class="flex flex-wrap gap-2">
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 15,
@@ -82,7 +82,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 30,
@@ -92,7 +92,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 1,
@@ -102,7 +102,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 2,
@@ -112,7 +112,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 4,
@@ -122,7 +122,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 8,
@@ -132,7 +132,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'relative',
 							amount: 24,
@@ -142,7 +142,7 @@
 				>
 				<button
 					class="btn btn-accent btn-xs"
-					on:click={() => {
+					onclick={() => {
 						timerange.set({
 							type: 'absolute',
 							from: startOfDay(new Date()),
@@ -170,7 +170,7 @@
 						{#if matches}
 							<button
 								class="btn btn-active btn-secondary btn-xs"
-								on:click={() => {
+								onclick={() => {
 									filterString.set(filter.filter);
 								}}>{filter.label}</button
 							>
@@ -209,7 +209,7 @@
 				<button
 					class="btn btn-sm btn-active btn-primary"
 					disabled={$selectedServices.length === 0}
-					on:click={() => {
+					onclick={() => {
 						if ($selectedServices.length > 0 && $activeCluser?.env) {
 							logStore.search(
 								$selectedServices.map((s) => s.name),
@@ -240,7 +240,7 @@
 				<button
 					class="btn btn-sm btn-active btn-primary"
 					disabled={$selectedServices.length === 0}
-					on:click={() => {
+					onclick={() => {
 						if ($selectedServices.length > 0 && $activeCluser?.env) {
 							logStore.dumpLogs(
 								$selectedServices.map((s) => s.name),
@@ -272,7 +272,7 @@
 			{#if $storeState.isLookingForLogs}
 				<button
 					class="btn btn-sm btn-active btn-warning"
-					on:click={() => {
+					onclick={() => {
 						logStore.abort('user-request');
 					}}
 					data-umami-event="logs_search_stop"
@@ -337,7 +337,7 @@
 			<tbody>
 				{#each $storeState.logs as log}
 					<tr
-						on:click={() => {
+						onclick={() => {
 							logStore.showLog(log);
 						}}
 						class={`cursor-pointer text-white ${log.style.bg} ${log.style.hover} ${
@@ -366,10 +366,11 @@
 									class="p-1 -m-0.5 bg-base-100 rounded-full"
 									data-umami-event="log_open_in_window"
 									data-umami-event-uid={$userStore.id}
-									on:click={(e) => {
-										e.stopPropagation();
+									onclick={(e) => {
+										e.preventDefault();
 										openLogInNewWindow(log.data);
 									}}
+									aria-label="Open log info"
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -402,7 +403,7 @@
 		<div class="w-full flex flex-row justify-center relative pb-1">
 			<div>
 				{#if !$storeState.showLogDetails}
-					<button on:click={() => ($storeState.showLogDetails = true)}>
+					<button onclick={() => ($storeState.showLogDetails = true)} aria-label="Open log details">
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							fill="none"
@@ -416,7 +417,10 @@
 					</button>
 				{/if}
 				{#if $storeState.showLogDetails}
-					<button on:click={() => ($storeState.showLogDetails = false)}>
+					<button
+						onclick={() => ($storeState.showLogDetails = false)}
+						aria-label="Hide log details"
+					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							fill="none"
@@ -440,11 +444,12 @@
 						data-umami-event="log_open_in_window"
 						data-umami-event-uid={$userStore.id}
 						class="btn btn-circle btn-xs"
-						on:click={() => {
+						onclick={() => {
 							if ($selectedLog) {
 								openLogInNewWindow($selectedLog);
 							}
 						}}
+						aria-label="Open log window"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"

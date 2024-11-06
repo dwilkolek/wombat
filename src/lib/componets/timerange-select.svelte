@@ -28,12 +28,16 @@
 		}
 	};
 
-	export let range: Writable<Timerange>;
-	let type = 'relative';
-	let from = startOfDay(new Date());
-	let to = endOfDay(new Date());
-	let amount = 30;
-	let unit: TimeUnit = 'minutes';
+	interface Props {
+		range: Writable<Timerange>;
+	}
+
+	let { range }: Props = $props();
+	let type = $state('relative');
+	let from = $state(startOfDay(new Date()));
+	let to = $state(endOfDay(new Date()));
+	let amount = $state(30);
+	let unit: TimeUnit = $state('minutes');
 
 	range.subscribe((r) => {
 		type = r.type;
@@ -48,8 +52,8 @@
 				break;
 		}
 	});
-	let details: HTMLDetailsElement;
-	let open = false;
+	let details: HTMLDetailsElement | undefined = $state();
+	let open = $state(false);
 
 	function setTimeUnit(value: string) {
 		unit = value as TimeUnit;
@@ -78,7 +82,7 @@
 <details class="dropdown grow" bind:this={details}>
 	<summary
 		class="btn btn-sm w-[450px]"
-		on:click={() => {
+		onclick={() => {
 			open = true;
 		}}
 	>
@@ -89,13 +93,13 @@
 			<div class="flex gap-2">
 				<button
 					class={`btn btn-sm ${type == 'relative' ? 'btn-primary' : 'btn-ghost'}`}
-					on:click={() => {
+					onclick={() => {
 						type = 'relative';
 					}}>Relative</button
 				>
 				<button
 					class={`btn btn-sm ${type == 'absolute' ? 'btn-primary' : 'btn-ghost'}`}
-					on:click={() => {
+					onclick={() => {
 						type = 'absolute';
 					}}>Absolute</button
 				>
@@ -106,7 +110,7 @@
 						Amount: <input
 							type="number"
 							class="input input-sm input-bordered w-full"
-							on:change={(event) => {
+							onchange={(event) => {
 								amount = parseInt(event.currentTarget.value);
 							}}
 							value={amount}
@@ -115,7 +119,7 @@
 					<div class="grow">
 						Unit: <select
 							class="input input-sm input-bordered w-full"
-							on:change={(event) => setTimeUnit(event.currentTarget.value)}
+							onchange={(event) => setTimeUnit(event.currentTarget.value)}
 						>
 							<option value="minutes" selected={unit == 'minutes'}>Minute</option>
 							<option value="hours" selected={unit == 'hours'}>Hour</option>
@@ -130,7 +134,7 @@
 							type="datetime-local"
 							placeholder="Start date"
 							class="input input-sm input-bordered w-full max-w-xs"
-							on:change={(event) => {
+							onchange={(event) => {
 								from = new Date(event.currentTarget.value);
 							}}
 							value={toLocalDateStr(from)}
@@ -141,7 +145,7 @@
 							type="datetime-local"
 							placeholder="End date"
 							class="input input-sm input-bordered w-full max-w-xs"
-							on:change={(event) => {
+							onchange={(event) => {
 								to = new Date(event.currentTarget.value);
 							}}
 							value={toLocalDateStr(to)}
@@ -152,15 +156,15 @@
 			<div class="flex justify-end gap-2">
 				<button
 					class="btn btn-sm btn-ghost"
-					on:click={() => {
+					onclick={() => {
 						reset();
-						details.removeAttribute('open');
+						details?.removeAttribute('open');
 						open = false;
 					}}>Cancel</button
 				>
 				<button
 					class="btn btn-sm btn-success"
-					on:click={() => {
+					onclick={() => {
 						switch (type) {
 							case 'absolute':
 								range.set({
@@ -176,7 +180,7 @@
 									unit
 								});
 						}
-						details.removeAttribute('open');
+						details?.removeAttribute('open');
 						open = false;
 					}}>Select</button
 				>
@@ -185,12 +189,12 @@
 	</div>
 </details>
 {#if open}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
 		class="w-screen h-screen bottom-0 left-0 fixed bg-salte"
-		on:click={() => {
-			details.removeAttribute('open');
+		onclick={() => {
+			details?.removeAttribute('open');
 			open = false;
 		}}
 	></div>

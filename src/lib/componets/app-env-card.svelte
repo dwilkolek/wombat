@@ -3,11 +3,15 @@
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import type { AwsEnv } from '$lib/types';
-	export let app: string;
-	export let env: AwsEnv;
-	$: detailsStorr = serviceDetailStore(app);
-	$: details = $detailsStorr;
-	$: envDetails = details?.envs?.get(env);
+	interface Props {
+		app: string;
+		env: AwsEnv;
+	}
+
+	let { app, env }: Props = $props();
+	let detailsStorr = $derived(serviceDetailStore(app));
+	let details = $derived($detailsStorr);
+	let envDetails = $derived(details?.envs?.get(env));
 </script>
 
 {#if envDetails}

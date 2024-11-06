@@ -6,9 +6,13 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { getRdsSecretDisabledReason } from '$lib/stores/reasons';
 
-	export let database: RdsInstance | undefined;
+	interface Props {
+		database: RdsInstance | undefined;
+	}
 
-	$: disabledReason = getRdsSecretDisabledReason(database);
+	let { database }: Props = $props();
+
+	let disabledReason = $derived(getRdsSecretDisabledReason(database));
 	const credentialsHandler = async () => {
 		let answer = await ask(
 			'Are you alone and not sharing screen?\nAccess to credentials is recorded.\nRequires access to Secret Manager.',
@@ -44,9 +48,10 @@
 		<button
 			disabled={!!$disabledReason}
 			class={$disabledReason ? 'opacity-30' : ''}
-			on:click={credentialsHandler}
+			onclick={credentialsHandler}
 			data-umami-event="rds_credentials_get"
 			data-umami-event-uid={$userStore.id}
+			aria-label={$disabledReason ?? 'Search for secret'}
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"

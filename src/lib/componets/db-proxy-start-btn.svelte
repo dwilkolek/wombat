@@ -6,9 +6,13 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { ask } from '@tauri-apps/plugin-dialog';
 
-	export let database: RdsInstance;
+	interface Props {
+		database: RdsInstance;
+	}
 
-	$: disabledReason = startRdsProxyDisabledReason(database);
+	let { database }: Props = $props();
+
+	let disabledReason = $derived(startRdsProxyDisabledReason(database));
 
 	const startDbProxy = async () => {
 		if (database?.env == AwsEnv.PROD) {
@@ -37,7 +41,8 @@
 		data-umami-event-uid={$userStore.id}
 		disabled={!!$disabledReason}
 		class={`flex flex-row gap-1 ${$disabledReason ? 'opacity-30' : 'cursor-pointer'}`}
-		on:click={startDbProxy}
+		onclick={startDbProxy}
+		aria-label={$disabledReason ?? 'Start proxy'}
 	>
 		<div class="w-5 h-5 relative">
 			<svg

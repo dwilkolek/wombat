@@ -4,7 +4,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { readable } from 'svelte/store';
 
-	$: logPromise = invoke<string>('kv_get', { key: $page.url.searchParams.get('kvKey') });
+	let logPromise = $derived(invoke<string>('kv_get', { key: $page.url.searchParams.get('kvKey') }));
 </script>
 
 <svelte:head>

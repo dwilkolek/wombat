@@ -3,6 +3,11 @@
 	import ErrorBox from '$lib/componets/error-box.svelte';
 	import { loading } from '$lib/stores/error-store';
 	import { invoke } from '@tauri-apps/api/core';
+	interface Props {
+		children?: import('svelte').Snippet;
+	}
+
+	let { children }: Props = $props();
 </script>
 
 <div>
@@ -24,6 +29,6 @@
 		</div>
 	{/if}
 	<main>
-		<slot />
+		{@render children?.()}
 	</main>
 </div>

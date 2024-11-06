@@ -12,7 +12,7 @@
 	</button>
 {:else}
 	<button
-		on:click={featuresStore.refreshFeatures}
+		onclick={featuresStore.refreshFeatures}
 		data-umami-event="fs_refresh"
 		data-umami-event-uid={$userStore.id}
 	>

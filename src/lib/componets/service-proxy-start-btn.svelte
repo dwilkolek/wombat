@@ -17,54 +17,64 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
 
-	export let service: EcsService;
-	let dialog: HTMLDialogElement;
-	let selectedInfraProfile =
+	interface Props {
+		service: EcsService;
+	}
+
+	let { service }: Props = $props();
+	let dialog: HTMLDialogElement | undefined = $state();
+	let selectedInfraProfile = $state(
 		$wombatProfileStore.infraProfiles.find(
 			(infraProfile) => infraProfile.env == service.env && infraProfile.app == service.name
-		) ?? $wombatProfileStore.infraProfiles.at(0);
-	let selectedSsoProxy =
+		) ?? $wombatProfileStore.infraProfiles.at(0)
+	);
+	let selectedSsoProxy = $state(
 		$wombatProfileStore.ssoProfiles.find((ssoProfile) => ssoProfile.env == service.env) ??
-		$wombatProfileStore.ssoProfiles.at(0);
-	let useSSOProfile = false;
-	let selectedAuthInterceptor: ProxyAuthConfig | undefined;
-	let customHeaders: CustomHeader[] = [
+			$wombatProfileStore.ssoProfiles.at(0)
+	);
+	let useSSOProfile = $state(false);
+	let selectedAuthInterceptor: ProxyAuthConfig | undefined = $state();
+	let customHeaders: CustomHeader[] = $state([
 		{
 			name: 'Host',
 			encodeBase64: false,
 			value: `${service.name}.service`
 		}
-	];
+	]);
 
-	$: matchingInfraProfiles =
+	let matchingInfraProfiles = $derived(
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
-		[];
-
-	$: disabledReason = startEcsProxyDisabledReason(service);
-
-	$: proxyAuthConfigsForThisService = $proxyAuthConfigsStore.filter(
-		(config) => config.env == service.env && config.toApp == service.name
+			[]
 	);
 
-	$: filterForInfraProfile = (
-		configs: ProxyAuthConfig[],
-		infraProfile: InfraProfile | undefined
-	) => {
-		return configs.filter(
-			(config) =>
-				infraProfile &&
-				(config.fromApp == '*' || infraProfile.app == config.fromApp) &&
-				!config.requireSsoProfile
-		);
-	};
+	let disabledReason = $derived(startEcsProxyDisabledReason(service));
 
-	$: filterForSsoProfile = (configs: ProxyAuthConfig[]) => {
+	let proxyAuthConfigsForThisService = $derived(
+		$proxyAuthConfigsStore.filter(
+			(config) => config.env == service.env && config.toApp == service.name
+		)
+	);
+
+	let filterForInfraProfile = $derived(
+		(configs: ProxyAuthConfig[], infraProfile: InfraProfile | undefined) => {
+			return configs.filter(
+				(config) =>
+					infraProfile &&
+					(config.fromApp == '*' || infraProfile.app == config.fromApp) &&
+					!config.requireSsoProfile
+			);
+		}
+	);
+
+	let filterForSsoProfile = $derived((configs: ProxyAuthConfig[]) => {
 		return configs;
-	};
+	});
 
-	$: configsForProfile = useSSOProfile
-		? filterForSsoProfile(proxyAuthConfigsForThisService)
-		: filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile);
+	let configsForProfile = $derived(
+		useSSOProfile
+			? filterForSsoProfile(proxyAuthConfigsForThisService)
+			: filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile)
+	);
 
 	const startProxy = async (
 		infraProfile: InfraProfile | undefined,
@@ -99,7 +109,7 @@
 				headers
 			});
 		});
-		dialog.close();
+		dialog?.close();
 	};
 </script>
 
@@ -107,7 +117,8 @@
 	<button
 		disabled={!!$disabledReason}
 		class={`flex flex-row gap-1 items-center ${$disabledReason ? 'opacity-30' : 'cursor-pointer'}`}
-		on:click={() => dialog.show()}
+		onclick={() => dialog?.show()}
+		aria-label={$disabledReason ?? 'Start proxy'}
 	>
 		<div class="w-5 h-5 relative">
 			<svg
@@ -139,7 +150,7 @@
 </div>
 <dialog
 	bind:this={dialog}
-	on:close={() => console.log('closed')}
+	onclose={() => console.log('closed')}
 	class="modal bg-black bg-opacity-60"
 >
 	<div class="modal-box w-11/12 max-w-[960px]">
@@ -152,9 +163,11 @@
 					</h2>
 					<button
 						class="btn btn-circle btn-sm"
-						on:click|preventDefault={() => {
-							dialog.close();
+						onclick={(e) => {
+							e.preventDefault();
+							dialog?.close();
 						}}
+						aria-label="Close modal"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -176,7 +189,7 @@
 				<span>Profile:</span>
 				<div class="flex gap-4 items-end">
 					<div class="w-32">
-						<!-- svelte-ignore a11y-autofocus -->
+						<!-- svelte-ignore a11y_autofocus -->
 						<select
 							autofocus
 							class="select select-bordered w-full select-sm"
@@ -188,7 +201,7 @@
 					</div>
 					{#if useSSOProfile}
 						<div class="grow">
-							<!-- svelte-ignore a11y-autofocus -->
+							<!-- svelte-ignore a11y_autofocus -->
 							<select
 								autofocus
 								class="select select-bordered w-full select-sm"
@@ -208,7 +221,7 @@
 					{/if}
 					{#if !useSSOProfile}
 						<div class="grow">
-							<!-- svelte-ignore a11y-autofocus -->
+							<!-- svelte-ignore a11y_autofocus -->
 							<select
 								autofocus
 								class="select select-bordered w-full select-sm"
@@ -249,7 +262,7 @@
 					Headers <button
 						class="btn btn-xs btn-accent"
 						disabled={!$featuresStore.proxyCustomHeaders}
-						on:click={() => {
+						onclick={() => {
 							let uuid = 'a77e0899-bb86-4551-b737-f28971f2d943';
 							if (service.env == AwsEnv.DEMO) {
 								uuid = '0a8d41aa-f38d-45fc-852b-6a01f57bbc54';
@@ -288,7 +301,7 @@
 					<button
 						class="btn btn-xs btn-accent"
 						disabled={!$featuresStore.proxyCustomHeaders}
-						on:click={() => {
+						onclick={() => {
 							customHeaders = [
 								{
 									name: 'Host',
@@ -339,7 +352,8 @@
 					class="btn btn-active btn-accent btn-sm"
 					data-umami-event="ecs_proxy_start"
 					data-umami-event-uid={$userStore.id}
-					on:click|preventDefault={() => {
+					onclick={(e) => {
+						e.preventDefault();
 						startProxy(
 							useSSOProfile ? undefined : selectedInfraProfile,
 							useSSOProfile ? selectedSsoProxy : undefined,

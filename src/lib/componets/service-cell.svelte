@@ -5,8 +5,12 @@
 	import { taskStore } from '$lib/stores/task-store';
 	import type { EcsService } from '$lib/types';
 
-	export let service: EcsService;
-	$: port = $taskStore?.find((t) => t.arn == service?.arn)?.port;
+	interface Props {
+		service: EcsService;
+	}
+
+	let { service }: Props = $props();
+	let port = $derived($taskStore?.find((t) => t.arn == service?.arn)?.port);
 </script>
 
 {#if port}

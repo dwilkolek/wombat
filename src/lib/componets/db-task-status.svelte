@@ -3,9 +3,13 @@
 	import { execute } from '$lib/stores/error-store';
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import type { RdsInstance } from '$lib/types';
-	export let task: Task | undefined;
-	export let db: RdsInstance;
-	$: port = task?.port ?? $userStore.db_proxy_port_map?.[db.name]?.[db.env] ?? '?';
+	interface Props {
+		task: Task | undefined;
+		db: RdsInstance;
+	}
+
+	let { task, db }: Props = $props();
+	let port = $derived(task?.port ?? $userStore.db_proxy_port_map?.[db.name]?.[db.env] ?? '?');
 </script>
 
 {#if task && task.status !== TaskStatus.FAILED}
@@ -23,7 +27,7 @@
 				class={`link text-sm gap-1 text-amber-300 flex items-center ${
 					$userStore.dbeaver_path ? 'hover:text-amber-500 cursor-pointer' : 'hover:text-red-900'
 				}`}
-				on:click={() => {
+				onclick={() => {
 					execute(
 						'open_dbeaver',
 						{
