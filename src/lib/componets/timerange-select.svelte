@@ -123,6 +123,7 @@
 						>
 							<option value="minutes" selected={unit == 'minutes'}>Minute</option>
 							<option value="hours" selected={unit == 'hours'}>Hour</option>
+							<option value="days" selected={unit == 'days'}>Day</option>
 						</select>
 					</div>
 				</div>

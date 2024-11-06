@@ -135,10 +135,30 @@
 					onclick={() => {
 						timerange.set({
 							type: 'relative',
-							amount: 24,
-							unit: 'hours'
+							amount: 1,
+							unit: 'days'
 						});
-					}}>Last 24h</button
+					}}>Last 1d</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					onclick={() => {
+						timerange.set({
+							type: 'relative',
+							amount: 3,
+							unit: 'days'
+						});
+					}}>Last 3d</button
+				>
+				<button
+					class="btn btn-accent btn-xs"
+					onclick={() => {
+						timerange.set({
+							type: 'relative',
+							amount: 7,
+							unit: 'days'
+						});
+					}}>Last 7d</button
 				>
 				<button
 					class="btn btn-accent btn-xs"

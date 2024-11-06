@@ -1,4 +1,4 @@
-import type { AwsEnv, Timerange } from '$lib/types';
+import type { AwsEnv, Timerange, TimeUnit } from '$lib/types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { format } from 'date-fns';
@@ -202,12 +202,14 @@ const createLogStore = () => {
 		}
 	};
 
-	const unitToMs = (unit: 'minutes' | 'hours'): number => {
+	const unitToMs = (unit: TimeUnit): number => {
 		switch (unit) {
 			case 'minutes':
 				return 60 * 1000;
 			case 'hours':
 				return 60 * 60 * 1000;
+			case 'days':
+				return 24 * 60 * 60 * 1000;
 		}
 	};
 
