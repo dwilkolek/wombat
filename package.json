@@ -2,8 +2,7 @@
 	"name": "wombat",
 	"version": "4.3.4",
 	"engines": {
-		"npm": ">=10.0.0",
-		"node": ">=20.0.0"
+		"node": ">=22.0.0"
 	},
 	"scripts": {
 		"start": "tauri dev",
@@ -65,5 +64,10 @@
 		"@rollup/rollup-darwin-arm64": "4.24.4",
 		"@rollup/rollup-linux-x64-gnu": "4.24.4",
 		"@rollup/rollup-win32-x64-msvc": "4.24.4"
+	},
+	"pnpm": {
+		"overrides": {
+			"cookie": "^0.7.0"
+		}
 	}
 }
