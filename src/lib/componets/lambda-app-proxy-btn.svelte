@@ -9,27 +9,36 @@
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
 
-	export let app: string;
-	export let env: AwsEnv;
+	interface Props {
+		app: string;
+		env: AwsEnv;
+	}
+
+	let { app, env }: Props = $props();
 	const lambdaArn = `lambdaApp::${app}::${env.toLowerCase()}`;
-	$: disabledReason = startLambdaProxyDisabledReason(lambdaArn, env);
+	let disabledReason = $derived(startLambdaProxyDisabledReason(lambdaArn, env));
 
-	$: port = $taskStore?.find((t) => {
-		return t.arn === lambdaArn;
-	})?.port;
+	let port = $derived(
+		$taskStore?.find((t) => {
+			return t.arn === lambdaArn;
+		})?.port
+	);
 
-	let dialog: HTMLDialogElement;
+	let dialog: HTMLDialogElement | undefined = $state();
 
-	$: availableApps = new Set([
-		'dxp',
-		...$wombatProfileStore.infraProfiles
-			.filter((infra) => infra.env == env)
-			.map((infra) => infra.app)
-	]);
+	let availableApps = $derived(
+		new Set([
+			'dxp',
+			...$wombatProfileStore.infraProfiles
+				.filter((infra) => infra.env == env)
+				.map((infra) => infra.app)
+		])
+	);
 
-	$: selectedApp = 'dxp';
-	let defaultHeaders = getAppHeaders(selectedApp ?? 'dxp');
-	let customHeaders: CustomHeader[] = [];
+	let selectedApp = $state('dxp');
+
+	let defaultHeaders = $derived(getAppHeaders(selectedApp ?? 'dxp'));
+	let customHeaders: CustomHeader[] = $state([]);
 
 	function getAppHeaders(app: string) {
 		const baseAddress = `https://${app}${env.toLowerCase() == 'prod' ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`;
@@ -65,16 +74,17 @@
 					headers
 				})
 		);
-		dialog.close();
+		dialog?.close();
 	};
 </script>
 
 {#if !port}
 	<div class="tooltip tooltip-left h-[20px]" data-tip={$disabledReason ?? 'Start proxy'}>
 		<button
+			aria-label="Start proxy"
 			disabled={!!$disabledReason}
 			class={`flex flex-row gap-1 items-center cursor-pointer ${$disabledReason ? 'opacity-30' : ''}`}
-			on:click={() => dialog.show()}
+			onclick={() => dialog?.show()}
 		>
 			<div class="w-5 h-5 relative">
 				<svg
@@ -107,7 +117,8 @@
 {:else}
 	<div class="tooltip tooltip-left flex" data-tip="Stop proxy to service">
 		<button
-			on:click={async () => {
+			aria-label="Stop proxy to service"
+			onclick={async () => {
 				await invoke('stop_job', { arn: lambdaArn });
 			}}
 		>
@@ -143,7 +154,7 @@
 
 <dialog
 	bind:this={dialog}
-	on:close={() => console.log('closed')}
+	onclose={() => console.log('closed')}
 	class="modal bg-black bg-opacity-60"
 >
 	<div class="modal-box w-11/12 max-w-[960px]">
@@ -156,9 +167,11 @@
 					</h2>
 					<button
 						class="btn btn-circle btn-sm"
-						on:click|preventDefault={() => {
-							dialog.close();
+						onclick={(e) => {
+							e.preventDefault();
+							dialog?.close();
 						}}
+						aria-label="Close dialog"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -178,13 +191,8 @@
 			</div>
 			<div>
 				<div class="flex items-center gap-2 pb-2">
-					Headers <select
-						class="select select-bordered w-full select-sm"
-						bind:value={selectedApp}
-						on:change={(e) => {
-							defaultHeaders = getAppHeaders(e.currentTarget.value);
-						}}
-					>
+					Headers <select class="select select-bordered w-full select-sm" bind:value={selectedApp}>
+						>
 						{#each availableApps as app}
 							<option value={app}> {app} </option>
 						{/each}
@@ -237,7 +245,10 @@
 					data-umami-event="lambda_app_proxy_start"
 					data-umami-event-uid={$userStore.id}
 					class="btn btn-active btn-accent btn-sm"
-					on:click|preventDefault={() => startProxy()}
+					onclick={(e) => {
+						e.preventDefault();
+						startProxy();
+					}}
 				>
 					Start proxy</button
 				>

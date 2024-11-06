@@ -61,7 +61,8 @@
 							{#if task.status == TaskStatus.RUNNING}
 								running
 								<button
-									on:click|preventDefault={async () => {
+									onclick={async (e) => {
+										e.preventDefault();
 										await taskStore.stopTask(task.arn);
 									}}>X</button
 								>

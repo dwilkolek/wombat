@@ -2,17 +2,22 @@
 	import { execute } from '$lib/stores/error-store';
 	import { userStore } from '$lib/stores/user-store';
 
-	export let database_arn: string;
+	interface Props {
+		database_arn: string;
+	}
+
+	let { database_arn }: Props = $props();
 </script>
 
 <div class="tooltip tooltip-left flex" data-tip="Stop proxy to database">
 	<button
 		data-umami-event="rds_proxy_stop"
 		data-umami-event-uid={$userStore.id}
-		on:click={async () => {
+		onclick={async () => {
 			console.log('stopping ', database_arn);
 			await execute('stop_job', { arn: database_arn });
 		}}
+		aria-label="Stop proxy to database"
 	>
 		<div class="w-5 h-5 relative">
 			<svg

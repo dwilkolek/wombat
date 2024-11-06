@@ -1,19 +1,13 @@
 <script lang="ts">
 	import { check } from '@tauri-apps/plugin-updater';
 	import { relaunch } from '@tauri-apps/plugin-process';
+	import { UpdateButtonState } from '$lib/types';
 
-	enum UpdateButtonState {
-		CHECK_DONE,
-		DOWLOADING,
-		INSTALLING,
-		INSTALLED,
-		FAILED
-	}
-	let state = UpdateButtonState.CHECK_DONE;
-	let contentSize = 0;
-	let dowloadedSize = 0;
-	let installProgress = 0;
-	let errorMessage = '';
+	let btnState: UpdateButtonState = $state(UpdateButtonState.CHECK_DONE);
+	let contentSize = $state(0);
+	let dowloadedSize = $state(0);
+	let installProgress = $state(0);
+	let errorMessage = $state('');
 </script>
 
 <div class="flex items-center fixed bottom-0 right-0 p-2 rounded-tl-md text-xs">
@@ -23,10 +17,10 @@
 		{#if update?.available}
 			<button
 				class="btn btn-primary btn-sm"
-				disabled={state != UpdateButtonState.CHECK_DONE}
-				on:click={async () => {
+				disabled={btnState != UpdateButtonState.CHECK_DONE}
+				onclick={async () => {
 					try {
-						state = UpdateButtonState.DOWLOADING;
+						btnState = UpdateButtonState.DOWLOADING;
 						await update.downloadAndInstall((e) => {
 							if (e.event == 'Started') {
 								contentSize = e.data.contentLength ?? 0;
@@ -35,19 +29,19 @@
 							}
 							installProgress = Math.round((dowloadedSize / contentSize) * 100);
 							if (contentSize == dowloadedSize) {
-								state = UpdateButtonState.INSTALLING;
+								btnState = UpdateButtonState.INSTALLING;
 							}
 						});
 
-						state = UpdateButtonState.INSTALLED;
+						btnState = UpdateButtonState.INSTALLED;
 						setTimeout(relaunch, 1500);
 					} catch (e) {
 						errorMessage = JSON.stringify(e);
-						state = UpdateButtonState.FAILED;
+						btnState = UpdateButtonState.FAILED;
 					}
 				}}
 			>
-				{#if state == UpdateButtonState.CHECK_DONE}
+				{#if btnState == UpdateButtonState.CHECK_DONE}
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						fill="none"
@@ -68,13 +62,13 @@
 						/>
 					</svg>
 					Update to {update.version}
-				{:else if state == UpdateButtonState.DOWLOADING}
+				{:else if btnState == UpdateButtonState.DOWLOADING}
 					<span class="loading loading-spinner"></span> Downloading {installProgress}%
-				{:else if state == UpdateButtonState.INSTALLING}
+				{:else if btnState == UpdateButtonState.INSTALLING}
 					<span class="loading loading-spinner"></span> Installing...
-				{:else if state == UpdateButtonState.INSTALLED}
+				{:else if btnState == UpdateButtonState.INSTALLED}
 					<span class="loading loading-spinner"></span> Restarting...
-				{:else if state == UpdateButtonState.FAILED}
+				{:else if btnState == UpdateButtonState.FAILED}
 					{errorMessage}
 				{/if}
 			</button>

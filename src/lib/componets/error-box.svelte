@@ -7,11 +7,12 @@
 	<div class="alert alert-error shadow-lg fixed bottom-0 rounded-b-[0px]">
 		<div class="flex items-center gap-2">
 			<button
-				on:click={() => {
+				onclick={() => {
 					error.set(undefined);
 				}}
 				data-umami-event="error_banner_clear"
 				data-umami-event-uid={$userStore.id}
+				aria-label="Close"
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"

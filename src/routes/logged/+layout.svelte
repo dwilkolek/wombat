@@ -10,9 +10,15 @@
 	import FeatureBtn from '$lib/componets/feature-btn.svelte';
 	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
 	import { featuresStore } from '$lib/stores/feature-store';
+	interface Props {
+		children?: import('svelte').Snippet;
+	}
 
-	const logout = async () => {
+	let { children }: Props = $props();
+
+	const logout = async (e: Event) => {
 		try {
+			e.preventDefault();
 			await invoke('logout');
 			emit('logged-out');
 			goto('/');
@@ -20,7 +26,7 @@
 			console.log(e);
 		}
 	};
-	$: userConfig = $userStore;
+	let userConfig = $derived($userStore);
 </script>
 
 <div class="navbar bg-base-100 flex flex-row gap-2 justify-between px-3 sticky top-0 z-50">
@@ -79,7 +85,8 @@
 		<button
 			data-umami-event="cache_refresh"
 			data-umami-event-uid={userConfig.id}
-			on:click={async () => {
+			aria-label="Refresh cache"
+			onclick={async () => {
 				await execute('refresh_cache', undefined, true);
 			}}
 			><svg
@@ -100,9 +107,10 @@
 		<button
 			data-umami-event="logout"
 			data-umami-event-uid={userConfig.id}
-			on:click|preventDefault={logout}
-			on:keypress|preventDefault={logout}
+			onclick={logout}
+			onkeypress={logout}
 			class="px-2 cursor-pointer"
+			aria-label="Logout"
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -122,6 +130,6 @@
 </div>
 <div class="flex flex-col">
 	<container style="min-height: calc(100vh - 72px)">
-		<slot />
+		{@render children?.()}
 	</container>
 </div>

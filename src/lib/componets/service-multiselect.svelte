@@ -4,19 +4,7 @@
 	import { serviceStore } from '$lib/stores/service-store';
 	import type { EcsService } from '$lib/types';
 
-	let open = false;
-	$: activeCluser = clusterStore.activeCluser;
-	$: tracked_names = $activeProfilePreferences.tracked_names;
-	$: selectedServices = serviceStore.selectedServices;
-	$: services = serviceStore.getServices($activeCluser).then((services) => {
-		return services
-			.filter((a) => a.name.includes(inputValue))
-			.toSorted((a, b) => {
-				const aT = tracked_names.includes(a.name) ? 1 : 0;
-				const bT = tracked_names.includes(b.name) ? 1 : 0;
-				return bT - aT;
-			});
-	});
+	let open = $state(false);
 	const toggle = () => {
 		open = !open;
 		if (!open) {
@@ -24,23 +12,37 @@
 		}
 	};
 
-	let inputValue = '';
-	let inputElement: HTMLElement;
-	$: if (inputElement) {
-		setTimeout(() => {
-			inputElement.focus();
-		});
-	}
+	let inputValue = $state('');
+	let inputElement: HTMLElement | undefined = $state();
 
-	$: select = (app: EcsService) => {
+	let activeCluser = $derived(clusterStore.activeCluser);
+	let tracked_names = $derived($activeProfilePreferences.tracked_names);
+	let selectedServices = $derived(serviceStore.selectedServices);
+	let services = $derived(
+		serviceStore.getServices($activeCluser).then((services) => {
+			return services
+				.filter((a) => a.name.includes(inputValue))
+				.toSorted((a, b) => {
+					const aT = tracked_names.includes(a.name) ? 1 : 0;
+					const bT = tracked_names.includes(b.name) ? 1 : 0;
+					return bT - aT;
+				});
+		})
+	);
+	$effect(() => {
+		if (inputElement) {
+			setTimeout(() => {
+				inputElement?.focus();
+			});
+		}
+	});
+	let select = $derived((app: EcsService) => {
 		serviceStore.selectService(app);
-	};
+	});
 </script>
 
 <div class={`w-full flex flex-col items-center mx-auto`}>
 	<div class="w-full">
-		<!-- svelte-ignore a11y-no-static-element-interactions -->
-		<!-- svelte-ignore a11y-click-events-have-key-events -->
 		<div class="flex flex-col items-center relative cursor-pointer">
 			<div class="w-full">
 				<div
@@ -50,7 +52,7 @@
 						{#each $selectedServices as s}
 							<div class="badge badge-info text-xs">
 								{s.name}
-								<button on:click={() => select(s)}>
+								<button onclick={() => select(s)} aria-label={'Serivice: ' + s.name}>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										fill="none"
@@ -66,10 +68,10 @@
 								</button>
 							</div>
 						{/each}
-						<div class="grow h-full" on:pointerdown={toggle}>&nbsp;</div>
+						<div class="grow h-full" onpointerdown={toggle}>&nbsp;</div>
 					</div>
 
-					<button class={`z-50 outline-none focus:outline-none ml-2`} on:click={toggle}>
+					<button class={`z-50 outline-none focus:outline-none ml-2`} onclick={toggle}>
 						{#if open}
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -122,11 +124,11 @@
 						<div class="overflow-auto max-h-[250px]">
 							{#await services then services}
 								{#each services as o}
-									<!-- svelte-ignore a11y-click-events-have-key-events -->
-									<!-- svelte-ignore a11y-no-static-element-interactions -->
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
 										class={`cursor-pointer w-full hover:bg-base-300`}
-										on:click={() => {
+										onclick={() => {
 											select(o);
 											inputValue = '';
 										}}
@@ -193,7 +195,7 @@
 </div>
 
 {#if open}
-	<!-- svelte-ignore a11y-no-static-element-interactions -->
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div class="w-screen h-screen bottom-0 left-0 fixed bg-salte" on:click={toggle}></div>
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<div class="w-screen h-screen bottom-0 left-0 fixed bg-salte" onclick={toggle}></div>
 {/if}

@@ -170,3 +170,11 @@ export type Timerange =
 			from: Date;
 			to: Date;
 	  };
+
+export enum UpdateButtonState {
+	CHECK_DONE,
+	DOWLOADING,
+	INSTALLING,
+	INSTALLED,
+	FAILED
+}

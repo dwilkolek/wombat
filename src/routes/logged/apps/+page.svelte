@@ -5,9 +5,9 @@
 	import AppCard from '$lib/componets/app-card.svelte';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
-	$: selectedClusters = $activeProfilePreferences.preffered_environments;
+	let selectedClusters = $derived($activeProfilePreferences.preffered_environments);
 
-	$: columnToggleHandler = (env: AwsEnv, e: { currentTarget: { checked: boolean } }) => {
+	let columnToggleHandler = $derived((env: AwsEnv, e: { currentTarget: { checked: boolean } }) => {
 		if (!e.currentTarget.checked) {
 			userStore.savePrefferedEnvs([
 				...selectedClusters.filter((selectedEnv) => env != selectedEnv)
@@ -15,11 +15,11 @@
 		} else {
 			userStore.savePrefferedEnvs([...selectedClusters, env]);
 		}
-	};
+	});
 
-	$: envs = $wombatProfileStore.environments;
-	let discoverValue: string = '';
-	let discovered: Promise<string[]> | undefined = undefined;
+	let envs = $derived($wombatProfileStore.environments);
+	let discoverValue: string = $state('');
+	let discovered: Promise<string[]> | undefined = $state(undefined);
 </script>
 
 <svelte:head>
@@ -29,7 +29,8 @@
 <div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-50">
 	<form
 		class="flex flex-row gap-2 mb-2"
-		on:submit|preventDefault={async () => {
+		onsubmit={async (e) => {
+			e.preventDefault();
 			discovered = invoke('discover', { name: discoverValue });
 		}}
 	>
@@ -57,7 +58,7 @@
 				type="button"
 				data-umami-event="app_search_reset"
 				data-umami-event-uid={$userStore.id}
-				on:click={() => {
+				onclick={() => {
 					discoverValue = '';
 					discovered = undefined;
 				}}
@@ -76,7 +77,7 @@
 						data-umami-event="selected_env_toggle"
 						data-umami-event-uid={$userStore.id}
 						checked={selectedClusters.includes(env)}
-						on:change={(e) => {
+						onchange={(e) => {
 							columnToggleHandler(env, e);
 						}}
 					/>
@@ -90,7 +91,7 @@
 	<div class="flex flex-wrap gap-2">
 		{#if discovered}
 			{#await discovered}
-				<span class="loading loading-dots loading-lg" />
+				<span class="loading loading-dots loading-lg"></span>
 			{:then discoverValue}
 				{#each discoverValue as discoveredApp}
 					<AppCard
