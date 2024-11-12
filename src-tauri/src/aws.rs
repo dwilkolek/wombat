@@ -889,19 +889,47 @@ pub async fn get_deploment_status(
     }
 }
 
-pub async fn restart_service(
+pub async fn deploy_service(
     config: &aws_config::SdkConfig,
     cluster_arn: &str,
-    service_name: &str,
+    service_arn: &str,
+    desired_version: Option<String>,
 ) -> Result<String, BError> {
+    let command = match desired_version {
+        Some(_) => "deploy-new-service-version".to_owned(),
+        None => "restart-service".to_owned(),
+    };
     let ecs_client = ecs::Client::new(config);
-    let result = ecs_client
+    let update_service = ecs_client
         .update_service()
         .cluster(cluster_arn)
-        .service(service_name)
-        .force_new_deployment(true)
-        .send()
-        .await;
+        .service(arn_to_name(service_arn));
+    let update_service = match desired_version {
+        Some(desired_version) => {
+            let service = get_ecs_service(&ecs_client, service_arn)
+                .await
+                .map_err(|e| BError {
+                    command: command.to_owned(),
+                    message: e,
+                })?;
+            let task_definition =
+                get_task_definition(&ecs_client, &service)
+                    .await
+                    .map_err(|e| BError {
+                        command: command.to_owned(),
+                        message: e,
+                    })?;
+            let new_task_definition =
+                register_task_definition(&ecs_client, &task_definition, desired_version).await;
+            if let Some(arn) = new_task_definition.and_then(|td| td.task_role_arn) {
+                update_service.task_definition(arn)
+            } else {
+                update_service
+            }
+        }
+        None => update_service.force_new_deployment(true),
+    };
+    let result = update_service.send().await;
     match result {
         Ok(output) => {
             let service = output.service.unwrap_or_log();
@@ -918,7 +946,7 @@ pub async fn restart_service(
         Err(err) => {
             let error_msg = format!(
                 "failed to restart service {}, cluster: {}. Reason: {}",
-                service_name, cluster_arn, err
+                service_arn, cluster_arn, err
             );
             error!("Error: {error_msg}");
             Err(BError::new("restart_service", error_msg))

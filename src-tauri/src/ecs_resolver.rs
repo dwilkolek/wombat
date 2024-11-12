@@ -1,4 +1,7 @@
-use crate::{aws, cache_db, shared::BError};
+use crate::{
+    aws, cache_db,
+    shared::{arn_to_name, BError},
+};
 use log::{info, warn};
 use std::{collections::HashMap, sync::Arc};
 use tauri::{AppHandle, Emitter};
@@ -58,14 +61,16 @@ impl EcsResolver {
         self.services(clusters).await
     }
 
-    pub async fn restart_service(
+    pub async fn deploy_service(
         &self,
         app_handle: AppHandle,
         config: aws_config::SdkConfig,
         cluster_arn: String,
-        service_name: String,
+        service_arn: String,
+        desired_version: Option<String>,
     ) -> Result<String, BError> {
-        let deplyoment_res = aws::restart_service(&config, &cluster_arn, &service_name).await;
+        let deplyoment_res =
+            aws::deploy_service(&config, &cluster_arn, &service_arn, desired_version).await;
 
         if deplyoment_res.is_ok() {
             let deployment_res_clone = deplyoment_res.clone();
@@ -78,7 +83,7 @@ impl EcsResolver {
                     let status = aws::get_deploment_status(
                         &config,
                         &cluster_arn,
-                        &service_name,
+                        &service_arn,
                         &deployment_id,
                     )
                     .await;
@@ -97,7 +102,7 @@ impl EcsResolver {
                         DeplyomentStatus {
                             deployment_id: deployment_id.to_owned(),
                             cluster_arn: cluster_arn.clone(),
-                            service_name: service_name.clone(),
+                            service_name: arn_to_name(&service_arn).clone(),
                             rollout_status: status_str.to_owned(),
                         },
                     );
