@@ -81,7 +81,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
         with:
-          tagName: wombat-${{ github.ref_name }} # the action automatically replaces \_\_VERSION\_\_ with the app version
+          tagName: wombat-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version
           releaseName: 'wombat: ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true

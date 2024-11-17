@@ -14,8 +14,7 @@
 		"lint": "prettier --check . && eslint .",
 		"eslint": "eslint",
 		"format": "prettier --write .",
-		"tauri": "tauri",
-		"bump-version": "node bump-version.js"
+		"tauri": "tauri"
 	},
 	"dependencies": {
 		"@tauri-apps/api": "2.0.3",
