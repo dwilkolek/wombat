@@ -5,6 +5,13 @@
 * add task page [`#162`](https://github.com/dwilkolek/wombat/pull/162)
 * Release v4.3.4 [`223d536`](https://github.com/dwilkolek/wombat/commit/223d5365a655b98258a86ef419e772b099f5ce70)
 
+## [4.4.0](https://github.com/dwilkolek/wombat/compare/wombat-v4.3.4...wombat-v4.4.0) (2024-11-17)
+
+
+### Features
+
+* add days support to timerange ([#165](https://github.com/dwilkolek/wombat/issues/165)) ([2ae5510](https://github.com/dwilkolek/wombat/commit/2ae55102a0ab6ad96764519161eb7214ba461d3e))
+
 ## [v4.3.3](https://github.com/dwilkolek/wombat/compare/v4.3.2...v4.3.3)
 
 ### Changes
