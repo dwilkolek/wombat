@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish-tauri:
-    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'release-please--branches--main--components--wombat'
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'release-please--branches--main'
     permissions:
       contents: write
     strategy:
@@ -81,8 +81,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
         with:
-          tagName: ${{ github.ref_name }} # the action automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: '${{ github.ref_name }}'
+          tagName: wombat-${{ github.ref_name }} # the action automatically replaces \_\_VERSION\_\_ with the app version
+          releaseName: 'wombat: ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
