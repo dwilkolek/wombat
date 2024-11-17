@@ -3,6 +3,7 @@ on: [pull_request]
 
 jobs:
   test-tauri:
+    if: github.event.pull_request.head.ref == 'release-please--branches--main'
     strategy:
       fail-fast: false
       matrix:
