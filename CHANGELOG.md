@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.4.0](https://github.com/dwilkolek/wombat/compare/app-v4.3.4...app-v4.4.0) (2024-11-17)
+
+
+### Features
+
+* add days support to timerange ([#165](https://github.com/dwilkolek/wombat/issues/165)) ([2ae5510](https://github.com/dwilkolek/wombat/commit/2ae55102a0ab6ad96764519161eb7214ba461d3e))
+
+
+### Miscellaneous Chores
+
+* add plugins ([af4624c](https://github.com/dwilkolek/wombat/commit/af4624c1ab6e855069dcf86f7a0ff5bee1eaf33d))
+
 ## [v4.3.4](https://github.com/dwilkolek/wombat/compare/v4.3.3...v4.3.4)
 
 ### Changes
