@@ -1,16 +1,18 @@
 {
 	"packages": {
 		".": {
+			"component": "ui",
 			"changelog-path": "CHANGELOG.md",
 			"release-type": "node",
 			"draft": true,
+			"prerelease": false
+		},
+		"src-tauri": {
+			"component": "tauri-backend",
+			"release-type": "rust",
+			"draft": true,
 			"prerelease": false,
 			"extra-files": [
-				{
-					"type": "toml",
-					"path": "src-tauri/Cargo.toml",
-					"jsonpath": "$.package.version"
-				},
 				{
 					"type": "json",
 					"path": "src-tauri/tauri.conf.json",
@@ -20,5 +22,13 @@
 		}
 	},
 	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
-	"bootstrap-sha": "223d5365a655b98258a86ef419e772b099f5ce70"
+	"bootstrap-sha": "223d5365a655b98258a86ef419e772b099f5ce70",
+	"plugins": [
+		"node-workspace",
+		{
+			"type": "linked-versions",
+			"groupName": "wombat",
+			"components": ["tauri-backend", "ui"]
+		}
+	]
 }
