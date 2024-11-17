@@ -1,16 +1,28 @@
 {
+	"release-type": "node",
+	"draft": true,
+	"prerelease": false,
+	"plugins": [
+		{
+			"type": "linked-versions",
+			"groupName": "wombat",
+			"components": ["wombat", "tauri-backend"]
+		}
+	],
+	"group-pull-request-title-pattern": "chore: release ${version}",
 	"packages": {
 		".": {
-			"changelog-path": "CHANGELOG.md",
+			"component": "wombat",
 			"release-type": "node",
+			"package-name": "wombat",
 			"draft": true,
-			"prerelease": false,
+			"prerelease": false
+		},
+		"src-tauri": {
+			"component": "tauri-backend",
+			"release-type": "rust",
+			"skip-github-release": true,
 			"extra-files": [
-				{
-					"type": "toml",
-					"path": "src-tauri/Cargo.toml",
-					"jsonpath": "$.package.version"
-				},
 				{
 					"type": "json",
 					"path": "src-tauri/tauri.conf.json",
