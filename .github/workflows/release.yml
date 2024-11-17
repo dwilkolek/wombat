@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish-tauri:
-    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'release-please--branches--main--components--wombat'
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'release-please--branches--main'
     permissions:
       contents: write
     strategy:
