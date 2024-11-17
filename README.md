@@ -104,7 +104,3 @@ role_arn = arn:aws:iam::123567890:role/<service2>-infra
 source_profile = <profile>-demo
 
 ```
-
-#### Bump version
-
-`npm run bump-version x.x.x`
