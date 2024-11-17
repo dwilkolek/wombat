@@ -269,6 +269,13 @@
 - Release v4.0.1 [`c0e8d0b`](https://github.com/dwilkolek/wombat/commit/c0e8d0b2f1228f8c9f7fedecea793602218ffe80)
 - remove unused code [`b4f344e`](https://github.com/dwilkolek/wombat/commit/b4f344e3943f0f23acb86e25bcc3ce283342ca21)
 
+## [4.4.0](https://github.com/dwilkolek/wombat/compare/wombat-v4.3.4...wombat-v4.4.0) (2024-11-17)
+
+
+### Features
+
+* add days support to timerange ([#165](https://github.com/dwilkolek/wombat/issues/165)) ([2ae5510](https://github.com/dwilkolek/wombat/commit/2ae55102a0ab6ad96764519161eb7214ba461d3e))
+
 ### [v4.0.0](https://github.com/dwilkolek/wombat/compare/v4.0.0-beta4...v4.0.0)
 
 - chore: copy config before migration [`#84`](https://github.com/dwilkolek/wombat/pull/84)
