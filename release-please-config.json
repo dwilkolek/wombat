@@ -6,16 +6,19 @@
 		{
 			"type": "linked-versions",
 			"groupName": "wombat",
-			"components": ["wombat", "tauri-backend"]
+			"components": [
+				"wombat",
+				"tauri-backend"
+			]
 		}
 	],
 	"group-pull-request-title-pattern": "chore: release ${version}",
 	"packages": {
 		".": {
-			"component": "wombat",
-			"release-type": "node",
-			"package-name": "wombat",
-			"draft": true,
+			"changelog-path": "CHANGELOG.md",
+			"bump-minor-pre-major": false,
+			"bump-patch-for-minor-pre-major": false,
+			"draft": false,
 			"prerelease": false
 		},
 		"src-tauri": {
