@@ -68,7 +68,7 @@ role_arn = arn:aws:iam::123567890:role/<service2>-infra
 source_profile = <profile>
 ```
 
-### SSO profile per environment with infra profile per app per dev
+### xSSO profile per environment with infra profile per app per dev
 
 _Use this for multiple AWS accounts_
 
