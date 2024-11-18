@@ -6,6 +6,21 @@
 ### Features
 
 * add days support to timerange ([#165](https://github.com/dwilkolek/wombat/issues/165)) ([2ae5510](https://github.com/dwilkolek/wombat/commit/2ae55102a0ab6ad96764519161eb7214ba461d3e))
+* component empty ([b2d47ec](https://github.com/dwilkolek/wombat/commit/b2d47ec5e26d2ba11bb4fb34b0e48efd4e1325ea))
+* test ([1ca14f4](https://github.com/dwilkolek/wombat/commit/1ca14f4046dd0ca4d34dbe7c46a93a47d6a485e6))
+
+
+### Miscellaneous Chores
+
+* add plugins ([d907df8](https://github.com/dwilkolek/wombat/commit/d907df8deeebde6e7c856ed9a8aec60f0a223727))
+* polyfill changelog ([d044180](https://github.com/dwilkolek/wombat/commit/d044180285a40cf8aeb7bcecbb32dbd52eb8ae52))
+
+## [4.4.0](https://github.com/dwilkolek/wombat/compare/wombat-v4.4.0...wombat-v4.4.0) (2024-11-18)
+
+
+### Features
+
+* add days support to timerange ([#165](https://github.com/dwilkolek/wombat/issues/165)) ([2ae5510](https://github.com/dwilkolek/wombat/commit/2ae55102a0ab6ad96764519161eb7214ba461d3e))
 
 
 ### Miscellaneous Chores
