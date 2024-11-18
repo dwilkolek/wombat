@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import * as cp from 'child_process';
 
 const newVersion = `${process.argv[2]}`;
 const safeNewVersion = newVersion.match(/([0-9]+.[0-9]+.[0-9]+)/)[0];
@@ -24,16 +23,3 @@ fs.writeFileSync(
 	cargoTomlPath,
 	cargoToml.substring(0, start) + `version = "${safeNewVersion}"` + cargoToml.substring(end)
 );
-
-fs.writeFileSync('./version', newVersion);
-
-cp.execSync('npm install');
-cp.execSync('cd src-tauri && cargo generate-lockfile && cd ..');
-
-cp.execSync('npm run format');
-setTimeout(() => {
-	cp.execSync(`git commit -a -m"Release v${newVersion}"`);
-	cp.execSync(`git tag v${newVersion}`);
-	cp.execSync(`git push origin v${newVersion}`);
-	console.log(`Done`);
-}, 20000);
