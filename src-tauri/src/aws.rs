@@ -921,7 +921,7 @@ pub async fn deploy_service(
                     })?;
             let new_task_definition =
                 register_task_definition(&ecs_client, &task_definition, desired_version).await;
-            if let Some(arn) = new_task_definition.and_then(|td| td.task_role_arn) {
+            if let Some(arn) = new_task_definition.and_then(|td| td.task_definition_arn) {
                 update_service.task_definition(arn)
             } else {
                 update_service
@@ -940,16 +940,16 @@ pub async fn deploy_service(
                 .and_then(|deployment| deployment.id());
             match deployment_id {
                 Some(deployment_id) => Ok(deployment_id.to_owned()),
-                None => Err(BError::new("restart_service", "missing deployment id")),
+                None => Err(BError::new(&command, "missing deployment id")),
             }
         }
         Err(err) => {
             let error_msg = format!(
-                "failed to restart service {}, cluster: {}. Reason: {}",
-                service_arn, cluster_arn, err
+                "{} service {}, cluster: {}. Reason: {}",
+                &command, service_arn, cluster_arn, err
             );
             error!("Error: {error_msg}");
-            Err(BError::new("restart_service", error_msg))
+            Err(BError::new(&command, error_msg))
         }
     }
 }
@@ -1084,6 +1084,10 @@ async fn register_task_definition(
     task_definition: &ecs::types::TaskDefinition,
     new_version: String,
 ) -> Option<TaskDefinition> {
+    info!(
+        "Registering new task definition with template={:?}. new_version={}",
+        task_definition, &new_version
+    );
     let contrainer_definitions = task_definition.container_definitions.as_ref().map(|cds| {
         cds.iter()
             .map(|cd| {

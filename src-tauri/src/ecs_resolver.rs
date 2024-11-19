@@ -86,6 +86,7 @@ impl EcsResolver {
                         &deployment_id,
                     )
                     .await;
+                    info!("Deployment={} has status={:?}", &deployment_id, &status);
                     let mut status_str = if chrono::Utc::now() < stop_watching_deployment_after {
                         "In Progress"
                     } else {

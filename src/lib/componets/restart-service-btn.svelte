@@ -94,7 +94,7 @@
 				invoke('deploy_ecs_service', {
 					clusterArn: service.cluster_arn,
 					serviceArn: service.arn,
-					desiredVersion: undefined
+					desiredVersion: null
 				});
 			}}
 		>
