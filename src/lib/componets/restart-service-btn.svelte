@@ -84,17 +84,17 @@
 		{/if}
 	{:else}
 		<button
-			aria-label="Restart ECS"
+			aria-label="Deploy ECS Service"
 			data-umami-event="ecs_task_restart_start"
 			data-umami-event-uid={$userStore.id}
 			disabled={!!$disabledReason}
 			class={$disabledReason ? 'opacity-30' : ''}
 			onclick={(e) => {
 				e.preventDefault();
-				invoke('restart_service', {
-					env: service.env,
+				invoke('deploy_ecs_service', {
 					clusterArn: service.cluster_arn,
-					serviceName: service.name
+					serviceArn: service.arn,
+					desiredVersion: undefined
 				});
 			}}
 		>

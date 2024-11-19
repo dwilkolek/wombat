@@ -71,15 +71,14 @@ impl EcsResolver {
     ) -> Result<String, BError> {
         let deplyoment_res =
             aws::deploy_service(&config, &cluster_arn, &service_arn, desired_version).await;
-
         if deplyoment_res.is_ok() {
             let deployment_res_clone = deplyoment_res.clone();
             let deployment_id = deployment_res_clone.unwrap().clone();
+            let stop_watching_deployment_after = chrono::Utc::now() + chrono::Duration::seconds(15);
             tokio::task::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_millis(5000));
                 let mut continue_checking = true;
                 while continue_checking {
-                    interval.tick().await;
                     let status = aws::get_deploment_status(
                         &config,
                         &cluster_arn,
@@ -87,13 +86,17 @@ impl EcsResolver {
                         &deployment_id,
                     )
                     .await;
-                    let mut status_str = "Unknown";
+                    let mut status_str = if chrono::Utc::now() < stop_watching_deployment_after {
+                        "In Progress"
+                    } else {
+                        "Unknown"
+                    };
                     if let Ok(status) = status {
                         status_str = match status {
                             aws_sdk_ecs::types::DeploymentRolloutState::Completed => "Completed",
                             aws_sdk_ecs::types::DeploymentRolloutState::Failed => "Failed",
                             aws_sdk_ecs::types::DeploymentRolloutState::InProgress => "In Progress",
-                            _ => "Unknown",
+                            _ => status_str,
                         };
                     }
 
@@ -107,6 +110,9 @@ impl EcsResolver {
                         },
                     );
                     continue_checking = status_str == "In Progress";
+                    if continue_checking {
+                        interval.tick().await;
+                    }
                 }
             });
         }
