@@ -70,7 +70,7 @@ impl EcsResolver {
         desired_version: Option<String>,
     ) -> Result<String, BError> {
         let deplyoment_res =
-            aws::deploy_service(&config, &cluster_arn, &service_arn, desired_version).await;
+            aws::deploy_service(&config, &cluster_arn, &service_arn, desired_version.clone()).await;
         if deplyoment_res.is_ok() {
             let deployment_res_clone = deplyoment_res.clone();
             let deployment_id = deployment_res_clone.unwrap().clone();
@@ -98,12 +98,12 @@ impl EcsResolver {
                             aws_sdk_ecs::types::DeploymentRolloutState::Failed => "Failed",
                             aws_sdk_ecs::types::DeploymentRolloutState::InProgress => "In Progress",
                             _ => {
-                                error_count = error_count + 1;
+                                error_count += 1;
                                 "Unknown"
                             }
                         };
                     } else {
-                        error_count = error_count + 1;
+                        error_count += 1;
                     }
 
                     let _ = app_handle.emit(
@@ -113,6 +113,7 @@ impl EcsResolver {
                             cluster_arn: cluster_arn.clone(),
                             service_name: service_name.clone(),
                             rollout_status: status_str.to_owned(),
+                            version: desired_version.clone(),
                         },
                     );
                     continue_checking = status_str == "In Progress" && error_count < 5;
@@ -254,4 +255,5 @@ struct DeplyomentStatus {
     service_name: String,
     cluster_arn: String,
     rollout_status: String,
+    version: Option<String>,
 }

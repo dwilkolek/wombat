@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import { deplyomentStore } from '$lib/stores/deployment-store';
 	import type { ServiceDetails } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';
-	import { restartEcsDisabledReason, deployEcsServiceDisabledReason } from '$lib/stores/reasons';
+	import { deployEcsServiceDisabledReason } from '$lib/stores/reasons';
+	import DeploymentStatus from './deployment-status.svelte';
 
 	interface Props {
 		service: ServiceDetails;
@@ -11,10 +11,8 @@
 
 	let { service }: Props = $props();
 
-	let disabledRestartReason = restartEcsDisabledReason(service);
-	let disabledDeployNewVersionReason = deployEcsServiceDisabledReason(service);
+	let disabledReason = deployEcsServiceDisabledReason(service);
 
-	let disabledReason = $derived($disabledRestartReason || $disabledDeployNewVersionReason);
 	let dialog: HTMLDialogElement | undefined = $state();
 	let imageTag = $state(service.version);
 	let justRestart = $state(true);
@@ -24,138 +22,18 @@
 	let command = $derived(justRestart ? 'ecs_task_restart_start' : 'ecs_task_deploy_start');
 </script>
 
-<span
-	class="tooltip tooltip-left flex"
-	data-tip={disabledReason?.message ??
-		($disabledDeployNewVersionReason ? 'Deploy ECS Service' : 'Restart ECS Service')}
->
-	{#if disabledReason?.deployment != null}
-		{@const deployment = disabledReason.deployment}
-		{#if deployment.rollout_status == 'In Progress'}
-			<span class="text-amber-300">
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-					/>
-				</svg>
-			</span>
-		{/if}
-		{#if deployment.rollout_status == 'Completed'}
-			<button
-				aria-label="Clear ECS restart state"
-				class="text-lime-500"
-				onclick={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
-				data-umami-event="ecs_deploy_clear"
-				data-umami-event-uid={$userStore.id}
-			>
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
-					/>
-				</svg>
-			</button>
-		{/if}
-		{#if deployment.rollout_status == 'Failed'}
-			<button
-				aria-label="Clear ECS restart state"
-				class="text-rose-700"
-				onclick={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
-				data-umami-event="ecs_deploy_clear"
-				data-umami-event-uid={$userStore.id}
-				><svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-					/>
-				</svg>
-			</button>
-		{/if}
-		{#if deployment.rollout_status == 'Unknown'}
-			<button
-				aria-label="Clear ECS restart state"
-				class="text-sky-400"
-				onclick={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
-				data-umami-event="ecs_deploy_clear"
-				data-umami-event-uid={$userStore.id}
-				><svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-					/>
-				</svg>
-			</button>
-		{/if}
-	{:else if $disabledDeployNewVersionReason}
-		<button
-			aria-label="Restart ECS Service"
-			data-umami-event={command}
-			data-umami-event-uid={$userStore.id}
-			disabled={!!disabledReason}
-			class={disabledReason ? 'opacity-30' : ''}
-			onclick={(e) => {
-				e.preventDefault();
-
-				invoke('deploy_ecs_service', {
-					clusterArn: service.cluster_arn,
-					serviceArn: service.arn,
-					desiredVersion: null
-				});
-			}}
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke-width="1.5"
-				stroke="currentColor"
-				class="w-4 h-4"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-				/>
-			</svg>
-		</button>
-	{:else}
+{#if $disabledReason?.deployment != null}
+	{@const deployment = $disabledReason.deployment}
+	<DeploymentStatus {deployment} />
+{:else}
+	<span
+		class="tooltip tooltip-left flex"
+		data-tip={$disabledReason?.message ?? 'Deploy ECS Service'}
+	>
 		<button
 			aria-label="Deploy ECS Service"
-			disabled={!!disabledReason}
-			class={disabledReason ? 'opacity-30' : ''}
+			disabled={!!$disabledReason}
+			class={$disabledReason ? 'opacity-30' : ''}
 			onclick={(e) => {
 				e.preventDefault();
 				dialog?.show();
@@ -176,8 +54,8 @@
 				/>
 			</svg>
 		</button>
-	{/if}
-</span>
+	</span>
+{/if}
 
 <dialog
 	bind:this={dialog}
@@ -216,7 +94,7 @@
 
 			<div class="flex flex-row gap-4 mt-2">
 				<input
-					disabled={!!$disabledDeployNewVersionReason || justRestart}
+					disabled={!!$disabledReason || justRestart}
 					autocomplete="off"
 					autocorrect="off"
 					autocapitalize="off"

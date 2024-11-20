@@ -6,6 +6,7 @@ export type DeploymentRolloutStatus = {
 	service_name: string;
 	cluster_arn: string;
 	rollout_status: 'Unknown' | 'Completed' | 'Failed' | 'In Progress';
+	version: string | undefined;
 };
 const createDeploymentStore = () => {
 	const deplyoments = writable<DeploymentRolloutStatus[]>([]);

@@ -11,8 +11,8 @@
 	import DbTaskStatus from './db-task-status.svelte';
 	import ServiceTaskStatus from './service-task-status.svelte';
 	import AppCardHr from './app-card-hr.svelte';
-	import DeployServiceBtn from './deploy-service-btn.svelte';
 	import { format } from 'date-fns/format';
+	import DeployOrRestartServiceBtn from './deploy-or-restart-service-btn.svelte';
 	interface Props {
 		app: string;
 		displayConfig: {
@@ -128,7 +128,7 @@
 												>
 													{service.version}
 												</div>
-												<DeployServiceBtn {service} />
+												<DeployOrRestartServiceBtn {service} />
 												<AppCardHr {task} />
 												<ServiceTaskStatus {task} {service} />
 											</div>
