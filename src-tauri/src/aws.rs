@@ -934,10 +934,15 @@ pub async fn deploy_service(
         Ok(output) => {
             let service = output.service.unwrap_or_log();
             let deployments = &service.deployments;
+
             let deployment_id = deployments
                 .as_ref()
                 .and_then(|dpls| dpls.first())
                 .and_then(|deployment| deployment.id());
+            info!(
+                "Creteted deployment with id={}",
+                deployment_id.unwrap_or("<missing>")
+            );
             match deployment_id {
                 Some(deployment_id) => Ok(deployment_id.to_owned()),
                 None => Err(BError::new(&command, "missing deployment id")),
@@ -948,7 +953,7 @@ pub async fn deploy_service(
                 "{} service {}, cluster: {}. Reason: {}",
                 &command, service_arn, cluster_arn, err
             );
-            error!("Error: {error_msg}");
+            error!("Deployment error: {error_msg}");
             Err(BError::new(&command, error_msg))
         }
     }

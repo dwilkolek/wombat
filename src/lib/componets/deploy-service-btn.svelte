@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
 	import { deplyomentStore } from '$lib/stores/deployment-store';
-	import type { EcsService } from '$lib/types';
+	import type { ServiceDetails } from '$lib/types';
 	import { userStore } from '$lib/stores/user-store';
 	import { restartEcsDisabledReason, deployEcsServiceDisabledReason } from '$lib/stores/reasons';
 
 	interface Props {
-		service: EcsService;
+		service: ServiceDetails;
 	}
 
 	let { service }: Props = $props();
@@ -16,9 +16,12 @@
 
 	let disabledReason = $derived($disabledRestartReason || $disabledDeployNewVersionReason);
 	let dialog: HTMLDialogElement | undefined = $state();
-	let imageTag = $state('');
-	let justRestart = $state(false);
+	let imageTag = $state(service.version);
+	let justRestart = $state(true);
+	let deployStarting = $state(false);
 	let isValid = $derived(!justRestart ? imageTag.length > 3 : true);
+
+	let command = $derived(justRestart ? 'ecs_task_restart_start' : 'ecs_task_deploy_start');
 </script>
 
 <span
@@ -96,7 +99,7 @@
 		{#if deployment.rollout_status == 'Unknown'}
 			<button
 				aria-label="Clear ECS restart state"
-				class="text-sky-700"
+				class="text-sky-400"
 				onclick={() => deployment && deplyomentStore.clear(deployment.deployment_id)}
 				data-umami-event="ecs_deploy_clear"
 				data-umami-event-uid={$userStore.id}
@@ -116,57 +119,62 @@
 				</svg>
 			</button>
 		{/if}
-	{:else}
+	{:else if $disabledDeployNewVersionReason}
 		<button
-			aria-label="Deploy ECS Service"
-			data-umami-event="ecs_task_restart_start"
+			aria-label="Restart ECS Service"
+			data-umami-event={command}
 			data-umami-event-uid={$userStore.id}
 			disabled={!!disabledReason}
 			class={disabledReason ? 'opacity-30' : ''}
 			onclick={(e) => {
 				e.preventDefault();
-				if ($disabledDeployNewVersionReason) {
-					invoke('deploy_ecs_service', {
-						clusterArn: service.cluster_arn,
-						serviceArn: service.arn,
-						desiredVersion: null
-					});
-				} else {
-					dialog?.show();
-				}
+
+				invoke('deploy_ecs_service', {
+					clusterArn: service.cluster_arn,
+					serviceArn: service.arn,
+					desiredVersion: null
+				});
 			}}
 		>
-			{#if $disabledDeployNewVersionReason}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
-					/>
-				</svg>
-			{:else}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke-width="1.5"
-					stroke="currentColor"
-					class="w-4 h-4"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
-					/>
-				</svg>
-			{/if}
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke-width="1.5"
+				stroke="currentColor"
+				class="w-4 h-4"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+				/>
+			</svg>
+		</button>
+	{:else}
+		<button
+			aria-label="Deploy ECS Service"
+			disabled={!!disabledReason}
+			class={disabledReason ? 'opacity-30' : ''}
+			onclick={(e) => {
+				e.preventDefault();
+				dialog?.show();
+			}}
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke-width="1.5"
+				stroke="currentColor"
+				class="w-4 h-4"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+				/>
+			</svg>
 		</button>
 	{/if}
 </span>
@@ -224,17 +232,19 @@
 					Just restart
 				</div>
 				<button
-					data-umami-event="deploy_ecs_service"
+					data-umami-event={command}
 					data-umami-event-uid={$userStore.id}
 					class="btn btn-active btn-accent btn-sm"
-					disabled={!isValid}
-					onclick={(e) => {
+					disabled={!isValid || deployStarting}
+					onclick={async (e) => {
 						e.preventDefault();
-						invoke('deploy_ecs_service', {
+						deployStarting = true;
+						await invoke('deploy_ecs_service', {
 							clusterArn: service.cluster_arn,
 							serviceArn: service.arn,
 							desiredVersion: justRestart ? null : imageTag
 						});
+						dialog?.close();
 					}}
 				>
 					Run deployment</button
