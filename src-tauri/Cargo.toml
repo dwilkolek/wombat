@@ -29,7 +29,7 @@ aws-runtime = "1.4.3"
 aws-config = "1.5.10"
 aws-sdk-ecs = "1.52.0"
 aws-sdk-rds = "1.64.0"
-aws-sdk-ec2 = "1.85.0"
+aws-sdk-ec2 = { path = "../smithy-rs/aws/sdk/build/aws-sdk/sdk/ec2" }
 aws-sdk-ssm = "1.53.0"
 aws-sdk-sts = "1.49.0"
 aws-sdk-cloudwatchlogs = "1.56.0"

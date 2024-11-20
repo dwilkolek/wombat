@@ -21,3 +21,4 @@ local.db-wal
 client_wal_index
 
 release-test-server
+smithy-rs
