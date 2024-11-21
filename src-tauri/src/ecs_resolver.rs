@@ -1,4 +1,7 @@
-use crate::{aws, cache_db, shared::BError};
+use crate::{
+    aws, cache_db,
+    shared::{arn_to_name, BError},
+};
 use log::{info, warn};
 use std::{collections::HashMap, sync::Arc};
 use tauri::{AppHandle, Emitter};
@@ -58,38 +61,66 @@ impl EcsResolver {
         self.services(clusters).await
     }
 
-    pub async fn restart_service(
+    pub async fn deploy_service(
         &self,
         app_handle: AppHandle,
         config: aws_config::SdkConfig,
         cluster_arn: String,
-        service_name: String,
+        service_arn: String,
+        desired_version: Option<String>,
     ) -> Result<String, BError> {
-        let deplyoment_res = aws::restart_service(&config, &cluster_arn, &service_name).await;
-
+        let deplyoment_res =
+            aws::deploy_service(&config, &cluster_arn, &service_arn, desired_version.clone()).await;
         if deplyoment_res.is_ok() {
             let deployment_res_clone = deplyoment_res.clone();
             let deployment_id = deployment_res_clone.unwrap().clone();
+            let mut error_count = 0;
+            let fail_deploy_after = chrono::Utc::now() + chrono::Duration::minutes(15);
+
             tokio::task::spawn(async move {
                 let mut interval = tokio::time::interval(std::time::Duration::from_millis(5000));
                 let mut continue_checking = true;
+                let service_name = arn_to_name(&service_arn);
                 while continue_checking {
                     interval.tick().await;
-                    let status = aws::get_deploment_status(
+                    info!("Checking deployment={deployment_id}");
+                    let deployment_status = aws::get_deploment_status(
                         &config,
                         &cluster_arn,
                         &service_name,
                         &deployment_id,
                     )
                     .await;
+                    info!(
+                        "Deployment={} has status={:?}",
+                        &deployment_id, &deployment_status
+                    );
                     let mut status_str = "Unknown";
-                    if let Ok(status) = status {
+                    let mut error_message = None;
+                    if let Ok(status) = deployment_status {
                         status_str = match status {
                             aws_sdk_ecs::types::DeploymentRolloutState::Completed => "Completed",
                             aws_sdk_ecs::types::DeploymentRolloutState::Failed => "Failed",
                             aws_sdk_ecs::types::DeploymentRolloutState::InProgress => "In Progress",
-                            _ => "Unknown",
+                            _ => {
+                                error_count += 1;
+                                error_message = Some(format!("Unknown status: {:?}", status));
+                                "Unknown"
+                            }
                         };
+                    } else {
+                        error_count += 1;
+                        error_message = Some(deployment_status.unwrap_err().message.clone())
+                    }
+
+                    if error_count == 5 {
+                        status_str = "Failed";
+                        error_message = Some("Exceeded error count".to_owned())
+                    }
+
+                    if chrono::Utc::now() > fail_deploy_after {
+                        status_str = "Failed";
+                        error_message = Some("Timed out after 15m. Check in AWS console".to_owned())
                     }
 
                     let _ = app_handle.emit(
@@ -99,9 +130,11 @@ impl EcsResolver {
                             cluster_arn: cluster_arn.clone(),
                             service_name: service_name.clone(),
                             rollout_status: status_str.to_owned(),
+                            version: desired_version.clone(),
+                            error_message,
                         },
                     );
-                    continue_checking = status_str == "In Progress";
+                    continue_checking = status_str == "In Progress" || status_str == "Unknown";
                 }
             });
         }
@@ -240,4 +273,6 @@ struct DeplyomentStatus {
     service_name: String,
     cluster_arn: String,
     rollout_status: String,
+    version: Option<String>,
+    error_message: Option<String>,
 }

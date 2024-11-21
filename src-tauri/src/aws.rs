@@ -5,7 +5,7 @@ use aws_config::{
 };
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
 use aws_sdk_ec2 as ec2;
-use aws_sdk_ecs as ecs;
+use aws_sdk_ecs::{self as ecs, types::TaskDefinition};
 use aws_sdk_rds as rds;
 use aws_sdk_secretsmanager as secretsmanager;
 use aws_sdk_ssm as ssm;
@@ -889,39 +889,72 @@ pub async fn get_deploment_status(
     }
 }
 
-pub async fn restart_service(
+pub async fn deploy_service(
     config: &aws_config::SdkConfig,
     cluster_arn: &str,
-    service_name: &str,
+    service_arn: &str,
+    desired_version: Option<String>,
 ) -> Result<String, BError> {
+    let command = match desired_version {
+        Some(_) => "deploy-new-service-version".to_owned(),
+        None => "restart-service".to_owned(),
+    };
     let ecs_client = ecs::Client::new(config);
-    let result = ecs_client
+    let update_service = ecs_client
         .update_service()
         .cluster(cluster_arn)
-        .service(service_name)
-        .force_new_deployment(true)
-        .send()
-        .await;
+        .service(arn_to_name(service_arn));
+    let update_service = match desired_version {
+        Some(desired_version) => {
+            let service = get_ecs_service(&ecs_client, service_arn)
+                .await
+                .map_err(|e| BError {
+                    command: command.to_owned(),
+                    message: e,
+                })?;
+            let task_definition =
+                get_task_definition(&ecs_client, &service)
+                    .await
+                    .map_err(|e| BError {
+                        command: command.to_owned(),
+                        message: e,
+                    })?;
+            let new_task_definition =
+                register_task_definition(&ecs_client, &task_definition, desired_version).await;
+            if let Some(arn) = new_task_definition.and_then(|td| td.task_definition_arn) {
+                update_service.task_definition(arn)
+            } else {
+                update_service
+            }
+        }
+        None => update_service.force_new_deployment(true),
+    };
+    let result = update_service.send().await;
     match result {
         Ok(output) => {
             let service = output.service.unwrap_or_log();
             let deployments = &service.deployments;
+
             let deployment_id = deployments
                 .as_ref()
                 .and_then(|dpls| dpls.first())
                 .and_then(|deployment| deployment.id());
+            info!(
+                "Creteted deployment with id={}",
+                deployment_id.unwrap_or("<missing>")
+            );
             match deployment_id {
                 Some(deployment_id) => Ok(deployment_id.to_owned()),
-                None => Err(BError::new("restart_service", "missing deployment id")),
+                None => Err(BError::new(&command, "missing deployment id")),
             }
         }
         Err(err) => {
             let error_msg = format!(
-                "failed to restart service {}, cluster: {}. Reason: {}",
-                service_name, cluster_arn, err
+                "{} service {}, cluster: {}. Reason: {}",
+                &command, service_arn, cluster_arn, err
             );
-            error!("Error: {error_msg}");
-            Err(BError::new("restart_service", error_msg))
+            error!("Deployment error: {error_msg}");
+            Err(BError::new(&command, error_msg))
         }
     }
 }
@@ -978,23 +1011,26 @@ pub async fn service_details(
     }
     for handle in tokio_tasks {
         let sd = handle.await.unwrap_or_log();
-        result.push(sd);
+        result.push(sd.map_err(|error| ServiceDetailsMissing {
+            name: arn_to_name(&error.service_arn),
+            timestamp: Utc::now(),
+            env: Env::from_any(&error.service_arn),
+            error: error.message,
+            arn: error.service_arn,
+        }));
     }
 
     result
 }
 
-pub async fn service_detail(
-    config: &aws_config::SdkConfig,
-    service_arn: String,
-) -> Result<ServiceDetails, ServiceDetailsMissing> {
-    info!("Fetching service details for {}", service_arn);
-
-    let ecs_client = ecs::Client::new(config);
+async fn get_ecs_service(
+    client: &ecs::Client,
+    service_arn: &str,
+) -> Result<ecs::types::Service, String> {
     let cluster = service_arn.split('/').collect::<Vec<&str>>()[1];
-    let service = ecs_client
+    let service = client
         .describe_services()
-        .services(&service_arn)
+        .services(service_arn)
         .cluster(cluster)
         .send()
         .await;
@@ -1008,21 +1044,26 @@ pub async fn service_detail(
             "Failed to describe service for {}, reason {}",
             &service_arn, error_str
         );
-        return Err(ServiceDetailsMissing {
-            name: arn_to_name(&service_arn),
-            timestamp: Utc::now(),
-            env: Env::from_any(&service_arn),
-            error: "Failed to describe service".to_owned(),
-            arn: service_arn,
-        });
+        return Err("Failed to describe service".to_owned());
     }
-    let service = service.unwrap();
-    let service = service.services();
-    let service = &service[0];
-    let task_def_arn = service.task_definition().unwrap_or_log();
-    let task_def = ecs_client
+    service
+        .ok()
+        .and_then(|s| s.services)
+        .and_then(|s| s.into_iter().next())
+        .ok_or("Service not found".to_owned())
+}
+
+async fn get_task_definition(
+    client: &ecs::Client,
+    service: &ecs::types::Service,
+) -> Result<ecs::types::TaskDefinition, String> {
+    let task_def_arn = match &service.task_definition {
+        Some(arn) => arn.to_owned(),
+        None => return Err("Service has not task definition arn".to_owned()),
+    };
+    let task_def = client
         .describe_task_definition()
-        .task_definition(task_def_arn)
+        .task_definition(&task_def_arn)
         .send()
         .await;
 
@@ -1034,19 +1075,88 @@ pub async fn service_detail(
             .unwrap_or(err.to_string());
         error!(
             "Failed to fetch task definition for {}, reason {}",
-            &service_arn, error_str
+            &task_def_arn, error_str
         );
-        return Err(ServiceDetailsMissing {
-            name: arn_to_name(&service_arn),
-            timestamp: Utc::now(),
-            env: Env::from_any(&service_arn),
-            error: "Failed to fetch task definition".to_owned(),
-            arn: service_arn,
-        });
+        return Err("Failed to fetch task definition".to_owned());
     }
     let task_def = task_def.unwrap();
 
-    let task_def = task_def.task_definition().unwrap_or_log();
+    Ok(task_def.task_definition.unwrap_or_log())
+}
+
+async fn register_task_definition(
+    client: &ecs::Client,
+    task_definition: &ecs::types::TaskDefinition,
+    new_version: String,
+) -> Option<TaskDefinition> {
+    info!(
+        "Registering new task definition with template={:?}. new_version={}",
+        task_definition, &new_version
+    );
+    let contrainer_definitions = task_definition.container_definitions.as_ref().map(|cds| {
+        cds.iter()
+            .map(|cd| {
+                let mut new_cd = cd.clone();
+                let desired_image = new_cd.image.and_then(|img| {
+                    img.split_once(":")
+                        .map(|(image, _)| format!("{}:{}", image, new_version))
+                });
+                new_cd.image = desired_image;
+                new_cd
+            })
+            .collect::<Vec<ecs::types::ContainerDefinition>>()
+    });
+
+    let registered = client
+        .register_task_definition()
+        .set_cpu(task_definition.cpu.clone())
+        //.set_tags woot?
+        .set_family(task_definition.family.clone())
+        .set_memory(task_definition.memory.clone())
+        .set_volumes(task_definition.volumes.clone())
+        .set_ipc_mode(task_definition.ipc_mode.clone())
+        .set_pid_mode(task_definition.pid_mode.clone())
+        .set_network_mode(task_definition.network_mode.clone())
+        .set_task_role_arn(task_definition.task_role_arn.clone())
+        .set_runtime_platform(task_definition.runtime_platform.clone())
+        .set_ephemeral_storage(task_definition.ephemeral_storage.clone())
+        .set_execution_role_arn(task_definition.execution_role_arn.clone())
+        .set_proxy_configuration(task_definition.proxy_configuration.clone())
+        .set_container_definitions(contrainer_definitions)
+        .set_placement_constraints(task_definition.placement_constraints.clone())
+        .set_inference_accelerators(task_definition.inference_accelerators.clone())
+        .set_requires_compatibilities(task_definition.requires_compatibilities.clone())
+        .send()
+        .await;
+
+    registered.ok().and_then(|td| td.task_definition)
+}
+
+struct ServiceErr {
+    service_arn: String,
+    message: String,
+}
+
+async fn service_detail(
+    config: &aws_config::SdkConfig,
+    service_arn: String,
+) -> Result<ServiceDetails, ServiceErr> {
+    info!("Fetching service details for {}", service_arn);
+
+    let ecs_client = ecs::Client::new(config);
+    let service = get_ecs_service(&ecs_client, &service_arn)
+        .await
+        .map_err(|e| ServiceErr {
+            service_arn: service_arn.to_owned(),
+            message: e,
+        })?;
+    let task_def = get_task_definition(&ecs_client, &service)
+        .await
+        .map_err(|e| ServiceErr {
+            service_arn: service_arn.to_owned(),
+            message: e,
+        })?;
+
     let container_def = &task_def.container_definitions()[0];
 
     let version = container_def
