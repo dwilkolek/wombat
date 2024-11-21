@@ -110,6 +110,33 @@ export function restartEcsDisabledReason(service: EcsService) {
 	);
 }
 
+export function deployEcsServiceDisabledReason(service: EcsService) {
+	return derived(
+		[featuresStore, wombatProfileStore, deplyomentStore],
+		([{ deployEcsService, ecsProdActions }, wombatProfileStore, deplyomentStore]) => {
+			if (!deployEcsService) {
+				return { message: 'ECS deploy disabled' };
+			}
+			const missingInfraProfile = !wombatProfileStore.infraProfiles.some(
+				({ app, env }) => app == service.name && env == service.env
+			);
+			if (missingInfraProfile) {
+				return { message: `Missing infra profile: ${service.name}` };
+			}
+			if (AwsEnv.PROD === service.env && !ecsProdActions) {
+				return { message: PROD_ACTIONS_DISABLED_REASON };
+			}
+			const deployment = deplyomentStore.find(
+				(deployment) =>
+					deployment.service_name == service.name && deployment.cluster_arn == service.cluster_arn
+			);
+			if (deployment) {
+				return { message: 'Deployment in progress', deployment };
+			}
+		}
+	);
+}
+
 export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 	return derived([featuresStore, wombatProfileStore], (stores) => {
 		const { devWay, getRdsSecret, rdsProdActions } = stores[0];

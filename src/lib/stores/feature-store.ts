@@ -5,6 +5,7 @@ import { writable } from 'svelte/store';
 const featureMap: { [key: string]: string } = {
 	'dev-way': 'devWay',
 	'restart-ecs-service': 'restartEcsService',
+	'deploy-ecs-service': 'deployEcsService',
 	'start-ecs-proxy': 'startEcsProxy',
 	'start-rds-proxy': 'startRdsProxy',
 	'start-lambda-proxy': 'startLambdaProxy',
@@ -23,6 +24,7 @@ const createFeatureStore = () => {
 		loading: true,
 		devWay: false,
 		restartEcsService: false,
+		deployEcsService: false,
 		startEcsProxy: false,
 		startRdsProxy: false,
 		startLambdaProxy: false,

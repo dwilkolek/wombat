@@ -38,6 +38,10 @@ listen('logged-out', () => {
 	allServiceDetailsStore.set([]);
 });
 
+export const triggerSilentServiceDetailsRefresh = (app: string) => {
+	to[app] = invoke('service_details', { app });
+};
+
 export const allServiceDetailsStore = createServiceDetailsStore();
 let refreshTimeout: number | undefined;
 const refresh = () => {

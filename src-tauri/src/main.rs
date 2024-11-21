@@ -669,31 +669,40 @@ async fn services(
 
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
-async fn restart_service(
+async fn deploy_ecs_service(
     cluster_arn: String,
-    env: Env,
-    service_name: String,
+    service_arn: String,
+    desired_version: Option<String>,
     app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<String, BError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("restart_service", msg));
+        return Err(BError::new("deploy_ecs_service", msg));
     };
+
+    let service_name = arn_to_name(&service_arn);
+    let env = Env::from_any(&cluster_arn);
 
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
         .app_config_with_fallback(&service_name, &env)
         .await
-        .expect("Missing sdk_config to restart service");
+        .expect("Missing sdk_config to deploy service");
     info!(
         "Attemping to restart service {} on {} with profile {}",
         &service_name, &cluster_arn, &aws_profile
     );
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     ecs_resolver_instance
-        .restart_service(app_handle, aws_config, cluster_arn, service_name)
+        .deploy_service(
+            app_handle,
+            aws_config,
+            cluster_arn,
+            service_arn,
+            desired_version,
+        )
         .await
 }
 
@@ -1544,7 +1553,7 @@ async fn main() {
             logout,
             clusters,
             services,
-            restart_service,
+            deploy_ecs_service,
             databases,
             service_details,
             favorite,
