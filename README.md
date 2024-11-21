@@ -24,6 +24,11 @@ _This project is no longer generic tool to use AWS._
 - [Session manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
 - Configured aws cli
 
+## Development tweaks
+
+Install caching wrapper: `brew install sccache`
+Export environment variable: `RUSTC_WRAPPER=sccache`
+
 ## Expected aws configuration
 
 ### Single SSO profile with infra profile per app
