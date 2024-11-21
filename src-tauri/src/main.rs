@@ -689,7 +689,7 @@ async fn deploy_ecs_service(
     let (aws_profile, aws_config) = aws_config_provider
         .app_config_with_fallback(&service_name, &env)
         .await
-        .expect("Missing sdk_config to restart service");
+        .expect("Missing sdk_config to deploy service");
     info!(
         "Attemping to restart service {} on {} with profile {}",
         &service_name, &cluster_arn, &aws_profile

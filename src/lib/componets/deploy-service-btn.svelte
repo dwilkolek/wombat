@@ -94,7 +94,7 @@
 
 			<div class="flex flex-row gap-4 mt-2">
 				<input
-					disabled={!!$disabledReason || justRestart}
+					disabled={!!$disabledReason || justRestart || deployStarting}
 					autocomplete="off"
 					autocorrect="off"
 					autocapitalize="off"
@@ -106,7 +106,12 @@
 				/>
 
 				<div class="flex items-center gap-1">
-					<input type="checkbox" class="toggle" bind:checked={justRestart} />
+					<input
+						type="checkbox"
+						class="toggle"
+						bind:checked={justRestart}
+						disabled={deployStarting}
+					/>
 					Just restart
 				</div>
 				<button
