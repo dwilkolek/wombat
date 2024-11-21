@@ -12,7 +12,12 @@
 		"copyright": "",
 		"targets": "all",
 		"externalBin": [],
-		"icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.ico"
+		],
 		"windows": {
 			"certificateThumbprint": null,
 			"digestAlgorithm": "sha256",
@@ -36,12 +41,14 @@
 		"createUpdaterArtifacts": "v1Compatible"
 	},
 	"productName": "Wombat",
-	"version": "4.4.0",
+	"version": "4.5.0",
 	"identifier": "eu.wilkolek.wombat",
 	"plugins": {
 		"updater": {
 			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFBOTI4MDNCMTY0RTU4NDMKUldSRFdFNFdPNENTR290QmhzTy9ZNUR1UEtTWEIrRndBdGF1OGZDYTBtTWRsdUt6b3dmd2hGV2QK",
-			"endpoints": ["https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"],
+			"endpoints": [
+				"https://github.com/dwilkolek/wombat/releases/latest/download/latest.json"
+			],
 			"windows": {
 				"installMode": "basicUi"
 			}
