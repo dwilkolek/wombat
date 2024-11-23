@@ -15,7 +15,7 @@
 	let address = $derived(
 		`https://${app}${env == AwsEnv.PROD ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`
 	);
-	let reason = startUserSessionProxyDisabledReason(address);
+	let reason = $derived(startUserSessionProxyDisabledReason(address));
 </script>
 
 <form
