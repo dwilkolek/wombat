@@ -6,17 +6,15 @@
 		onRemove?: (name: string) => void;
 		onAdd?: (header: CustomHeader) => void;
 		added?: boolean;
-		header: CustomHeader;
 		disabled: boolean;
+		header: CustomHeader;
 	}
 
-	let {
-		onRemove = () => {},
-		onAdd = () => {},
-		added = false,
-		header = $bindable(),
-		disabled
-	}: Props = $props();
+	let { onRemove = () => {}, onAdd = () => {}, added = false, disabled, header }: Props = $props();
+
+	let encodeBase64 = $state(header.encodeBase64);
+	let name = $state(header.name);
+	let value = $state(header.value);
 </script>
 
 <form class="flex items-center justify-between gap-2">
@@ -29,7 +27,7 @@
 			spellcheck="false"
 			type="text"
 			placeholder="name"
-			bind:value={header.name}
+			bind:value={name}
 			class="input input-sm input-bordered w-full max-w-xs"
 		/>
 	</label>
@@ -42,7 +40,7 @@
 			spellcheck="false"
 			type="text"
 			placeholder="value"
-			bind:value={header.value}
+			bind:value
 			class="input input-sm input-bordered w-full max-w-xs"
 		/>
 	</label>
@@ -51,7 +49,7 @@
 			<input
 				{disabled}
 				type="checkbox"
-				bind:checked={header.encodeBase64}
+				bind:checked={encodeBase64}
 				class="checkbox checkbox-sm checkbox-primary"
 			/>
 
@@ -60,15 +58,15 @@
 	</div>
 	{#if !added}
 		<button
-			disabled={disabled || header.name == ''}
+			disabled={disabled || name == ''}
 			class="btn btn-circle btn-xs btn-success"
 			data-umami-event="custom_header_add"
 			data-umami-event-uid={$userStore.id}
 			onclick={() => {
-				onAdd({ ...header });
-				header.name = '';
-				header.value = '';
-				header.encodeBase64 = false;
+				onAdd({ name, value, encodeBase64 });
+				name = '';
+				value = '';
+				encodeBase64 = false;
 			}}
 			aria-label="Add header"
 		>
@@ -91,7 +89,7 @@
 			{disabled}
 			onclick={(e) => {
 				e.preventDefault();
-				onRemove(header.name);
+				onRemove(name);
 			}}
 			aria-label="Remove header"
 		>
