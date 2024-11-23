@@ -5,40 +5,35 @@
 	import type { EcsService } from '$lib/types';
 
 	let open = $state(false);
+	let inputValue = $state('');
+
+	let inputElement: HTMLElement | undefined = $state();
+
+	let activeCluser = clusterStore.activeCluser;
+	let tracked_names = $activeProfilePreferences.tracked_names;
+	let selectedServices = serviceStore.selectedServices;
+
+	let services = serviceStore.getServices($activeCluser).then((services) => {
+		return services.toSorted((a, b) => {
+			const aT = tracked_names.includes(a.name) ? 1 : 0;
+			const bT = tracked_names.includes(b.name) ? 1 : 0;
+			return bT - aT;
+		});
+	});
+
+	const select = (app: EcsService) => {
+		serviceStore.selectService(app);
+		if (inputElement) {
+			inputElement.focus();
+		}
+	};
+
 	const toggle = () => {
 		open = !open;
 		if (!open) {
 			inputValue = '';
 		}
 	};
-
-	let inputValue = $state('');
-	let inputElement: HTMLElement | undefined = $state();
-
-	let activeCluser = $derived(clusterStore.activeCluser);
-	let tracked_names = $derived($activeProfilePreferences.tracked_names);
-	let selectedServices = $derived(serviceStore.selectedServices);
-	let services = $derived(
-		serviceStore.getServices($activeCluser).then((services) => {
-			return services
-				.filter((a) => a.name.includes(inputValue))
-				.toSorted((a, b) => {
-					const aT = tracked_names.includes(a.name) ? 1 : 0;
-					const bT = tracked_names.includes(b.name) ? 1 : 0;
-					return bT - aT;
-				});
-		})
-	);
-	$effect(() => {
-		if (inputElement) {
-			setTimeout(() => {
-				inputElement?.focus();
-			});
-		}
-	});
-	let select = $derived((app: EcsService) => {
-		serviceStore.selectService(app);
-	});
 </script>
 
 <div class={`w-full flex flex-col items-center mx-auto`}>
@@ -123,7 +118,7 @@
 						</div>
 						<div class="overflow-auto max-h-[250px]">
 							{#await services then services}
-								{#each services as o}
+								{#each services.filter((a) => a.name.includes(inputValue)) as o}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
