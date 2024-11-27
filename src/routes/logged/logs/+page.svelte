@@ -11,16 +11,14 @@
 	import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import TimerangeSelect from '$lib/componets/timerange-select.svelte';
 
-	let activeCluser = $derived(clusterStore.activeCluser);
+	let activeCluser = clusterStore.activeCluser;
+	let selectedServices = serviceStore.selectedServices;
+	let clusters = clusterStore.clusters;
 
-	let selectedServices = $derived(serviceStore.selectedServices);
-
-	let clusters = $derived(clusterStore.clusters);
-
-	let timerange = $derived(logStore.timerange);
-	let filterString = $derived(logStore.filterString);
-	let selectedLog = $derived(logStore.selectedLog);
-	let storeState = $derived(logStore.storeState);
+	let timerange = logStore.timerange;
+	let filterString = logStore.filterString;
+	let selectedLog = logStore.selectedLog;
+	let storeState = logStore.storeState;
 
 	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });

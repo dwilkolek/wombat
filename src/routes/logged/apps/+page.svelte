@@ -5,7 +5,7 @@
 	import AppCard from '$lib/componets/app-card.svelte';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
-	let selectedClusters = $derived($activeProfilePreferences.preffered_environments);
+	let selectedClusters = $activeProfilePreferences.preffered_environments;
 
 	let columnToggleHandler = $derived((env: AwsEnv, e: { currentTarget: { checked: boolean } }) => {
 		if (!e.currentTarget.checked) {
@@ -17,7 +17,7 @@
 		}
 	});
 
-	let envs = $derived($wombatProfileStore.environments);
+	let envs = $wombatProfileStore.environments;
 	let discoverValue: string = $state('');
 	let discovered: Promise<string[]> | undefined = $state(undefined);
 </script>

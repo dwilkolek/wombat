@@ -47,7 +47,7 @@
 			[]
 	);
 
-	let disabledReason = $derived(startEcsProxyDisabledReason(service));
+	let disabledReason = startEcsProxyDisabledReason(service);
 
 	let proxyAuthConfigsForThisService = $derived(
 		$proxyAuthConfigsStore.filter(
@@ -55,16 +55,17 @@
 		)
 	);
 
-	let filterForInfraProfile = $derived(
-		(configs: ProxyAuthConfig[], infraProfile: InfraProfile | undefined) => {
-			return configs.filter(
-				(config) =>
-					infraProfile &&
-					(config.fromApp == '*' || infraProfile.app == config.fromApp) &&
-					!config.requireSsoProfile
-			);
-		}
-	);
+	let filterForInfraProfile = (
+		configs: ProxyAuthConfig[],
+		infraProfile: InfraProfile | undefined
+	) => {
+		return configs.filter(
+			(config) =>
+				infraProfile &&
+				(config.fromApp == '*' || infraProfile.app == config.fromApp) &&
+				!config.requireSsoProfile
+		);
+	};
 
 	let filterForSsoProfile = $derived((configs: ProxyAuthConfig[]) => {
 		return configs;

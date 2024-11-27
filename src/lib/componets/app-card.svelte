@@ -23,10 +23,7 @@
 
 	let { app, displayConfig }: Props = $props();
 
-	let detailsStorr = $derived(serviceDetailStore(app));
-	let details = $derived($detailsStorr);
-
-	let tasks = $derived($taskStore);
+	let details = serviceDetailStore(app);
 
 	let isFavourite = $derived((name: string): boolean => {
 		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
@@ -58,17 +55,17 @@
 					<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
 				  </svg>
 			</div> -->
-			{#if details}
+			{#if $details}
 				<div class="place-content-end text-xs text-slate-500 font-italic">
 					<div class="flex gap-2">
-						<span>Synchronized at: {format(details.timestamp, 'yyyy-MM-dd HH:mm:ss')}</span>
+						<span>Synchronized at: {format($details.timestamp, 'yyyy-MM-dd HH:mm:ss')}</span>
 						<button
 							aria-label="Refresh"
 							data-umami-event="app_refresh"
 							data-umami-event-uid={$userStore.id}
 							onclick={(e) => {
 								e.preventDefault();
-								allServiceDetailsStore.refreshOne(details.app);
+								allServiceDetailsStore.refreshOne($details.app);
 							}}
 						>
 							<svg
@@ -91,17 +88,17 @@
 			{/if}
 		</div>
 
-		{#if !details}
+		{#if !$details}
 			<span class="loading loading-dots loading-lg"></span>
 		{/if}
 
-		{#if details}
+		{#if $details}
 			<div
 				class={`grid w-full divide-x divide-base-100`}
 				style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
 			>
 				{#each $wombatProfileStore.environments as enabled_env}
-					{@const value = details.envs?.get(enabled_env)}
+					{@const value = $details.envs?.get(enabled_env)}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(enabled_env)}
 						{@const hasInfraProfile = $wombatProfileStore.infraProfiles.some(
 							(infra) => infra.env == enabled_env && infra.app == app
@@ -113,7 +110,7 @@
 							<div class="flex gap-1 app-env-cell-stack">
 								{#if value}
 									{#each value.services.filter((service) => !service.error) as service}
-										{@const task = tasks.find((task) => task.arn == service.arn)}
+										{@const task = $taskStore.find((task) => task.arn == service.arn)}
 
 										<div class="flex flex-row items-center gap-1 px-1">
 											<ServiceCell {service} />
@@ -141,7 +138,7 @@
 									{/each}
 
 									{#each value.dbs as db}
-										{@const task = tasks.find((task) => task.arn == db.arn)}
+										{@const task = $taskStore.find((task) => task.arn == db.arn)}
 										<div class="flex flex-row items-center gap-1 px-1">
 											<DatabaseCell database={db} />
 											<div class="flex gap-2 justify-between items-center grow">

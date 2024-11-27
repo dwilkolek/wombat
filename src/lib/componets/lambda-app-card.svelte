@@ -10,8 +10,6 @@
 	}
 
 	let { app }: Props = $props();
-
-	let tasks = $derived($taskStore);
 </script>
 
 <div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
@@ -28,7 +26,7 @@
 		style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
 	>
 		{#each $wombatProfileStore.environments as enabled_env}
-			{@const task = tasks.find(
+			{@const task = $taskStore.find(
 				(task) => task.arn == `lambdaApp::${app}::${enabled_env.toLowerCase()}`
 			)}
 			<div class={`flex flex-col app-env-cell px-2`}>

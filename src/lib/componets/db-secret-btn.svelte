@@ -12,7 +12,7 @@
 
 	let { database }: Props = $props();
 
-	let disabledReason = $derived(getRdsSecretDisabledReason(database));
+	let disabledReason = getRdsSecretDisabledReason(database);
 	const credentialsHandler = async () => {
 		let answer = await ask(
 			'Are you alone and not sharing screen?\nAccess to credentials is recorded.\nRequires access to Secret Manager.',

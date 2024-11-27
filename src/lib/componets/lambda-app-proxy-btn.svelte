@@ -16,7 +16,7 @@
 
 	let { app, env }: Props = $props();
 	const lambdaArn = `lambdaApp::${app}::${env.toLowerCase()}`;
-	let disabledReason = $derived(startLambdaProxyDisabledReason(lambdaArn, env));
+	let disabledReason = startLambdaProxyDisabledReason(lambdaArn, env);
 
 	let port = $derived(
 		$taskStore?.find((t) => {
