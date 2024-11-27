@@ -12,7 +12,7 @@
 
 	let { database }: Props = $props();
 
-	let disabledReason = $derived(startRdsProxyDisabledReason(database));
+	let disabledReason = startRdsProxyDisabledReason(database);
 
 	const startDbProxy = async () => {
 		if (database?.env == AwsEnv.PROD) {

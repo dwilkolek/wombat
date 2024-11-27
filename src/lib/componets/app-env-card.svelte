@@ -9,9 +9,9 @@
 	}
 
 	let { app, env }: Props = $props();
-	let detailsStorr = $derived(serviceDetailStore(app));
-	let details = $derived($detailsStorr);
-	let envDetails = $derived(details?.envs?.get(env));
+
+	let details = serviceDetailStore(app);
+	let envDetails = $derived($details?.envs?.get(env));
 </script>
 
 {#if envDetails}
