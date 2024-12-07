@@ -1466,7 +1466,12 @@ async fn main() {
     tokio::task::spawn(rest_api::serve(
         cookie_jar.clone(),
         browser_ext.clone(),
-        wombat_api.clone(),
+        Arc::new(Mutex::new(wombat_api::WombatApi::new(
+            app_config.wombat_api_url.clone(),
+            app_config.wombat_api_user.clone(),
+            app_config.wombat_api_password.clone(),
+            user.id,
+        ))),
     ));
 
     let _guard = match app_config.logger.as_str() {

@@ -200,35 +200,34 @@
 				</div>
 
 				<div class="flex gap-1 flex-col">
-					{#each defaultHeaders as header}
-						{#key JSON.stringify(header)}
-							<CustomHeaderForm
-								added={true}
-								{header}
-								disabled={true}
-								onRemove={() => {
-									console.error('cannot remove');
-								}}
-							/>
-						{/key}
+					{#each defaultHeaders as _, hi}
+						<CustomHeaderForm
+							added={true}
+							disabled={true}
+							bind:name={defaultHeaders[hi].name}
+							bind:value={defaultHeaders[hi].value}
+							bind:encodeBase64={defaultHeaders[hi].encodeBase64}
+							onRemove={() => {
+								console.error('cannot remove');
+							}}
+						/>
 					{/each}
-					{#each customHeaders as header}
-						{#key JSON.stringify(header)}
-							<CustomHeaderForm
-								added={true}
-								{header}
-								disabled={!$featuresStore.proxyCustomHeaders}
-								onRemove={(name) => {
-									customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
-								}}
-							/>
-						{/key}
+					{#each customHeaders as _, hi}
+						<CustomHeaderForm
+							added={true}
+							bind:name={customHeaders[hi].name}
+							bind:value={customHeaders[hi].value}
+							bind:encodeBase64={customHeaders[hi].encodeBase64}
+							disabled={!$featuresStore.proxyCustomHeaders}
+							onRemove={(name) => {
+								customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
+							}}
+						/>
 					{/each}
 					<hr class="h-px my-1 bg-gray-200 border-0 dark:bg-gray-700" />
 					<CustomHeaderForm
 						added={false}
 						disabled={!$featuresStore.proxyCustomHeaders}
-						header={{ encodeBase64: false, name: '', value: '' }}
 						onAdd={(header) => {
 							if (customHeaders.some((ch) => header.name.toLowerCase() == ch.name.toLowerCase())) {
 								message(`Header name needs to be unique`, { title: 'Ooops!', kind: 'error' });
