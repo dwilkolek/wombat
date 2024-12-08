@@ -16,6 +16,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { userStore } from '$lib/stores/user-store';
 	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
+	import { getFromList } from '$lib/utils';
 
 	interface Props {
 		service: EcsService;
@@ -355,24 +356,23 @@
 					>
 				</div>
 				<div class="flex gap-1 flex-col">
-					{#each customHeaders as header}
-						{#key JSON.stringify(header)}
-							<CustomHeaderForm
-								added={true}
-								{header}
-								disabled={!$featuresStore.proxyCustomHeaders}
-								onRemove={(name) => {
-									customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
-								}}
-							/>
-						{/key}
+					{#each getFromList(customHeaders) as header}
+						<CustomHeaderForm
+							added={true}
+							bind:name={header.name}
+							bind:value={header.value}
+							bind:encodeBase64={header.encodeBase64}
+							disabled={!$featuresStore.proxyCustomHeaders}
+							onRemove={(name) => {
+								customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
+							}}
+						/>
 					{/each}
 					{#if $featuresStore.proxyCustomHeaders}
 						<hr class="h-px my-1 bg-gray-200 border-0 dark:bg-gray-700" />
 						<CustomHeaderForm
 							added={false}
 							disabled={!$featuresStore.proxyCustomHeaders}
-							header={{ encodeBase64: false, name: '', value: '' }}
 							onAdd={(header) => {
 								if (
 									customHeaders.some((ch) => header.name.toLowerCase() == ch.name.toLowerCase())

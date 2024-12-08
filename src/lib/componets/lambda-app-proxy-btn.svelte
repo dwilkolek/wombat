@@ -8,6 +8,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
+	import { getFromList } from '$lib/utils';
 
 	interface Props {
 		app: string;
@@ -200,35 +201,34 @@
 				</div>
 
 				<div class="flex gap-1 flex-col">
-					{#each defaultHeaders as header}
-						{#key JSON.stringify(header)}
-							<CustomHeaderForm
-								added={true}
-								{header}
-								disabled={true}
-								onRemove={() => {
-									console.error('cannot remove');
-								}}
-							/>
-						{/key}
+					{#each getFromList(defaultHeaders) as header}
+						<CustomHeaderForm
+							added={true}
+							disabled={true}
+							bind:name={header.name}
+							bind:value={header.value}
+							bind:encodeBase64={header.encodeBase64}
+							onRemove={() => {
+								console.error('cannot remove');
+							}}
+						/>
 					{/each}
-					{#each customHeaders as header}
-						{#key JSON.stringify(header)}
-							<CustomHeaderForm
-								added={true}
-								{header}
-								disabled={!$featuresStore.proxyCustomHeaders}
-								onRemove={(name) => {
-									customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
-								}}
-							/>
-						{/key}
+					{#each getFromList(customHeaders) as header}
+						<CustomHeaderForm
+							added={true}
+							bind:name={header.name}
+							bind:value={header.value}
+							bind:encodeBase64={header.encodeBase64}
+							disabled={!$featuresStore.proxyCustomHeaders}
+							onRemove={(name) => {
+								customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
+							}}
+						/>
 					{/each}
 					<hr class="h-px my-1 bg-gray-200 border-0 dark:bg-gray-700" />
 					<CustomHeaderForm
 						added={false}
 						disabled={!$featuresStore.proxyCustomHeaders}
-						header={{ encodeBase64: false, name: '', value: '' }}
 						onAdd={(header) => {
 							if (customHeaders.some((ch) => header.name.toLowerCase() == ch.name.toLowerCase())) {
 								message(`Header name needs to be unique`, { title: 'Ooops!', kind: 'error' });

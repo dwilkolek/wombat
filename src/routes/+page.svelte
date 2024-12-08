@@ -63,6 +63,8 @@
 						</span>
 					</div>
 				{/each}
+			{:catch error}
+				<p>Failed: {error}</p>
 			{/await}
 			<div class="flex items-center gap-1 text-sm">
 				<BrowserExtensionDot />
