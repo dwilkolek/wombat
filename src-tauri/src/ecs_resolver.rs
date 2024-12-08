@@ -68,9 +68,16 @@ impl EcsResolver {
         cluster_arn: String,
         service_arn: String,
         desired_version: Option<String>,
+        include_terraform_tag: bool,
     ) -> Result<String, BError> {
-        let deplyoment_res =
-            aws::deploy_service(&config, &cluster_arn, &service_arn, desired_version.clone()).await;
+        let deplyoment_res = aws::deploy_service(
+            &config,
+            &cluster_arn,
+            &service_arn,
+            desired_version.clone(),
+            include_terraform_tag,
+        )
+        .await;
         if deplyoment_res.is_ok() {
             let deployment_res_clone = deplyoment_res.clone();
             let deployment_id = deployment_res_clone.unwrap().clone();

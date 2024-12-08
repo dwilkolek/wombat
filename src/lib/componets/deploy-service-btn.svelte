@@ -4,6 +4,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { deployEcsServiceDisabledReason } from '$lib/stores/reasons';
 	import DeploymentStatus from './deployment-status.svelte';
+	import { featuresStore } from '$lib/stores/feature-store';
 
 	interface Props {
 		service: ServiceDetails;
@@ -15,6 +16,7 @@
 
 	let dialog: HTMLDialogElement | undefined = $state();
 	let imageTag = $state(service.version);
+	let includeTerraformTag = $state(false);
 	let justRestart = $state(true);
 	let deployStarting = $state(false);
 	let isValid = $derived(!justRestart ? imageTag.length > 3 : true);
@@ -92,46 +94,59 @@
 				</div>
 			</div>
 
-			<div class="flex flex-row gap-4 mt-2">
-				<input
-					disabled={!!$disabledReason || justRestart || deployStarting}
-					autocomplete="off"
-					autocorrect="off"
-					autocapitalize="off"
-					spellcheck="false"
-					type="text"
-					placeholder="Image tag"
-					bind:value={imageTag}
-					class="input input-sm input-bordered grow"
-				/>
-
-				<div class="flex items-center gap-1">
+			<div class="flex flex-col w-full gap-4 mt-2">
+				<div class="flex flex-row gap-4 items-center">
 					<input
-						type="checkbox"
-						class="toggle"
-						bind:checked={justRestart}
-						disabled={deployStarting}
+						disabled={!!$disabledReason || justRestart || deployStarting}
+						autocomplete="off"
+						autocorrect="off"
+						autocapitalize="off"
+						spellcheck="false"
+						type="text"
+						placeholder="Image tag"
+						bind:value={imageTag}
+						class="input input-sm input-bordered grow"
 					/>
-					Just restart
+					<div class="flex items-center gap-1">
+						<input
+							type="checkbox"
+							class="toggle"
+							bind:checked={includeTerraformTag}
+							disabled={justRestart || deployStarting}
+						/>
+						Set Terraform tag
+					</div>
 				</div>
-				<button
-					data-umami-event={command}
-					data-umami-event-uid={$userStore.id}
-					class="btn btn-active btn-accent btn-sm"
-					disabled={!isValid || deployStarting}
-					onclick={async (e) => {
-						e.preventDefault();
-						deployStarting = true;
-						await invoke('deploy_ecs_service', {
-							clusterArn: service.cluster_arn,
-							serviceArn: service.arn,
-							desiredVersion: justRestart ? null : imageTag
-						});
-						dialog?.close();
-					}}
-				>
-					Run deployment</button
-				>
+				<div class="flex flex-row gap-8 items-center justify-end">
+					<div class="flex items-center gap-1">
+						<input
+							type="checkbox"
+							class="toggle"
+							bind:checked={justRestart}
+							disabled={deployStarting}
+						/>
+						Just restart
+					</div>
+					<button
+						data-umami-event={command}
+						data-umami-event-uid={$userStore.id}
+						class="btn btn-active btn-accent btn-sm"
+						disabled={!isValid || deployStarting || !$featuresStore.deployEcsWithTags}
+						onclick={async (e) => {
+							e.preventDefault();
+							deployStarting = true;
+							await invoke('deploy_ecs_service', {
+								clusterArn: service.cluster_arn,
+								serviceArn: service.arn,
+								desiredVersion: justRestart ? null : imageTag,
+								includeTerraformTag: justRestart ? null : includeTerraformTag
+							});
+							dialog?.close();
+						}}
+					>
+						Run deployment</button
+					>
+				</div>
 			</div>
 		</div>
 	</div>
