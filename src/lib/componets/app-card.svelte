@@ -13,6 +13,7 @@
 	import AppCardHr from './app-card-hr.svelte';
 	import { format } from 'date-fns/format';
 	import DeployOrRestartServiceBtn from './deploy-or-restart-service-btn.svelte';
+	import RemoveNonPlatformTaskDefinitionsBtn from './remove-non-platform-task-definitions-btn.svelte';
 	interface Props {
 		app: string;
 		displayConfig: {
@@ -126,6 +127,7 @@
 													{service.version}
 												</div>
 												<DeployOrRestartServiceBtn {service} />
+												<RemoveNonPlatformTaskDefinitionsBtn {service} />
 												<AppCardHr {task} />
 												<ServiceTaskStatus {task} {service} />
 											</div>

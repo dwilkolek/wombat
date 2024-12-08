@@ -51,6 +51,17 @@ impl EcsResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
+        if version < 2 {
+            conn.execute(
+                "ALTER TABLE services
+                  ADD COLUMN td_family text default ''
+                  ",
+                (),
+            )
+            .await
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 2).await;
+        }
     }
 
     pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
@@ -213,7 +224,10 @@ impl EcsResolver {
 async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::EcsService> {
     log::info!("reading ecs instances from cache");
     let result = conn
-        .query("SELECT arn, name, cluster_arn, env FROM services", ())
+        .query(
+            "SELECT arn, name, cluster_arn, env, td_family FROM services",
+            (),
+        )
         .await;
     match result {
         Ok(mut rows) => {
@@ -225,11 +239,13 @@ async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::EcsService> {
                         let name = row.get::<String>(1).unwrap();
                         let cluster_arn = row.get::<String>(2).unwrap();
                         let env = serde_json::from_str(&row.get::<String>(3).unwrap()).unwrap();
+                        let td_family = row.get::<String>(4).unwrap();
                         services.push(aws::EcsService {
                             arn,
                             name,
                             cluster_arn,
                             env,
+                            td_family,
                         })
                     }
                     None => {
