@@ -7,14 +7,20 @@
 		onAdd?: (header: CustomHeader) => void;
 		added?: boolean;
 		disabled: boolean;
-		header: CustomHeader;
+		name?: string;
+		value?: string;
+		encodeBase64?: boolean;
 	}
 
-	let { onRemove = () => {}, onAdd = () => {}, added = false, disabled, header }: Props = $props();
-
-	let encodeBase64 = $state(header.encodeBase64);
-	let name = $state(header.name);
-	let value = $state(header.value);
+	let {
+		onRemove = () => {},
+		onAdd = () => {},
+		added = false,
+		disabled,
+		name = $bindable(''),
+		value = $bindable(''),
+		encodeBase64 = $bindable(false)
+	}: Props = $props();
 </script>
 
 <form class="flex items-center justify-between gap-2">
