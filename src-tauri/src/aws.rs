@@ -894,6 +894,7 @@ pub async fn deploy_service(
     cluster_arn: &str,
     service_arn: &str,
     desired_version: Option<String>,
+    include_terraform_tag: bool,
 ) -> Result<String, BError> {
     let command = match desired_version {
         Some(_) => "deploy-new-service-version".to_owned(),
@@ -919,8 +920,13 @@ pub async fn deploy_service(
                         command: command.to_owned(),
                         message: e,
                     })?;
-            let new_task_definition =
-                register_task_definition(&ecs_client, &task_definition, desired_version).await;
+            let new_task_definition = register_task_definition(
+                &ecs_client,
+                &task_definition,
+                desired_version,
+                include_terraform_tag,
+            )
+            .await;
             if let Some(arn) = new_task_definition.and_then(|td| td.task_definition_arn) {
                 update_service.task_definition(arn)
             } else {
@@ -1088,6 +1094,7 @@ async fn register_task_definition(
     client: &ecs::Client,
     task_definition: &ecs::types::TaskDefinition,
     new_version: String,
+    include_terraform_tag: bool,
 ) -> Option<TaskDefinition> {
     info!(
         "Registering new task definition with template={:?}. new_version={}",
@@ -1110,7 +1117,14 @@ async fn register_task_definition(
     let registered = client
         .register_task_definition()
         .set_cpu(task_definition.cpu.clone())
-        //.set_tags woot?
+        .set_tags(if include_terraform_tag {
+            Some(vec![ecs::types::Tag::builder()
+                .key("Terraform")
+                .value("true")
+                .build()])
+        } else {
+            None
+        })
         .set_family(task_definition.family.clone())
         .set_memory(task_definition.memory.clone())
         .set_volumes(task_definition.volumes.clone())
