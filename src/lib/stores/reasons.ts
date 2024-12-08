@@ -137,6 +137,24 @@ export function deployEcsServiceDisabledReason(service: EcsService) {
 	);
 }
 
+export function removeEcsTaskDefinitionsReason(service: EcsService) {
+	return derived([featuresStore, wombatProfileStore], (stores) => {
+		const { removeEcsTaskDefinitions, ecsProdActions } = stores[0];
+
+		if (!removeEcsTaskDefinitions) {
+			return 'Remove ECS task definition action disabled';
+		}
+		if (
+			!stores[1].infraProfiles.some(({ app, env }) => app == service.name && env == service.env)
+		) {
+			return `Missing infra profile: ${service.name}`;
+		}
+		if (AwsEnv.PROD === service.env && !ecsProdActions) {
+			return PROD_ACTIONS_DISABLED_REASON;
+		}
+	});
+}
+
 export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 	return derived([featuresStore, wombatProfileStore], (stores) => {
 		const { getRdsSecret, rdsProdActions } = stores[0];

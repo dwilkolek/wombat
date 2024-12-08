@@ -29,6 +29,7 @@ pub struct Cluster {
     pub name: String,
     pub arn: String,
     pub env: Env,
+    pub platform_version: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,6 +77,7 @@ pub struct EcsService {
     pub name: String,
     pub cluster_arn: String,
     pub env: Env,
+    pub td_family: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +89,8 @@ pub struct ServiceDetails {
     pub cluster_arn: String,
     pub env: Env,
     pub task_registered_at: Option<DateTime<Utc>>,
+    pub td_family: String,
+    pub td_revision: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -842,10 +846,15 @@ pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {
     let mut clusters = vec![];
     for cluster_arn in cluster_arns {
         let env = Env::from_any(cluster_arn);
+        let platform_version = cluster_arn
+            .split("-")
+            .last()
+            .map_or(1, |v| v.parse::<i32>().unwrap_or(0));
         clusters.push(Cluster {
             name: cluster_arn_to_name(cluster_arn),
             arn: cluster_arn.clone(),
             env,
+            platform_version,
         });
     }
 
@@ -985,11 +994,18 @@ pub async fn services(config: &aws_config::SdkConfig, cluster: &Cluster) -> Vec<
         has_more = next_token.is_some();
 
         services_resp.service_arns().iter().for_each(|service_arn| {
+            let service_name = service_arn.split('/').last().unwrap_or_log().to_owned();
+            let env = cluster.env.clone();
+            let td_family = format!(
+                "{}-{}-{}",
+                &service_name, &cluster.env, cluster.platform_version
+            );
             values.push(EcsService {
-                name: service_arn.split('/').last().unwrap_or_log().to_owned(),
+                name: service_name,
                 arn: service_arn.to_owned(),
                 cluster_arn: cluster.arn.to_owned(),
-                env: cluster.env.clone(),
+                env,
+                td_family,
             })
         })
     }
@@ -1088,6 +1104,78 @@ async fn get_task_definition(
     let task_def = task_def.unwrap();
 
     Ok(task_def.task_definition.unwrap_or_log())
+}
+
+pub async fn remove_non_platform_task_definitions(
+    config: &aws_config::SdkConfig,
+    family: String,
+    exclude_revision: i32,
+    dry_run: bool,
+) -> Vec<String> {
+    let client = ecs::Client::new(config);
+    let mut removed = vec![];
+    let res = client
+        .list_task_definitions()
+        .family_prefix(family)
+        .sort(aws_sdk_ecs::types::SortOrder::Desc)
+        .send()
+        .await;
+
+    let task_arns = res
+        .map(|r| r.task_definition_arns.unwrap_or_default())
+        .unwrap();
+
+    for arn in task_arns {
+        let arn_result = client
+            .describe_task_definition()
+            .task_definition(arn.clone())
+            .include(ecs::types::TaskDefinitionField::Tags)
+            .send()
+            .await;
+        let task_definition = arn_result.unwrap();
+        let has_terraform_tag = task_definition.tags.map_or(false, |t| {
+            t.into_iter()
+                .map(|tag| tag.key)
+                .any(|f| f.unwrap_or("-".to_owned()) == "Terraform".to_owned())
+        });
+        let task_definition = &task_definition.task_definition.unwrap();
+        let is_registered_by_terraform = task_definition
+            .registered_by
+            .as_ref()
+            .map(|by| by.contains("terraform"))
+            .unwrap_or(false);
+
+        let excluded_task_definition = task_definition.revision == exclude_revision;
+
+        info!(
+            "Task definition: {}, tagged={}, registered={}",
+            &arn, &has_terraform_tag, &is_registered_by_terraform
+        );
+        if has_terraform_tag && !is_registered_by_terraform {
+            info!("Found cheated terraform task definition: {}", &arn)
+        }
+        if !is_registered_by_terraform && !excluded_task_definition {
+            if dry_run {
+                removed.push(arn);
+            } else if let Ok(_) = client
+                .deregister_task_definition()
+                .task_definition(arn.clone())
+                .send()
+                .await
+            {
+                if let Ok(_) = client
+                    .delete_task_definitions()
+                    .set_task_definitions(Some(vec![arn.clone()]))
+                    .send()
+                    .await
+                {
+                    removed.push(arn);
+                }
+            }
+        }
+    }
+
+    removed
 }
 
 async fn register_task_definition(
@@ -1192,6 +1280,11 @@ async fn service_detail(
             .and_then(DateTime::from_timestamp_millis),
         version,
         env: Env::from_any(&service_arn),
+        td_family: task_def
+            .family()
+            .map(|f| f.to_owned())
+            .unwrap_or("<missing>".to_owned()),
+        td_revision: task_def.revision,
     })
 }
 

@@ -709,6 +709,31 @@ async fn deploy_ecs_service(
 }
 
 #[tauri::command]
+async fn remove_task_definitions(
+    service: aws::ServiceDetails,
+    dry_run: bool,
+    app_handle: AppHandle,
+    app_state: tauri::State<'_, AppContextState>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+) -> Result<Vec<String>, BError> {
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
+        return Err(BError::new("remove_task_definitions", msg));
+    };
+    let aws_config_provider = aws_config_provider.0.read().await;
+    let (_, aws_config) = aws_config_provider
+        .app_config(&service.name, &service.env)
+        .await
+        .expect("Missing sdk_config to remove task definitions");
+    return Ok(aws::remove_non_platform_task_definitions(
+        &aws_config,
+        service.td_family,
+        service.td_revision,
+        dry_run,
+    )
+    .await);
+}
+
+#[tauri::command]
 async fn databases(
     env: shared::Env,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
@@ -1562,6 +1587,7 @@ async fn main() {
             clusters,
             services,
             deploy_ecs_service,
+            remove_task_definitions,
             databases,
             service_details,
             favorite,
