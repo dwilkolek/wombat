@@ -139,7 +139,7 @@ export function deployEcsServiceDisabledReason(service: EcsService) {
 
 export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 	return derived([featuresStore, wombatProfileStore], (stores) => {
-		const { devWay, getRdsSecret, rdsProdActions } = stores[0];
+		const { getRdsSecret, rdsProdActions } = stores[0];
 		if (!rds) {
 			return 'No RDS selected';
 		}
@@ -147,10 +147,7 @@ export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 			return 'Get RDS secret action disabled';
 		}
 		if (
-			!stores[1].infraProfiles.some(
-				({ app, env }) => app == rds.normalized_name && env == rds.env
-			) &&
-			!devWay
+			!stores[1].infraProfiles.some(({ app, env }) => app == rds.normalized_name && env == rds.env)
 		) {
 			return `Missing infra profile: ${rds.normalized_name}`;
 		}
