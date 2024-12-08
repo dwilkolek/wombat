@@ -4,6 +4,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { deployEcsServiceDisabledReason } from '$lib/stores/reasons';
 	import DeploymentStatus from './deployment-status.svelte';
+	import { featuresStore } from '$lib/stores/feature-store';
 
 	interface Props {
 		service: ServiceDetails;
@@ -130,7 +131,7 @@
 						data-umami-event={command}
 						data-umami-event-uid={$userStore.id}
 						class="btn btn-active btn-accent btn-sm"
-						disabled={!isValid || deployStarting}
+						disabled={!isValid || deployStarting || !$featuresStore.deployEcsWithTags}
 						onclick={async (e) => {
 							e.preventDefault();
 							deployStarting = true;
