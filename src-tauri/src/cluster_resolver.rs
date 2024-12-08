@@ -45,6 +45,17 @@ impl ClusterResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
         }
+        if version < 2 {
+            conn.execute(
+                "ALTER TABLE clusters
+                  ADD COLUMN platform_version int default 0
+                  ",
+                (),
+            )
+            .await
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 2).await;
+        }
     }
 
     pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
@@ -105,7 +116,9 @@ impl ClusterResolver {
 
 async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::Cluster> {
     log::info!("reading clusters from cache");
-    let result = conn.query("SELECT arn, name, env FROM clusters;", ()).await;
+    let result = conn
+        .query("SELECT arn, name, env, platform_version FROM clusters;", ())
+        .await;
     match result {
         Ok(mut rows) => {
             let mut clusters = Vec::new();
@@ -115,7 +128,13 @@ async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::Cluster> {
                         let arn = row.get::<String>(0).unwrap();
                         let name = row.get::<String>(1).unwrap();
                         let env = serde_json::from_str(&row.get::<String>(2).unwrap()).unwrap();
-                        clusters.push(aws::Cluster { arn, name, env })
+                        let platform_version = row.get::<i32>(3).unwrap_or(0);
+                        clusters.push(aws::Cluster {
+                            arn,
+                            name,
+                            env,
+                            platform_version,
+                        })
                     }
                     None => {
                         break;

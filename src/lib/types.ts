@@ -55,6 +55,7 @@ export type Cluster = {
 	name: string;
 	arn: string;
 	env: AwsEnv;
+	version: number;
 };
 type EnvPortMap = { [key: string]: number };
 export type WombatProfilePreferences = {
@@ -78,6 +79,7 @@ export type EcsService = {
 	name: string;
 	arn: string;
 	cluster_arn: string;
+	td_family: string;
 };
 
 export type ServiceDetails = {
@@ -88,6 +90,8 @@ export type ServiceDetails = {
 	env: AwsEnv;
 	timestamp: string;
 	task_registered_at: string;
+	td_family: string;
+	td_revision: number;
 };
 
 export type ServiceDetailsMissing = {
