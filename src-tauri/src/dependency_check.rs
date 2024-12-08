@@ -11,7 +11,7 @@ pub async fn check_dependencies(
     required_feature: &str,
 ) -> HashMap<String, Result<String, String>> {
     let mut dependecies = HashMap::new();
-
+    log::info!("checking dependencies");
     if let Ok(cmd) = Command::new("aws").arg("--version").output() {
         if cmd.status.success() {
             let version = String::from_utf8_lossy(&cmd.stdout).to_string();
@@ -24,6 +24,7 @@ pub async fn check_dependencies(
         dependecies.insert("aws-cli".to_string(), Err("Not installed".to_string()));
     }
 
+    log::info!("aws done");
     if let Ok(cmd) = Command::new("session-manager-plugin")
         .arg("--version")
         .output()
@@ -41,6 +42,7 @@ pub async fn check_dependencies(
             Err("Not installed".to_string()),
         );
     }
+    log::info!("session manager done");
     dependecies.insert(
         "aws-profiles".to_string(),
         Ok(format!(
@@ -65,9 +67,9 @@ pub async fn check_dependencies(
                 .sum::<usize>()
         )),
     );
-
+    log::info!("aws profiles done");
     let wombat_api_key = "wombat-backend-api".to_string();
-
+    log::info!("wombat done");
     dependecies.insert(wombat_api_key, wombat_api.status(required_feature).await);
 
     dependecies

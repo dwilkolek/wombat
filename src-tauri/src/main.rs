@@ -988,6 +988,7 @@ async fn start_service_proxy(
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<NewTaskParams, BError> {
+    dbg!(&headers);
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;

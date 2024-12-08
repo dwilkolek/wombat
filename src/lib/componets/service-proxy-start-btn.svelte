@@ -34,11 +34,22 @@
 	);
 	let useSSOProfile = $state(false);
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined = $state();
+	const baseAddress = `https://${service.name}${service.env.toLowerCase() == 'prod' ? '' : '.' + service.env.toLowerCase()}.services.technipfmc.com`;
 	let customHeaders: CustomHeader[] = $state([
 		{
 			name: 'Host',
 			encodeBase64: false,
 			value: `${service.name}.service`
+		},
+		{
+			name: 'Origin',
+			encodeBase64: false,
+			value: baseAddress + '/'
+		},
+		{
+			name: 'Referer',
+			encodeBase64: false,
+			value: baseAddress
 		}
 	]);
 
@@ -102,6 +113,7 @@
 			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
 		});
 		taskStore.startTask({ ...service, proxyAuthConfig }, async () => {
+			console.log('headers', headers);
 			return invoke<NewTaskParams>('start_service_proxy', {
 				service,
 				proxyAuthConfig,
@@ -312,6 +324,34 @@
 								...customHeaders.filter((h) => h.name.toLowerCase() !== 'host')
 							];
 						}}>+ host</button
+					>
+					<button
+						class="btn btn-xs btn-accent"
+						disabled={!$featuresStore.proxyCustomHeaders}
+						onclick={() => {
+							customHeaders = [
+								{
+									name: 'Origin',
+									encodeBase64: false,
+									value: baseAddress + '/'
+								},
+								...customHeaders.filter((h) => h.name.toLowerCase() !== 'origin')
+							];
+						}}>+ origin</button
+					>
+					<button
+						class="btn btn-xs btn-accent"
+						disabled={!$featuresStore.proxyCustomHeaders}
+						onclick={() => {
+							customHeaders = [
+								{
+									name: 'Referer',
+									encodeBase64: false,
+									value: baseAddress
+								},
+								...customHeaders.filter((h) => h.name.toLowerCase() !== 'referer')
+							];
+						}}>+ referer</button
 					>
 				</div>
 				<div class="flex gap-1 flex-col">
