@@ -33,7 +33,8 @@
 				invoke('deploy_ecs_service', {
 					clusterArn: service.cluster_arn,
 					serviceArn: service.arn,
-					desiredVersion: null
+					desiredVersion: null,
+					includeTerraformTag: false
 				});
 			}}
 		>
