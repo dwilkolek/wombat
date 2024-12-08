@@ -8,6 +8,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
+	import { getFromList } from '$lib/utils';
 
 	interface Props {
 		app: string;
@@ -200,24 +201,24 @@
 				</div>
 
 				<div class="flex gap-1 flex-col">
-					{#each defaultHeaders as _, hi}
+					{#each getFromList(defaultHeaders) as header}
 						<CustomHeaderForm
 							added={true}
 							disabled={true}
-							bind:name={defaultHeaders[hi].name}
-							bind:value={defaultHeaders[hi].value}
-							bind:encodeBase64={defaultHeaders[hi].encodeBase64}
+							bind:name={header.name}
+							bind:value={header.value}
+							bind:encodeBase64={header.encodeBase64}
 							onRemove={() => {
 								console.error('cannot remove');
 							}}
 						/>
 					{/each}
-					{#each customHeaders as _, hi}
+					{#each getFromList(customHeaders) as header}
 						<CustomHeaderForm
 							added={true}
-							bind:name={customHeaders[hi].name}
-							bind:value={customHeaders[hi].value}
-							bind:encodeBase64={customHeaders[hi].encodeBase64}
+							bind:name={header.name}
+							bind:value={header.value}
+							bind:encodeBase64={header.encodeBase64}
 							disabled={!$featuresStore.proxyCustomHeaders}
 							onRemove={(name) => {
 								customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
