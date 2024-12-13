@@ -929,6 +929,12 @@ pub async fn deploy_service(
                         command: command.to_owned(),
                         message: e,
                     })?;
+            info!(
+                "Using task definition {}, cpu={} mem={}",
+                task_definition.revision,
+                task_definition.cpu().unwrap_or("-"),
+                task_definition.memory().unwrap_or("-")
+            );
             let new_task_definition = register_task_definition(
                 &ecs_client,
                 &task_definition,

@@ -17,11 +17,7 @@
 	let dialog: HTMLDialogElement | undefined = $state();
 	let imageTag = $state(service.version);
 	let includeTerraformTag = $state(false);
-	let justRestart = $state(true);
 	let deployStarting = $state(false);
-	let isValid = $derived(!justRestart ? imageTag.length > 3 : true);
-
-	let command = $derived(justRestart ? 'ecs_task_restart_start' : 'ecs_task_deploy_start');
 </script>
 
 {#if $disabledReason?.deployment != null}
@@ -97,7 +93,7 @@
 			<div class="flex flex-col w-full gap-4 mt-2">
 				<div class="flex flex-row gap-4 items-center">
 					<input
-						disabled={!!$disabledReason || justRestart || deployStarting}
+						disabled={!!$disabledReason || deployStarting}
 						autocomplete="off"
 						autocorrect="off"
 						autocapitalize="off"
@@ -112,40 +108,50 @@
 							type="checkbox"
 							class="toggle"
 							bind:checked={includeTerraformTag}
-							disabled={justRestart || deployStarting}
+							disabled={deployStarting || !$featuresStore.deployEcsWithTags}
 						/>
 						Set Terraform tag
 					</div>
 				</div>
-				<div class="flex flex-row gap-8 items-center justify-end">
-					<div class="flex items-center gap-1">
-						<input
-							type="checkbox"
-							class="toggle"
-							bind:checked={justRestart}
-							disabled={deployStarting}
-						/>
-						Just restart
-					</div>
+				<div class="flex flex-row gap-4 items-center justify-end">
 					<button
-						data-umami-event={command}
+						data-umami-event={'ecs_task_deploy_start'}
 						data-umami-event-uid={$userStore.id}
 						class="btn btn-active btn-accent btn-sm"
-						disabled={!isValid || deployStarting || !$featuresStore.deployEcsWithTags}
+						disabled={imageTag.length <= 3 || deployStarting}
 						onclick={async (e) => {
 							e.preventDefault();
 							deployStarting = true;
 							await invoke('deploy_ecs_service', {
 								clusterArn: service.cluster_arn,
 								serviceArn: service.arn,
-								desiredVersion: justRestart ? null : imageTag,
-								includeTerraformTag: justRestart ? null : includeTerraformTag
+								desiredVersion: imageTag,
+								includeTerraformTag: includeTerraformTag
 							});
 							dialog?.close();
 						}}
 					>
-						Run deployment</button
+						Deploy {imageTag} {includeTerraformTag ? 'and set Terraform=true' : ''}</button
 					>
+					<button
+						data-umami-event={'ecs_task_restart_start'}
+						data-umami-event-uid={$userStore.id}
+						class="btn btn-active btn-secondary btn-sm"
+						disabled={deployStarting}
+						onclick={async (e) => {
+							e.preventDefault();
+							deployStarting = true;
+							await invoke('deploy_ecs_service', {
+								clusterArn: service.cluster_arn,
+								serviceArn: service.arn,
+								desiredVersion: null,
+								includeTerraformTag: null
+							});
+							dialog?.close();
+						}}
+					>
+						Restart
+					</button>
 				</div>
 			</div>
 		</div>
