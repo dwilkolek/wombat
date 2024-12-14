@@ -145,7 +145,7 @@
 								clusterArn: service.cluster_arn,
 								serviceArn: service.arn,
 								desiredVersion: null,
-								includeTerraformTag: null
+								includeTerraformTag: false
 							});
 							dialog?.close();
 						}}
