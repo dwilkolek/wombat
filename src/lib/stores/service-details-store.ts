@@ -64,8 +64,7 @@ refresh();
 
 let to: { [key: string]: Promise<void> } = {};
 export const serviceDetailStore = (app: string) =>
-	derived([allServiceDetailsStore], (stores) => {
-		const apps = stores[0];
+	derived([allServiceDetailsStore], ([apps]) => {
 		const details = apps.find((a) => a.app === app);
 		if (!details) {
 			if (!to[app]) {
