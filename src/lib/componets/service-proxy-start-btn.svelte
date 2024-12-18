@@ -46,12 +46,12 @@
 			name: 'Origin',
 			encodeBase64: false,
 			value: baseAddress + '/'
-		},
-		{
-			name: 'Referer',
-			encodeBase64: false,
-			value: baseAddress
 		}
+		// {
+		// 	name: 'Referer',
+		// 	encodeBase64: false,
+		// 	value: baseAddress
+		// }
 	]);
 
 	let matchingInfraProfiles = $derived(
