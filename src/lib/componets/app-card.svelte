@@ -118,13 +118,19 @@
 											<div class="flex gap-2 justify-between items-center grow">
 												<div
 													class="flex flex-col tooltip tooltip-left"
-													data-tip={`Deployed at: ${
+													data-tip={`Deployed ${
+														service.version.length < 18
+															? service.version
+															: service.version.substring(0, 15) + '...'
+													} at: ${
 														service.task_registered_at
 															? format(service.task_registered_at, 'yyyy-MM-dd HH:mm:ss')
 															: ''
 													}`}
 												>
-													{service.version}
+													{service.version.length < 18
+														? service.version
+														: service.version.substring(0, 15) + '...'}
 												</div>
 												<DeployOrRestartServiceBtn {service} />
 												<RemoveNonPlatformTaskDefinitionsBtn {service} />
