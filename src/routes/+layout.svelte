@@ -14,9 +14,6 @@
 	<ErrorBox />
 	{#await invoke('is_debug') then isDebug}
 		{#if !isDebug}
-			<script>
-				document.addEventListener('contextmenu', (event) => event.preventDefault());
-			</script>
 			<script
 				defer
 				src="https://umami.wilkolek.eu/script.js"
