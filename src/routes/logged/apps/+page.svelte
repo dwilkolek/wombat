@@ -107,13 +107,15 @@
 	</div>
 	<div class="flex flex-wrap gap-2">
 		{#each $activeProfilePreferences.tracked_names as app}
-			<AppCard
-				{app}
-				displayConfig={{
-					envs: selectedClusters,
-					favorite: true
-				}}
-			/>
+			{#key app}
+				<AppCard
+					{app}
+					displayConfig={{
+						envs: selectedClusters,
+						favorite: true
+					}}
+				/>
+			{/key}
 		{/each}
 	</div>
 </div>

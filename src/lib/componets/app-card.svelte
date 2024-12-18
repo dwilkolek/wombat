@@ -26,12 +26,10 @@
 
 	let details = serviceDetailStore(app);
 
-	let isFavourite = $derived((name: string): boolean => {
-		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
-	});
+	let isFavourite = $derived(!!$activeProfilePreferences.tracked_names.includes(app));
 </script>
 
-{#if displayConfig.favorite == null || isFavourite(app) === displayConfig.favorite}
+{#if displayConfig.favorite == null || isFavourite === displayConfig.favorite}
 	<div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
 		<div class="flex gap-2 flex-col justify-around">
 			<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
@@ -43,7 +41,7 @@
 						userStore.favoriteTrackedName(app);
 					}}
 				>
-					<StarIcon isSelected={isFavourite(app)} />
+					<StarIcon isSelected={isFavourite} />
 				</button>
 				<span class="inline text-base">
 					<a class="hover:text-accent underline" href={`/logged/apps/${app}`}>
