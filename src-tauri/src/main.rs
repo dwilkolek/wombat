@@ -1529,18 +1529,7 @@ async fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            let chrome_extension_dir = user::chrome_extension_dir();
-            if chrome_extension_dir.exists() {
-                match fs::remove_dir_all(&chrome_extension_dir) {
-                    Ok(_) => info!("chrome_extension plugin removed"),
-                    Err(reason) => {
-                        error!("chrome_extension plugin was not removed, reason={}", reason)
-                    }
-                }
-            }
-
-            let handle = app.handle();
-            handle
+            app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())
                 .expect("Failed to initialize updater plugin");
             Ok(())
