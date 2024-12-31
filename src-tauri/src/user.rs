@@ -13,10 +13,6 @@ pub fn wombat_dir() -> PathBuf {
     home::home_dir().unwrap_or_log().as_path().join(".wombat")
 }
 
-pub fn chrome_extension_dir() -> PathBuf {
-    wombat_dir().join("chrome-extension")
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WombatAwsProfilePreferences {
     pub tracked_names: HashSet<TrackedName>,
