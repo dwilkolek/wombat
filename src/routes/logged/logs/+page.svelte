@@ -10,6 +10,7 @@
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 	import TimerangeSelect from '$lib/componets/timerange-select.svelte';
+	import { logFiltersStore } from '$lib/stores/log-filters-store';
 
 	let activeCluser = clusterStore.activeCluser;
 	let selectedServices = serviceStore.selectedServices;
@@ -23,13 +24,6 @@
 	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
-	type LogFilter = {
-		id: number;
-		filter: string;
-		services: string[];
-		label: string;
-	};
-	let filters = $derived(invoke<LogFilter[]>('log_filters'));
 
 	const openLogInNewWindow = async (log: LogData) => {
 		const key = await invoke<string>('kv_put', { value: JSON.stringify(log) });
@@ -170,9 +164,10 @@
 				>
 			</div>
 			<div class="flex flex-wrap gap-2">
-				{#await filters}
+				{#if $logFiltersStore.isLoading}
 					<div>Loading filters...</div>
-				{:then filters}
+				{:else}
+					{@const filters = $logFiltersStore.filters}
 					{#each filters as filter}
 						{@const enabledFor = filter.services.filter((ls) => ls.at(0) !== '!')}
 						{@const disabledFor =
@@ -194,7 +189,7 @@
 							>
 						{/if}
 					{/each}
-				{/await}
+				{/if}
 			</div>
 		</div>
 		<div class="flex gap-2">

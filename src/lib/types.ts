@@ -182,3 +182,10 @@ export enum UpdateButtonState {
 	INSTALLED,
 	FAILED
 }
+
+export type LogFilter = {
+	id: number;
+	filter: string;
+	services: string[];
+	label: string;
+};
