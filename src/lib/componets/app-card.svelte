@@ -38,7 +38,7 @@
 					data-umami-event="favorite_app_toggle"
 					data-umami-event-uid={$userStore.id}
 					onclick={() => {
-						userStore.favoriteTrackedName(app);
+						userStore.favoriteString(app);
 					}}
 				>
 					<StarIcon isSelected={isFavourite} />

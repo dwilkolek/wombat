@@ -12,6 +12,7 @@ rust-version = "1.78.0"
 
 [build-dependencies]
 tauri-build = { version = "2.0.3", features = [] }
+tonic-build = "*"
 
 [dependencies]
 log = "^0.4"
@@ -29,11 +30,13 @@ aws-runtime = "1.5.2"
 aws-config = "1.5.12"
 aws-sdk-ecs = "1.57.1"
 aws-sdk-rds = "1.69.0"
-aws-sdk-ec2 = "1.97.0"
+aws-sdk-ec2 = { version = "1.97.0", optional = true }
 aws-sdk-ssm = "1.56.0"
 aws-sdk-sts = "1.51.0"
 aws-sdk-cloudwatchlogs = "1.61.0"
 aws-sdk-secretsmanager = "1.54.0"
+tonic = { version = "*", optional = true }
+prost = { version = "0.13", optional = true }
 tokio = { version = "1", features = ["full"] }
 home = "0.5.9"
 warp-reverse-proxy = "1.0.0"
@@ -78,3 +81,5 @@ default = ["custom-protocol"]
 # this feature is used for production builds where `devPath` points to the filesystem
 # DO NOT remove this
 custom-protocol = ["tauri/custom-protocol"]
+aws-sdk = ["dep:aws-sdk-ec2"]
+arh = ["dep:tonic", "dep:prost"]

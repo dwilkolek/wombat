@@ -41,7 +41,7 @@ const createUserStore = () => {
 		emit('logged-in');
 	};
 
-	const favoriteTrackedName = async (name: string) => {
+	const favoriteString = async (name: string) => {
 		const config = await execute<UserConfig>('favorite', {
 			name
 		});
@@ -61,7 +61,7 @@ const createUserStore = () => {
 		login,
 		setDbeaverPath,
 		setLogsDir,
-		favoriteTrackedName,
+		favoriteString,
 		savePrefferedEnvs
 	};
 };

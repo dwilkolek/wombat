@@ -79,13 +79,13 @@ jobs:
           #   args: '--verbose --target x86_64-apple-darwin'
           #   platform-name: 'Macos-Intel'
           - platform: 'macos-latest' # for Univrsal based macs.
-            args: '--verbose --target universal-apple-darwin'
+            args: '--verbose --target universal-apple-darwin --features aws-sdk'
             platform-name: 'Macos-Universal'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
-            args: '--verbose'
+            args: '--verbose --features aws-sdk'
             platform-name: 'Linux'
           - platform: 'windows-latest'
-            args: '--verbose'
+            args: '--verbose --features aws-sdk'
             platform-name: 'Windows'
     runs-on: ${{ matrix.platform }}
     steps:

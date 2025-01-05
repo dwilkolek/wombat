@@ -1,4 +1,4 @@
-use crate::shared::{BrowserExtension, Cookie, CookieJar, Env};
+use crate::shared::{BrowserExtension, Cookie, CookieJar};
 use crate::wombat_api::WombatApi;
 use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
@@ -11,7 +11,7 @@ use warp::{self, http::StatusCode};
 struct NewCookieDto {
     name: String,
     value: String,
-    env: Env,
+    env: crate::aws::types::Env,
     stored_at: i64,
 }
 impl From<NewCookieDto> for Cookie {

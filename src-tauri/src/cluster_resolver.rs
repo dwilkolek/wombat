@@ -7,13 +7,13 @@ const CACHE_NAME: &str = "cluster";
 
 pub struct ClusterResolver {
     db: Arc<RwLock<libsql::Database>>,
-    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    aws_config_resolver: Arc<RwLock<aws::profile_resolver::AwsConfigProvider>>,
 }
 
 impl ClusterResolver {
     pub fn new(
         db: Arc<RwLock<libsql::Database>>,
-        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+        aws_config_resolver: Arc<RwLock<aws::profile_resolver::AwsConfigProvider>>,
     ) -> Self {
         ClusterResolver {
             db,
@@ -58,7 +58,7 @@ impl ClusterResolver {
         }
     }
 
-    pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
+    pub async fn refresh(&mut self) -> Vec<aws::types::Cluster> {
         {
             let db = self.db.read().await;
             clear_clusters(&db.connect().unwrap()).await;
@@ -66,7 +66,7 @@ impl ClusterResolver {
         self.clusters().await.clone()
     }
 
-    pub async fn clusters(&mut self) -> Vec<aws::Cluster> {
+    pub async fn clusters(&mut self) -> Vec<aws::types::Cluster> {
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         info!("Resolving clusters");
@@ -85,7 +85,7 @@ impl ClusterResolver {
         for env in environments.iter() {
             let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching ecs from aws using {profile}");
-            let clusters = aws::clusters(&config).await;
+            let clusters = aws::sdk_functions::clusters(&config).await;
             for cluster in clusters {
                 unique_clusters_map.insert(cluster.arn.clone(), cluster);
             }
@@ -101,7 +101,7 @@ impl ClusterResolver {
         clusters
     }
 
-    pub async fn read_clusters(&self) -> Vec<aws::Cluster> {
+    pub async fn read_clusters(&self) -> Vec<aws::types::Cluster> {
         info!("Resolving clusters");
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
@@ -114,7 +114,7 @@ impl ClusterResolver {
     }
 }
 
-async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::Cluster> {
+async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::types::Cluster> {
     log::info!("reading clusters from cache");
     let result = conn
         .query("SELECT arn, name, env, platform_version FROM clusters;", ())
@@ -129,7 +129,7 @@ async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::Cluster> {
                         let name = row.get::<String>(1).unwrap();
                         let env = serde_json::from_str(&row.get::<String>(2).unwrap()).unwrap();
                         let platform_version = row.get::<i32>(3).unwrap_or(0);
-                        clusters.push(aws::Cluster {
+                        clusters.push(aws::types::Cluster {
                             arn,
                             name,
                             env,
@@ -155,7 +155,7 @@ async fn clear_clusters(conn: &libsql::Connection) {
     conn.execute("DELETE FROM clusters", ()).await.unwrap();
 }
 
-async fn store_clusters(conn: &libsql::Connection, clusters: &[aws::Cluster]) {
+async fn store_clusters(conn: &libsql::Connection, clusters: &[aws::types::Cluster]) {
     clear_clusters(conn).await;
 
     for db in clusters.iter() {

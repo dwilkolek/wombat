@@ -28,6 +28,7 @@ _This project is no longer generic tool to use AWS._
 
 Install caching wrapper: `brew install sccache`
 Export environment variable: `RUSTC_WRAPPER=sccache`
+Running with feature: `pnpm tauri dev -- --features arh`
 
 ## Expected aws configuration
 
