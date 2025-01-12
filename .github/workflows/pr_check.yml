@@ -117,8 +117,6 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
       - name: install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -139,6 +137,27 @@ jobs:
         run: |
           pnpm lint
           pnpm check
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.23.0'
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build ARH
+        run: |
+          cd arh
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+          protoc \
+            --go_out=. \
+            --go_opt=paths=source_relative \
+            --go-grpc_out=. \
+            --go-grpc_opt=paths=source_relative \
+              proto/arh.proto
+          go build -o ../src-tauri/binaries/arh cmd/grpc-server/main.go
+          cd ../
+          pnpm rename-sidecar
       - uses: tauri-apps/tauri-action@v0
         env:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}

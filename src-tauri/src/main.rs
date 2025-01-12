@@ -22,8 +22,10 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 
+use aws::profile_resolver::{InfraProfile, SsoProfile, WombatAwsProfile};
 use aws::types::*;
-use aws::profile_resolver::{SsoProfile, InfraProfile, WombatAwsProfile};
+
+use tauri_plugin_shell::ShellExt;
 
 mod aws;
 mod cache_db;
@@ -165,6 +167,11 @@ async fn login(
 
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, BError> {
+    let sidecar_command = app_handle.shell().sidecar("arh").unwrap();
+    tokio::task::spawn(async move {
+        let (mut _rx, mut _child) = sidecar_command.spawn().unwrap();
+    });
+
     let environments: Vec<Env>;
     let tracked_names: HashSet<String>;
     {
@@ -346,7 +353,8 @@ async fn credentials(
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = aws::sdk_functions::db_secret(&override_aws_config, &db.name, &db.env).await;
+                secret =
+                    aws::sdk_functions::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {
                 secret = Err(err)
             }
@@ -891,8 +899,11 @@ async fn service_details(
             .collect()
     }
     let mut counter = rate_limitter.0.lock().await;
-    let mut services =
-        aws::sdk_functions::service_details(aws_config_provider.0.clone(), services_to_resolve.clone()).await;
+    let mut services = aws::sdk_functions::service_details(
+        aws_config_provider.0.clone(),
+        services_to_resolve.clone(),
+    )
+    .await;
     let mut retry_count = 3;
     while services.iter().any(|s| s.is_err()) && retry_count > 0 {
         retry_count -= 1;
@@ -958,7 +969,7 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<NewTaskParams, BError>  {
+) -> Result<NewTaskParams, BError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(BError::new("start_db_proxy", msg));
     };
@@ -1368,7 +1379,8 @@ async fn open_dbeaver(
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = aws::sdk_functions::db_secret(&override_aws_config, &db.name, &db.env).await;
+                secret =
+                    aws::sdk_functions::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {
                 return Err(BError::new("db_secret", "No secret found"));
             }
@@ -1524,7 +1536,9 @@ async fn main() {
 
     let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
 
-    let aws_config_provider = Arc::new(RwLock::new(aws::profile_resolver::AwsConfigProvider::new().await));
+    let aws_config_provider = Arc::new(RwLock::new(
+        aws::profile_resolver::AwsConfigProvider::new().await,
+    ));
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
@@ -1568,6 +1582,15 @@ async fn main() {
         .manage(KVStoreInstance(Arc::new(Mutex::new(KVStore {
             store: HashMap::new(),
         }))))
+        .setup(|app| {
+            let handle = app.handle();
+            let sidecar_command = handle.shell().sidecar("arh").unwrap();
+            tokio::task::spawn(async move {
+                info!("Starting arh server...");
+                let (mut _rx, mut _child) = sidecar_command.spawn().unwrap();
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             user_config,
             set_dbeaver_path,

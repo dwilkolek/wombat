@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::aws::types::Env;
 use aws_config::{
     profile::{ProfileFileLoadError, ProfileSet},
     BehaviorVersion,
@@ -7,7 +8,6 @@ use aws_config::{
 use log::{info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use crate::aws::types::Env;
 use tracing_unwrap::{OptionExt, ResultExt};
 
 pub struct AwsConfigProvider {
@@ -339,8 +339,6 @@ impl AwsConfigProvider {
         .or_else(aws_config::Region::new("eu-west-1"))
     }
 
-   
-
     async fn use_aws_config(&self, ssm_profile: &str) -> (String, aws_config::SdkConfig) {
         let region_provider = self.region_provider(ssm_profile).await;
 
@@ -355,7 +353,10 @@ impl AwsConfigProvider {
     }
 }
 
-async fn region_from_profile(profile: &str, profile_set: &ProfileSet) -> Option<aws_config::Region> {
+async fn region_from_profile(
+    profile: &str,
+    profile_set: &ProfileSet,
+) -> Option<aws_config::Region> {
     if let Some(profile) = profile_set.get_profile(profile) {
         if let Some(region) = profile.get("region") {
             return Some(aws_config::Region::new(region.to_owned()));
@@ -364,9 +365,10 @@ async fn region_from_profile(profile: &str, profile_set: &ProfileSet) -> Option<
     None
 }
 
+#[cfg(not(feature = "arh"))]
 async fn region_provider(
     profile: &str,
-    profile_set: &ProfileSet
+    profile_set: &ProfileSet,
 ) -> aws_config::meta::region::RegionProviderChain {
     aws_config::meta::region::RegionProviderChain::first_try(
         region_from_profile(profile, profile_set).await,
@@ -375,13 +377,14 @@ async fn region_provider(
     .or_else(aws_config::Region::new("eu-west-1"))
 }
 
+#[cfg(not(feature = "arh"))]
 pub async fn sdk_config(profile_name: &str) -> aws_config::SdkConfig {
     let profiles = profile_set().await.unwrap_or_log();
     aws_config::defaults(BehaviorVersion::latest())
-                .profile_name(profile_name)
-                .region(region_provider(profile_name, &profiles).await)
-                .load()
-                .await
+        .profile_name(profile_name)
+        .region(region_provider(profile_name, &profiles).await)
+        .load()
+        .await
 }
 
 async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
@@ -393,8 +396,6 @@ async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
     )
     .await
 }
-
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SupportLevel {

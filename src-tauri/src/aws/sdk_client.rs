@@ -5,11 +5,6 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use super::profile_resolver;
 
 pub struct SdkAwsResolver {}
-impl SdkAwsResolver {
-    pub async fn new() -> Self {
-        SdkAwsResolver {}
-    }
-}
 
 impl crate::aws::aws_resolver::IAwsProvider for SdkAwsResolver {
     async fn bastions(&self, profile: &str) -> Vec<Bastion> {

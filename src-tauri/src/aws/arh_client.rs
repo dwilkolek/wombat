@@ -12,11 +12,6 @@ async fn create_client() -> arh::arh_client::ArhClient<tonic::transport::Channel
 }
 
 pub struct ArhAwsResolver {}
-impl ArhAwsResolver {
-    pub async fn new() -> Self {
-        ArhAwsResolver {}
-    }
-}
 impl crate::aws::aws_resolver::IAwsProvider for ArhAwsResolver {
     async fn bastions(&self, profile: &str) -> Vec<Bastion> {
         let mut client = create_client().await;
