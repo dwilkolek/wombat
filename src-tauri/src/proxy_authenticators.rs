@@ -1,5 +1,4 @@
 use crate::proxy::ProxyInterceptor;
-use crate::shared::Env;
 use crate::{aws, shared::CookieJar, wombat_api};
 use async_trait::async_trait;
 use headers::authorization::Credentials;
@@ -60,7 +59,7 @@ impl JepsenAutheticator {
 
     pub async fn get_jepsen_token(&self) -> Result<String, String> {
         info!("Getting token {}", &self.secret_arn);
-        let client_secret = aws::get_secret(&self.aws_config, &self.secret_arn)
+        let client_secret = aws::sdk_functions::get_secret(&self.aws_config, &self.secret_arn)
             .await
             .unwrap_or_log();
         let client = reqwest::Client::new();
@@ -121,7 +120,7 @@ impl BasicAuthenticator {
         BasicAuthenticator {
             user: basic_config.basic_user.unwrap(),
             path_prefix: basic_config.api_path,
-            password: aws::get_secret(aws_config, basic_config.secret_name.as_str())
+            password: aws::sdk_functions::get_secret(aws_config, basic_config.secret_name.as_str())
                 .await
                 .ok(),
         }
@@ -147,7 +146,7 @@ impl ProxyInterceptor for BasicAuthenticator {
 }
 
 pub struct CookieAutheticator {
-    pub env: Env,
+    pub env: aws::types::Env,
     pub jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
 }
 

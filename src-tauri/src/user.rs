@@ -6,7 +6,8 @@ use std::fs;
 use std::path::PathBuf;
 use tracing_unwrap::OptionExt;
 
-use crate::shared::{arn_to_name, BError, Env, TrackedName};
+use crate::shared::{arn_to_name, BError};
+use crate::aws::types::Env;
 use uuid::Uuid;
 
 pub fn wombat_dir() -> PathBuf {
@@ -15,7 +16,7 @@ pub fn wombat_dir() -> PathBuf {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WombatAwsProfilePreferences {
-    pub tracked_names: HashSet<TrackedName>,
+    pub tracked_names: HashSet<String>,
     pub preffered_environments: Vec<Env>,
 }
 
@@ -24,9 +25,9 @@ pub struct UserConfig {
     pub id: Uuid,
     verson: i8,
     last_used_profile: Option<String>,
-    db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
-    service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
-    lambda_app_proxy_port_map: Option<HashMap<TrackedName, HashMap<Env, u16>>>,
+    db_proxy_port_map: HashMap<String, HashMap<Env, u16>>,
+    service_proxy_port_map: HashMap<String, HashMap<Env, u16>>,
+    lambda_app_proxy_port_map: Option<HashMap<String, HashMap<Env, u16>>>,
     user_session_proxy_port_map: Option<HashMap<String, u16>>,
     pub dbeaver_path: Option<String>,
     pub logs_dir: Option<PathBuf>,
@@ -124,8 +125,8 @@ impl UserConfig {
     }
 
     fn get_port(
-        map: &mut HashMap<TrackedName, HashMap<Env, u16>>,
-        tracked_name: TrackedName,
+        map: &mut HashMap<String, HashMap<Env, u16>>,
+        tracked_name: String,
         env: Env,
         from_port: u16,
         range: u16,
@@ -257,7 +258,7 @@ impl UserConfig {
     pub fn favorite(
         &mut self,
         profile_name: &str,
-        tracked_name: TrackedName,
+        tracked_name: String,
     ) -> Result<UserConfig, BError> {
         info!("Favorite {} ", &tracked_name);
         let preferences = self.preferences.as_mut().unwrap_or_log();

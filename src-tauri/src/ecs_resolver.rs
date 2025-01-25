@@ -11,13 +11,13 @@ const CACHE_NAME: &str = "ecs";
 
 pub struct EcsResolver {
     db: Arc<RwLock<libsql::Database>>,
-    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    aws_config_resolver: Arc<RwLock<aws::profile_resolver::AwsConfigProvider>>,
 }
 
 impl EcsResolver {
     pub fn new(
         db: Arc<RwLock<libsql::Database>>,
-        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+        aws_config_resolver: Arc<RwLock<aws::profile_resolver::AwsConfigProvider>>,
     ) -> Self {
         EcsResolver {
             db,
@@ -64,7 +64,7 @@ impl EcsResolver {
         }
     }
 
-    pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
+    pub async fn refresh(&mut self, clusters: Vec<aws::types::Cluster>) -> Vec<aws::types::EcsService> {
         {
             let db = self.db.read().await;
             clear_services(&db.connect().unwrap()).await;
@@ -81,7 +81,7 @@ impl EcsResolver {
         desired_version: Option<String>,
         include_terraform_tag: bool,
     ) -> Result<String, BError> {
-        let deplyoment_res = aws::deploy_service(
+        let deplyoment_res = aws::sdk_functions::deploy_service(
             &config,
             &cluster_arn,
             &service_arn,
@@ -102,7 +102,7 @@ impl EcsResolver {
                 while continue_checking {
                     interval.tick().await;
                     info!("Checking deployment={deployment_id}");
-                    let deployment_status = aws::get_deploment_status(
+                    let deployment_status = aws::sdk_functions::get_deploment_status(
                         &config,
                         &cluster_arn,
                         &service_name,
@@ -160,7 +160,7 @@ impl EcsResolver {
         deplyoment_res
     }
 
-    pub async fn services(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
+    pub async fn services(&mut self, clusters: Vec<aws::types::Cluster>) -> Vec<aws::types::EcsService> {
         info!("Resolving services for clusters {clusters:?}");
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
@@ -187,7 +187,7 @@ impl EcsResolver {
                     "Using profile={} to resolve services for cluster={}",
                     cluster.arn, profile
                 );
-                let services = aws::services(&config, &cluster).await;
+                let services = aws::sdk_functions::services(&config, &cluster).await;
                 for service in services {
                     unique_services_map.insert(service.arn.clone(), service);
                 }
@@ -209,7 +209,7 @@ impl EcsResolver {
         services
     }
 
-    pub async fn read_services(&self) -> Vec<aws::EcsService> {
+    pub async fn read_services(&self) -> Vec<aws::types::EcsService> {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let services = fetch_services(&conn).await;
@@ -221,7 +221,7 @@ impl EcsResolver {
     }
 }
 
-async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::EcsService> {
+async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::types::EcsService> {
     log::info!("reading ecs instances from cache");
     let result = conn
         .query(
@@ -240,7 +240,7 @@ async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::EcsService> {
                         let cluster_arn = row.get::<String>(2).unwrap();
                         let env = serde_json::from_str(&row.get::<String>(3).unwrap()).unwrap();
                         let td_family = row.get::<String>(4).unwrap();
-                        services.push(aws::EcsService {
+                        services.push(aws::types::EcsService {
                             arn,
                             name,
                             cluster_arn,
@@ -267,7 +267,7 @@ async fn clear_services(conn: &libsql::Connection) {
     conn.execute("DELETE FROM services", ()).await.unwrap();
 }
 
-async fn store_services(conn: &libsql::Connection, services: &[aws::EcsService]) {
+async fn store_services(conn: &libsql::Connection, services: &[aws::types::EcsService]) {
     clear_services(conn).await;
 
     for ecs in services.iter() {

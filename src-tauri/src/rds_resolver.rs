@@ -7,13 +7,13 @@ const CACHE_NAME: &str = "rds";
 
 pub struct RdsResolver {
     db: Arc<RwLock<libsql::Database>>,
-    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    aws_config_resolver: Arc<RwLock<aws::profile_resolver::AwsConfigProvider>>,
 }
 
 impl RdsResolver {
     pub fn new(
         db: Arc<RwLock<libsql::Database>>,
-        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+        aws_config_resolver: Arc<RwLock<aws::profile_resolver::AwsConfigProvider>>,
     ) -> Self {
         RdsResolver {
             db,
@@ -54,7 +54,7 @@ impl RdsResolver {
         }
     }
 
-    pub async fn refresh(&mut self) -> Vec<aws::RdsInstance> {
+    pub async fn refresh(&mut self) -> Vec<aws::types::RdsInstance> {
         {
             let db = self.db.read().await;
             clear_databases(&db.connect().unwrap()).await;
@@ -62,7 +62,7 @@ impl RdsResolver {
         self.databases().await
     }
 
-    pub async fn databases(&mut self) -> Vec<aws::RdsInstance> {
+    pub async fn databases(&mut self) -> Vec<aws::types::RdsInstance> {
         info!("Resolving databases");
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
@@ -82,7 +82,7 @@ impl RdsResolver {
         for env in environments.iter() {
             let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching rds from aws using profile {profile}");
-            let databases = aws::databases(&config).await;
+            let databases = aws::sdk_functions::databases(&config).await;
             for db in databases {
                 unique_databases_map.insert(db.arn.clone(), db);
             }
@@ -97,7 +97,7 @@ impl RdsResolver {
         databases
     }
 
-    pub async fn read_databases(&self) -> Vec<aws::RdsInstance> {
+    pub async fn read_databases(&self) -> Vec<aws::types::RdsInstance> {
         let db = self.db.read().await;
         let conn = db.connect().unwrap();
         let databases = fetch_databases(&conn).await;
@@ -109,7 +109,7 @@ impl RdsResolver {
     }
 }
 
-async fn fetch_databases(conn: &libsql::Connection) -> Vec<aws::RdsInstance> {
+async fn fetch_databases(conn: &libsql::Connection) -> Vec<aws::types::RdsInstance> {
     log::info!("reading rds instances from cache");
     let result = conn
         .query(
@@ -132,7 +132,7 @@ async fn fetch_databases(conn: &libsql::Connection) -> Vec<aws::RdsInstance> {
                         let environment_tag = row.get::<String>(5).unwrap();
                         let env = serde_json::from_str(&row.get::<String>(6).unwrap()).unwrap();
                         let appname_tag = row.get::<String>(7).unwrap();
-                        databases.push(aws::RdsInstance {
+                        databases.push(aws::types::RdsInstance {
                             arn,
                             normalized_name: name.replace("-migrated", ""),
                             name,
@@ -163,7 +163,7 @@ async fn clear_databases(conn: &libsql::Connection) {
     conn.execute("DELETE FROM databases", ()).await.unwrap();
 }
 
-async fn store_databases(conn: &libsql::Connection, databases: &[aws::RdsInstance]) {
+async fn store_databases(conn: &libsql::Connection, databases: &[aws::types::RdsInstance]) {
     clear_databases(conn).await;
 
     for db in databases.iter() {

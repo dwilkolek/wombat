@@ -38,6 +38,16 @@
 		"core:window:allow-set-ignore-cursor-events",
 		"core:window:allow-start-dragging",
 		"core:webview:allow-print",
+		{
+			"identifier": "shell:allow-execute",
+			"allow": [
+				{
+					"args": [],
+					"name": "binaries/arh",
+					"sidecar": true
+				}
+			]
+		},
 		"shell:allow-open",
 		"dialog:allow-message",
 		"dialog:allow-ask",

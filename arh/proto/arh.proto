@@ -1,0 +1,28 @@
+syntax = "proto3";
+package arh;
+option go_package = "github.com/dwilkolek/wombat/arh/proto";
+
+service Arh {
+  // Sends a greeting
+  rpc DescribeBastions (DescribeBastionsRequest) returns (DescribeBastionsResponse) {}
+}
+
+message DescribeBastionsRequest {
+    string profile = 1;
+}
+
+message DescribeBastionsResponse {
+    repeated BastionInstance results = 1;
+}
+
+message BastionInstance {
+    string instance_id = 1;
+    Environment env = 2;
+}
+
+enum Environment {
+    UNKNOWN = 0;
+    DEV = 1;
+    DEMO = 2;
+    PROD = 3;
+}
