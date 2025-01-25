@@ -80,7 +80,7 @@
 		</div>
 	</div>
 	<div class="absolute right-4 top-4 p-2">
-		<h1 class="font-bold text-amber-400">Chrome extension</h1>
+		<h1 class="font-bold text-amber-400">Quokka chrome extension</h1>
 		<div class="flex flex-col gap-1 text-sm">
 			<ul class="list-disc ml-6">
 				<li>automates <span class="text-orange-300">aws sso login</span> process</li>
@@ -90,7 +90,7 @@
 			</ul>
 			<a
 				target="_blank"
-				href="https://chromewebstore.google.com/detail/wombat-plugin/genpoikemhehdicnplfojdolhdhofonp"
+				href="https://chromewebstore.google.com/detail/quokka/genpoikemhehdicnplfojdolhdhofonp"
 				>👉 <span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span></a
 			>
 		</div>
