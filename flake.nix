@@ -7,7 +7,8 @@ pkgs.mkShell {
     gobject-introspection
     cargo
     cargo-tauri
-    nodejs
+    nodejs_22
+    nodePackages.pnpm
   ];
 
   buildInputs = with pkgs;[
