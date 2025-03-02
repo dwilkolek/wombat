@@ -3,10 +3,7 @@ on: [pull_request]
 
 jobs:
   test-tauri:
-    runs-on:
-      platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
-      args: '--verbose'
-      platform-name: 'Linux'
+    runs-on: 'ubuntu-latest'
     steps:
       - name: Set git to use LF
         run: |
@@ -31,7 +28,7 @@ jobs:
       - uses: workflow/nix-shell-action@v3
         with:
           script: |
-            nom run tauri build
+            pnpm tauri build
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
