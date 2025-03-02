@@ -3,6 +3,7 @@ let
 in
 pkgs.mkShell {
   nativeBuildInputs = with pkgs; [
+    cargo-tauri.hook
     pkg-config
     gobject-introspection
     cargo
