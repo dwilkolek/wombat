@@ -29,6 +29,7 @@ jobs:
         with:
           flakes-from-devshell: true
           script: |
+            npm i -g pnpm
             pnpm install
             pnpm tauri build
       - name: Archive executable
