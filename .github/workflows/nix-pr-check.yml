@@ -20,18 +20,11 @@ jobs:
           WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
           WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
           WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
-      - uses: cachix/install-nix-action@v18
+      - uses: cachix/install-nix-action@v25
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-          extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - uses: workflow/nix-shell-action@v3
-        with:
-          packages: pkg-config,gobject-introspection,cargo,cargo-tauri,nodejs_22,nodePackages.pnpm,at-spi2-atk,atkmm,cairo,gdk-pixbuf,glib,gtk3,harfbuzz,librsvg,libsoup_3,pango,webkitgtk_4_1,openssl,nixos.glib
-          script: |
-            npm i -g pnpm
-            pnpm install
-            pnpm tauri build
+      - run: nix-build
+      - run: nix-shell --run "echo OK"
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
