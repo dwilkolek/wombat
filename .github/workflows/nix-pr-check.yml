@@ -29,6 +29,7 @@ jobs:
         with:
           flakes-from-devshell: true
           script: |
+            npm install
             npm run tauri build
       - name: Archive executable
         uses: actions/upload-artifact@v4
