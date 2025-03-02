@@ -27,9 +27,10 @@ jobs:
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
       - uses: workflow/nix-shell-action@v3
         with:
+          flakes-from-devshell: true
           script: |
-            npm install
-            npm run tauri build
+            pnpm install
+            pnpm tauri build
       - name: Archive executable
         uses: actions/upload-artifact@v4
         with:
