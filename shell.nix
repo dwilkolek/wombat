@@ -8,7 +8,6 @@ pkgs.mkShell {
     cargo
     cargo-tauri
     nodejs
-    nodePackages.pnpm
   ];
 
   buildInputs = with pkgs;[
@@ -24,5 +23,7 @@ pkgs.mkShell {
     pango
     webkitgtk_4_1
     openssl
+    pkgs.nodejs_20  # Wybierz odpowiednią wersję Node.js
+    pkgs.pnpm
   ];
 }
