@@ -26,7 +26,7 @@ jobs:
       - run: nix-build
       - run: nix-shell --run "pnpm install && pnpm tauri build"
       - id: debug
-        run: nix-shell --run "cd  ./src-tauri/target/release/bundle/appimage && sh ./build_appimage.sh"
+        run: nix-shell --run "cd  ./src-tauri/target/release/bundle/appimage && rm -Rf Wombat.AppDir && sh ./build_appimage.sh"
         if: always()
       - name: Archive executable
         if: always()
