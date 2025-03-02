@@ -26,6 +26,7 @@ jobs:
       - run: nix-build
       - run: nix-shell --run "pnpm install && pnpm tauri build"
       - name: Archive executable
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: nix-thing
