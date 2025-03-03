@@ -25,5 +25,6 @@ pkgs.mkShell {
     pango
     webkitgtk_4_1
     openssl
+    glib-networking
   ];
 }
