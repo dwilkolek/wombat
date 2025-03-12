@@ -29,6 +29,7 @@
 
 	let availableApps = $derived(
 		new Set([
+			'none',
 			'dxp',
 			...$wombatProfileStore.infraProfiles
 				.filter((infra) => infra.env == env)
@@ -36,12 +37,15 @@
 		])
 	);
 
-	let selectedApp = $state('dxp');
+	let selectedApp = $state('none');
 
-	let defaultHeaders = $derived(getAppHeaders(selectedApp ?? 'dxp'));
+	let defaultHeaders = $derived(getAppHeaders(selectedApp ?? 'none'));
 	let customHeaders: CustomHeader[] = $state([]);
 
 	function getAppHeaders(app: string) {
+		if (app == 'none') {
+			return [];
+		}
 		const baseAddress = `https://${app}${env.toLowerCase() == 'prod' ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`;
 		return [
 			{

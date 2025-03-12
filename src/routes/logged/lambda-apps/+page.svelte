@@ -1,6 +1,6 @@
 <script lang="ts">
 	import LambdaAppCard from '$lib/componets/lambda-app-card.svelte';
-	const lambdaServices = ['filevault', 'commenting-service', 'feedback-form'];
+	const lambdaServices = ['filevault', 'commenting-service', 'feedback-form', 'ad-user-meta'];
 </script>
 
 <svelte:head>
