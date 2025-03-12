@@ -122,7 +122,7 @@
 							<span class="label-text">AWS profile</span>
 						</label>
 						{#if userId}
-							<select class="select select-bordered w-full" bind:value={profile}>
+							<select class="select w-full" bind:value={profile}>
 								{#each $wombatAwsProfiles as wombatAwsProfile}
 									<option value={wombatAwsProfile}>
 										{wombatAwsProfile.name}
@@ -164,11 +164,11 @@
 					</div>
 					{#await dependenciesPromise then deps}
 						{#if !Object.entries(deps).some((v) => v[1].Err)}
-							<div class="form-control mt-6">
+							<div class="form-control mt-6 flex justify-center">
 								<button
 									data-umami-event="login"
 									data-umami-event-uid={userId}
-									class="btn btn-accent"
+									class="btn btn-accent w-full"
 									disabled={loading}
 									type="submit"
 								>

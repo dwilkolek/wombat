@@ -192,7 +192,7 @@
 			</div>
 			<div>
 				<div class="flex items-center gap-2 pb-2">
-					Headers <select class="select select-bordered w-full select-sm" bind:value={selectedApp}>
+					Headers <select class="select w-full select-sm" bind:value={selectedApp}>
 						>
 						{#each availableApps as app}
 							<option value={app}> {app} </option>

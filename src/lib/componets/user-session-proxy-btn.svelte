@@ -61,7 +61,7 @@
 		bind:value={app}
 		class="input input-bordered w-full max-w-xs input-sm"
 	/>
-	<select class="select-sm select max-w-xs select-bordered" bind:value={env}>
+	<select class="select-sm select max-w-xs" bind:value={env}>
 		{#each ENVIRONMENTS as env}
 			<option value={env}>{env}</option>
 		{/each}
