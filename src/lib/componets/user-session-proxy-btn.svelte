@@ -57,7 +57,7 @@
 		autocorrect="off"
 		autocapitalize="off"
 		spellcheck="false"
-		placeholder="URL"
+		placeholder="App name eg. ad-user-meta"
 		bind:value={app}
 		class="input input-bordered w-full max-w-xs input-sm"
 	/>
