@@ -194,7 +194,7 @@
 		</div>
 		<div class="flex gap-2">
 			<div class="min-w-[200px]">
-				<select class="w-full select-sm select select-bordered" bind:value={$activeCluser}>
+				<select class="w-full select-sm select" bind:value={$activeCluser}>
 					{#each $clusters as cluster}
 						<option value={cluster}>{cluster.name}</option>
 					{/each}

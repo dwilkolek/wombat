@@ -41,7 +41,7 @@
 		<div class="flex flex-col items-center relative cursor-pointer">
 			<div class="w-full">
 				<div
-					class="h-8 flex flex-row justify-center items-center p-1 form-control border border-radius-sm border-slate select-bordered rounded-btn"
+					class="h-8 flex flex-row justify-center items-center p-1 form-control border border-b-2 rounded-sm border-white/20 rounded-btn"
 				>
 					<div class="flex flex-auto flex-wrap items-center gap-1 shrink">
 						{#each $selectedServices as s}

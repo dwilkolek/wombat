@@ -204,11 +204,7 @@
 				<div class="flex gap-4 items-end">
 					<div class="w-32">
 						<!-- svelte-ignore a11y_autofocus -->
-						<select
-							autofocus
-							class="select select-bordered w-full select-sm"
-							bind:value={useSSOProfile}
-						>
+						<select autofocus class="select w-full select-sm" bind:value={useSSOProfile}>
 							<option value={false}> Infra </option>
 							<option value={true}> SSO </option>
 						</select>
@@ -216,11 +212,7 @@
 					{#if useSSOProfile}
 						<div class="grow">
 							<!-- svelte-ignore a11y_autofocus -->
-							<select
-								autofocus
-								class="select select-bordered w-full select-sm"
-								bind:value={selectedSsoProxy}
-							>
+							<select autofocus class="select w-full select-sm" bind:value={selectedSsoProxy}>
 								{#each $wombatProfileStore.ssoProfiles as ssoProfile}
 									{#if ssoProfile.env == service.env}{@const interceptorCount = filterForSsoProfile(
 											proxyAuthConfigsForThisService
@@ -236,11 +228,7 @@
 					{#if !useSSOProfile}
 						<div class="grow">
 							<!-- svelte-ignore a11y_autofocus -->
-							<select
-								autofocus
-								class="select select-bordered w-full select-sm"
-								bind:value={selectedInfraProfile}
-							>
+							<select autofocus class="select w-full select-sm" bind:value={selectedInfraProfile}>
 								{#each matchingInfraProfiles as infraProfile}
 									{@const interceptorCount = filterForInfraProfile(
 										proxyAuthConfigsForThisService,
@@ -257,10 +245,7 @@
 			</div>
 			<div class="flex flex-col gap-1">
 				<span>Authentication interceptor:</span>
-				<select
-					class="select select-bordered w-full select-sm"
-					bind:value={selectedAuthInterceptor}
-				>
+				<select class="select w-full select-sm" bind:value={selectedAuthInterceptor}>
 					<option value={undefined}>None</option>
 
 					{#each configsForProfile as config}
