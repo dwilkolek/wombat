@@ -93,7 +93,7 @@
 			{#await discovered}
 				<span class="loading loading-dots loading-lg"></span>
 			{:then discoverValue}
-				{#each discoverValue as discoveredApp}
+				{#each discoverValue as discoveredApp (discoveredApp)}
 					<AppCard
 						app={discoveredApp}
 						displayConfig={{
@@ -106,16 +106,14 @@
 		{/if}
 	</div>
 	<div class="flex flex-wrap gap-2">
-		{#each $activeProfilePreferences.tracked_names as app}
-			{#key app}
-				<AppCard
-					{app}
-					displayConfig={{
-						envs: selectedClusters,
-						favorite: true
-					}}
-				/>
-			{/key}
+		{#each $activeProfilePreferences.tracked_names as app (app)}
+			<AppCard
+				{app}
+				displayConfig={{
+					envs: selectedClusters,
+					favorite: true
+				}}
+			/>
 		{/each}
 	</div>
 </div>

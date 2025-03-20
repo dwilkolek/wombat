@@ -22,37 +22,37 @@
 	</div>
 
 	<div
-		class={`grid w-full divide-x divide-base-100`}
+		class="grid w-full divide-x divide-base-100"
 		style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
 	>
-		{#each $wombatProfileStore.environments as enabled_env}
+		{#each $wombatProfileStore.environments as enabled_env (enabled_env)}
 			{@const task = $taskStore.find(
 				(task) => task.arn == `lambdaApp::${app}::${enabled_env.toLowerCase()}`
 			)}
-			<div class={`flex flex-col app-env-cell px-2`}>
+			<div class="flex flex-col app-env-cell px-2">
 				<div class="font-medium text-xs flex items-row gap-1 items-center">
 					{#if $cookieJar.cookieHealth[enabled_env] == 'Ok'}
 						<div
-							class={`bg-lime-400 h-[8px] w-[8px] rounded tooltip tooltip-top`}
-							data-tip={'Cookie is fresh, <5min'}
+							class="bg-lime-400 h-[8px] w-[8px] rounded tooltip tooltip-top"
+							data-tip="Cookie is fresh, <5min"
 						></div>
 					{/if}
 					{#if $cookieJar.cookieHealth[enabled_env] == 'Stale'}
 						<div
-							class={`bg-amber-300 h-[8px] w-[8px] rounded tooltip tooltip-top`}
-							data-tip={'Cookie is stale, >5min'}
+							class="bg-amber-300 h-[8px] w-[8px] rounded tooltip tooltip-top"
+							data-tip="Cookie is stale, >5min"
 						></div>
 					{/if}
 					{#if $cookieJar.cookieHealth[enabled_env] == 'Old'}
 						<div
-							class={`bg-red-500 h-[8px] w-[8px] rounded tooltip tooltip-top`}
-							data-tip={'Cookie is old, >10min'}
+							class="bg-red-500 h-[8px] w-[8px] rounded tooltip tooltip-top"
+							data-tip="Cookie is old, >10min"
 						></div>
 					{/if}
 					{#if !$cookieJar.cookieHealth[enabled_env]}
 						<div
-							class={`bg-gray-500 h-[8px] w-[8px] rounded tooltip tooltip-top`}
-							data-tip={'No cookie 🤷‍♂️'}
+							class="bg-gray-500 h-[8px] w-[8px] rounded tooltip tooltip-top"
+							data-tip="No cookie 🤷‍♂️"
 						></div>
 					{/if}
 					<span class="italic">{enabled_env}:</span>

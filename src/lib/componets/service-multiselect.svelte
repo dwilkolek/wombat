@@ -36,7 +36,7 @@
 	};
 </script>
 
-<div class={`w-full flex flex-col items-center mx-auto`}>
+<div class="w-full flex flex-col items-center mx-auto">
 	<div class="w-full">
 		<div class="flex flex-col items-center relative cursor-pointer">
 			<div class="w-full">
@@ -44,7 +44,7 @@
 					class="h-8 flex flex-row justify-center items-center p-1 form-control border border-b-2 rounded-sm border-white/20 rounded-btn"
 				>
 					<div class="flex flex-auto flex-wrap items-center gap-1 shrink">
-						{#each $selectedServices as s}
+						{#each $selectedServices as s (s)}
 							<div class="badge badge-info text-xs">
 								{s.name}
 								<button onclick={() => select(s)} aria-label={'Serivice: ' + s.name}>
@@ -66,7 +66,7 @@
 						<div class="grow h-full" onpointerdown={toggle}>&nbsp;</div>
 					</div>
 
-					<button class={`z-50 outline-none focus:outline-none ml-2`} onclick={toggle}>
+					<button class="z-50 outline-none focus:outline-none ml-2" onclick={toggle}>
 						{#if open}
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -118,11 +118,11 @@
 						</div>
 						<div class="overflow-auto max-h-[250px]">
 							{#await services then services}
-								{#each services.filter((a) => a.name.includes(inputValue)) as o}
+								{#each services.filter((a) => a.name.includes(inputValue)) as o (o.arn)}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
-										class={`cursor-pointer w-full hover:bg-base-300`}
+										class="cursor-pointer w-full hover:bg-base-300"
 										onclick={() => {
 											select(o);
 											inputValue = '';
@@ -132,7 +132,7 @@
 											class="flex w-full items-center p-1 border-transparent border-l-2 relative"
 										>
 											<div class="w-full items-center flex">
-												<div class={`mx-2 leading-6 flex items-center gap-1`}>
+												<div class="mx-2 leading-6 flex items-center gap-1">
 													{#if $selectedServices.some((selected) => selected.name == o.name)}
 														<svg
 															xmlns="http://www.w3.org/2000/svg"

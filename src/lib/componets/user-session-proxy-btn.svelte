@@ -62,7 +62,7 @@
 		class="input input-bordered w-full max-w-xs input-sm"
 	/>
 	<select class="select-sm select max-w-xs" bind:value={env}>
-		{#each ENVIRONMENTS as env}
+		{#each ENVIRONMENTS as env (env)}
 			<option value={env}>{env}</option>
 		{/each}
 	</select>

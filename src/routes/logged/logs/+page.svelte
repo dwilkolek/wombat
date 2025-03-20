@@ -168,7 +168,7 @@
 					<div>Loading filters...</div>
 				{:else}
 					{@const filters = $logFiltersStore.filters}
-					{#each filters as filter}
+					{#each filters as filter (filter.id)}
 						{@const enabledFor = filter.services.filter((ls) => ls.at(0) !== '!')}
 						{@const disabledFor =
 							filter.services
@@ -195,7 +195,7 @@
 		<div class="flex gap-2">
 			<div class="min-w-[200px]">
 				<select class="w-full select-sm select" bind:value={$activeCluser}>
-					{#each $clusters as cluster}
+					{#each $clusters as cluster (cluster.arn)}
 						<option value={cluster}>{cluster.name}</option>
 					{/each}
 				</select>
@@ -348,7 +348,7 @@
 	>
 		<table class="table table-xs w-full">
 			<tbody>
-				{#each $storeState.logs as log}
+				{#each $storeState.logs as log (log.id)}
 					<tr
 						onclick={() => {
 							logStore.showLog(log);
@@ -487,8 +487,8 @@
 		</div>
 
 		{#if $selectedLog && $storeState.showLogDetails}
-			<div class={`h-[40vh] flex flex-col gap-2`}>
-				<div class={`text-sm overflow-auto h-[40vh]`}>
+			<div class="h-[40vh] flex flex-col gap-2">
+				<div class="text-sm overflow-auto h-[40vh]">
 					<div bind:this={jsonViewNode}>
 						<JsonView log={selectedLog} nested={false} />
 					</div>
@@ -496,7 +496,7 @@
 			</div>
 		{/if}
 		{#if !$selectedLog && $storeState.showLogDetails}
-			<div class={`h-[40vh] overflow-auto justify-evenly text-center flex flex-col gap-2`}>
+			<div class="h-[40vh] overflow-auto justify-evenly text-center flex flex-col gap-2">
 				Select log to see details
 			</div>
 		{/if}

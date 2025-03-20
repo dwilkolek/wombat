@@ -44,7 +44,7 @@
 {/if}
 <div class="flex flex-col">
 	{#if details}
-		{#each [...details.envs] as [env]}
+		{#each [...details.envs] as [env] (env)}
 			<AppEnvCard app={data.app} {env} />
 		{/each}
 	{/if}
