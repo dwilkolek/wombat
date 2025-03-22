@@ -110,7 +110,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-3 h-3 absolute text-xs right-0 bottom-0 text-accent"
+					class="w-3 h-3 absolute text-xs right-0 bottom-0 text-success"
 				>
 					<path
 						d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
@@ -146,7 +146,7 @@
 					xmlns="http://www.w3.org/2000/svg"
 					viewBox="0 0 20 20"
 					fill="currentColor"
-					class="w-3 h-3 absolute text-xs right-0 bottom-0 text-accent"
+					class="w-3 h-3 absolute text-xs right-0 bottom-0 text-success"
 				>
 					<path
 						d="M5.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75A.75.75 0 007.25 3h-1.5zM12.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75h-1.5z"
@@ -157,11 +157,7 @@
 	</div>
 {/if}
 
-<dialog
-	bind:this={dialog}
-	onclose={() => console.log('closed')}
-	class="modal bg-black bg-opacity-60"
->
+<dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
 	<div class="modal-box w-11/12 max-w-[960px]">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
@@ -198,14 +194,14 @@
 				<div class="flex items-center gap-2 pb-2">
 					Headers <select class="select w-full select-sm" bind:value={selectedApp}>
 						>
-						{#each availableApps as app}
+						{#each availableApps as app (app)}
 							<option value={app}> {app} </option>
 						{/each}
 					</select>
 				</div>
 
 				<div class="flex gap-1 flex-col">
-					{#each getFromList(defaultHeaders) as header}
+					{#each getFromList(defaultHeaders) as header (header)}
 						<CustomHeaderForm
 							added={true}
 							disabled={true}
@@ -217,7 +213,7 @@
 							}}
 						/>
 					{/each}
-					{#each getFromList(customHeaders) as header}
+					{#each getFromList(customHeaders) as header (header)}
 						<CustomHeaderForm
 							added={true}
 							bind:name={header.name}

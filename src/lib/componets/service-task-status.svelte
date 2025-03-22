@@ -15,12 +15,12 @@
 
 {#if task && task.status !== TaskStatus.FAILED}
 	<div
-		class={`tooltip tooltip-left flex items-center text-amber-300 hover:text-amber-500 gap-1`}
+		class="tooltip tooltip-left flex items-center text-amber-300 hover:text-amber-500 gap-1"
 		data-tip={`Open ${task.name} in browser`}
 	>
 		{#if task.status !== TaskStatus.STARTING}
 			<button
-				class={`link text-sm`}
+				class="link text-sm"
 				onclick={(e) => {
 					e.preventDefault();
 					open('http://localhost:' + task.port);
