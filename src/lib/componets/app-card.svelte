@@ -93,22 +93,22 @@
 
 		{#if $details}
 			<div
-				class={`grid w-full divide-x divide-base-100`}
+				class="grid w-full divide-x divide-base-100"
 				style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
 			>
-				{#each $wombatProfileStore.environments as enabled_env}
+				{#each $wombatProfileStore.environments as enabled_env (enabled_env)}
 					{@const value = $details.envs?.get(enabled_env)}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(enabled_env)}
 						{@const hasInfraProfile = $wombatProfileStore.infraProfiles.some(
 							(infra) => infra.env == enabled_env && infra.app == app
 						)}
-						<div class={`flex flex-col app-env-cell px-2`}>
+						<div class="flex flex-col app-env-cell px-2">
 							<div class="font-medium text-xs italic flex gap-1 items-center">
 								<span class={`${hasInfraProfile ? '' : 'opacity-60'}`}>{enabled_env}: </span>
 							</div>
 							<div class="flex gap-1 app-env-cell-stack">
 								{#if value}
-									{#each value.services.filter((service) => !service.error) as service}
+									{#each value.services.filter((service) => !service.error) as service (service.arn)}
 										{@const task = $taskStore.find((task) => task.arn == service.arn)}
 
 										<div class="flex flex-row items-center gap-1 px-1">
@@ -137,13 +137,13 @@
 											</div>
 										</div>
 									{/each}
-									{#each value.services.filter((service) => service.error) as service}
+									{#each value.services.filter((service) => service.error) as service (service.arn)}
 										<div class="flex flex-row items-center gap-1 px-1 text-rose-800 text-sm">
 											{service.error}
 										</div>
 									{/each}
 
-									{#each value.dbs as db}
+									{#each value.dbs as db (db.arn)}
 										{@const task = $taskStore.find((task) => task.arn == db.arn)}
 										<div class="flex flex-row items-center gap-1 px-1">
 											<DatabaseCell database={db} />

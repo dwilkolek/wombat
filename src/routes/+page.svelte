@@ -48,7 +48,7 @@
 		<div class="flex flex-col gap-1">
 			{#await dependenciesPromise then deps}
 				{@const entries = Object.entries(deps).sort((a, b) => a[0].localeCompare(b[0]))}
-				{#each entries as dep}
+				{#each entries as dep (dep)}
 					<div class="flex items-center gap-1 text-sm">
 						{#if dep[1].Ok}
 							<div class="bg-lime-500 w-2 h-2 rounded"></div>
@@ -123,7 +123,7 @@
 						</label>
 						{#if userId}
 							<select class="select w-full" bind:value={profile}>
-								{#each $wombatAwsProfiles as wombatAwsProfile}
+								{#each $wombatAwsProfiles as wombatAwsProfile (wombatAwsProfile.name)}
 									<option value={wombatAwsProfile}>
 										{wombatAwsProfile.name}
 										{#if wombatAwsProfile.support_level == 'Full'}✅{/if}
@@ -150,7 +150,7 @@
 											.length}</span
 									>
 								{:else}
-									{#each Object.values(profile.sso_profiles).sort((a, b) => envImportance[a.env] - envImportance[b.env]) as sso_profiles}
+									{#each Object.values(profile.sso_profiles).sort((a, b) => envImportance[a.env] - envImportance[b.env]) as sso_profiles (sso_profiles.profile_name)}
 										<div class="flex gap-1">
 											{#if sso_profiles.support_level == 'Full'}✅{/if}
 											{#if sso_profiles.support_level == 'Partial'}⚠️{/if}

@@ -23,7 +23,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each $taskStore as task}
+				{#each $taskStore as task (task.arn)}
 					<tr>
 						<th>{task.arn}</th>
 						<td>{task.port}</td>

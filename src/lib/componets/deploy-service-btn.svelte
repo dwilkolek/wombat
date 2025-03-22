@@ -55,11 +55,7 @@
 	</span>
 {/if}
 
-<dialog
-	bind:this={dialog}
-	onclose={() => console.log('closed')}
-	class="modal bg-black bg-opacity-60"
->
+<dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
 	<div class="modal-box w-11/12 max-w-[960px]">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
@@ -115,7 +111,7 @@
 				</div>
 				<div class="flex flex-row gap-4 items-center justify-end">
 					<button
-						data-umami-event={'ecs_task_deploy_start'}
+						data-umami-event="ecs_task_deploy_start"
 						data-umami-event-uid={$userStore.id}
 						class="btn btn-active btn-accent btn-sm"
 						disabled={imageTag.length <= 3 || deployStarting}
@@ -134,7 +130,7 @@
 						Deploy {imageTag} {includeTerraformTag ? 'and set Terraform=true' : ''}</button
 					>
 					<button
-						data-umami-event={'ecs_task_restart_start'}
+						data-umami-event="ecs_task_restart_start"
 						data-umami-event-uid={$userStore.id}
 						class="btn btn-active btn-secondary btn-sm"
 						disabled={deployStarting}

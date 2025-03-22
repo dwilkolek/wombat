@@ -25,7 +25,7 @@
 					<div class="">
 						<h4 class="font-medium text-lg">Service:</h4>
 						<div class="flex">
-							{#each envDetails.services as service}
+							{#each envDetails.services as service (service.arn)}
 								<div class="flex flex-col gap-2">
 									<h5>ARN: {service.arn}</h5>
 									<span>Task version: {service.version}</span>
@@ -40,7 +40,7 @@
 					<div class="">
 						<h4 class="font-medium text-lg">Database:</h4>
 						<div class="flex flex-col gap-2">
-							{#each envDetails.dbs as db}
+							{#each envDetails.dbs as db (db.arn)}
 								<div class="flex flex-col">
 									<h5>ARN: {db.arn}</h5>
 									<span>Engine: {db.engine}</span>

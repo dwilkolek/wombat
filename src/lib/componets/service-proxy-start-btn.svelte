@@ -153,7 +153,7 @@
 				xmlns="http://www.w3.org/2000/svg"
 				viewBox="0 0 20 20"
 				fill="currentColor"
-				class="w-3 h-3 absolute text-xs right-0 bottom-0 text-accent"
+				class="w-3 h-3 absolute text-xs right-0 bottom-0 text-success"
 			>
 				<path
 					d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"
@@ -162,11 +162,7 @@
 		</div>
 	</button>
 </div>
-<dialog
-	bind:this={dialog}
-	onclose={() => console.log('closed')}
-	class="modal bg-black bg-opacity-60"
->
+<dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
 	<div class="modal-box w-11/12 max-w-[960px]">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
@@ -213,7 +209,7 @@
 						<div class="grow">
 							<!-- svelte-ignore a11y_autofocus -->
 							<select autofocus class="select w-full select-sm" bind:value={selectedSsoProxy}>
-								{#each $wombatProfileStore.ssoProfiles as ssoProfile}
+								{#each $wombatProfileStore.ssoProfiles as ssoProfile (ssoProfile.profile_name)}
 									{#if ssoProfile.env == service.env}{@const interceptorCount = filterForSsoProfile(
 											proxyAuthConfigsForThisService
 										).length}
@@ -229,7 +225,7 @@
 						<div class="grow">
 							<!-- svelte-ignore a11y_autofocus -->
 							<select autofocus class="select w-full select-sm" bind:value={selectedInfraProfile}>
-								{#each matchingInfraProfiles as infraProfile}
+								{#each matchingInfraProfiles as infraProfile (infraProfile.profile_name)}
 									{@const interceptorCount = filterForInfraProfile(
 										proxyAuthConfigsForThisService,
 										infraProfile
@@ -248,7 +244,7 @@
 				<select class="select w-full select-sm" bind:value={selectedAuthInterceptor}>
 					<option value={undefined}>None</option>
 
-					{#each configsForProfile as config}
+					{#each configsForProfile as config (config.id)}
 						<option value={config}>
 							{config.authType}: {config.jepsenClientId ?? config.basicUser ?? '?'}
 						</option>
@@ -341,7 +337,7 @@
 					>
 				</div>
 				<div class="flex gap-1 flex-col">
-					{#each getFromList(customHeaders) as header}
+					{#each getFromList(customHeaders) as header (header)}
 						<CustomHeaderForm
 							added={true}
 							bind:name={header.name}

@@ -16,14 +16,14 @@
 
 {#if task}
 	<div
-		class={`tooltip tooltip-left flex items-center text-amber-300 hover:text-amber-500 gap-1`}
+		class="tooltip tooltip-left flex items-center text-amber-300 hover:text-amber-500 gap-1"
 		data-tip={`Open ${task.name} in browser`}
 	>
 		{#if task.status === TaskStatus.RUNNING}
 			<button
 				data-umami-event="browser_lambda_app_proxy_open"
 				data-umami-event-uid={$userStore.id}
-				class={`link text-sm`}
+				class="link text-sm"
 				onclick={(e) => {
 					e.preventDefault();
 					open('http://localhost:' + task.port);

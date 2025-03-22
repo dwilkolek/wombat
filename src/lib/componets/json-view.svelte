@@ -81,7 +81,7 @@
 	});
 </script>
 
-<div class={`pr-36`}>
+<div class="pr-36">
 	{#if !nested}
 		<div class="min-w-36 w-36 absolute right-0">
 			<div class="flex flex-col gap-2 p-2">
@@ -113,9 +113,9 @@
 		</div>
 	{/if}
 	<div bind:this={container} class={`${nested ? 'bg-transparent' : 'bg-base-300'} grow`}>
-		<table class={`table-auto w-full font-mono font-extralight text-xs text-zinc-400 `}>
+		<table class="table-auto w-full font-mono font-extralight text-xs text-zinc-400">
 			<tbody>
-				{#each entries as { key, value }, index}
+				{#each entries as { key, value }, index (key)}
 					<tr class={nested ? 'transparent' : index % 2 == 1 ? 'bg-base-200' : 'bg-base-300'}>
 						<td class={`align-top min-w-28 w-28 ${nested ? 'pl-0' : 'pl-2'} text-right`}
 							>{key}:
@@ -200,7 +200,7 @@
 										}, getReducerAcc()).lines}
 
 									<div class="text-slate-400 text-pretty">
-										{#each stacktraceLines as line}
+										{#each stacktraceLines as line (line)}
 											{#if activeTags.includes(line.tag)}
 												<span class="break-all">
 													<!-- eslint-disable-next-line -->
