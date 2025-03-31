@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { endOfDay, format, startOfDay } from 'date-fns';
+	import { add, endOfDay, format, startOfDay, sub } from 'date-fns';
 	import { clusterStore } from '$lib/stores/cluster-store';
 	import { serviceStore } from '$lib/stores/service-store';
 	import { invoke } from '@tauri-apps/api/core';
@@ -490,7 +490,27 @@
 			<div class="h-[40vh] flex flex-col gap-2">
 				<div class="text-sm overflow-auto h-[40vh]">
 					<div bind:this={jsonViewNode}>
-						<JsonView log={selectedLog} nested={false} />
+						<JsonView
+							log={selectedLog}
+							createFilter={(prop, value) => {
+								if (prop === 'timestamp') {
+									logStore.timerange.set({
+										type: 'absolute',
+										from: sub(new Date((value + 'Z') as string), { minutes: 1 }),
+										to: add(new Date((value + 'Z') as string), { minutes: 1 })
+									});
+									return;
+								}
+								logStore.filterString.update((s) => {
+									if (s.length > 1 && s[0] == '[') {
+										return s;
+									}
+									const oldFilters =
+										s.trim() == '' ? '' : s.substring(1, s.length - 2).trim() + ' &&';
+									return `{ ${oldFilters} $.${prop} = "${value}" }`;
+								});
+							}}
+						></JsonView>
 					</div>
 				</div>
 			</div>
