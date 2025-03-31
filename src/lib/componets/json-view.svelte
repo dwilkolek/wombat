@@ -3,13 +3,15 @@
 	import JsonView from '$lib/componets/json-view.svelte';
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import { readable, type Readable } from 'svelte/store';
+	import { format } from 'date-fns';
 
 	interface Props {
 		log: Readable<object | undefined>;
-		nested: boolean | null | undefined;
+		propPrefix?: string | null | undefined;
+		createFilter?: (prop: string, value: unknown) => void;
 	}
 
-	let { log, nested }: Props = $props();
+	let { log, propPrefix, createFilter }: Props = $props();
 
 	enum Tag {
 		std,
@@ -23,6 +25,11 @@
 	} {
 		return { lines: [], sinceLastSpecial: 0, seenSpecial: false };
 	}
+
+	function getFullPropPath(key: string) {
+		return propPrefix ? propPrefix + '.' + key : key;
+	}
+
 	function regeneratePng(): Promise<string> {
 		return new Promise<string>((resolve) => {
 			setTimeout(async () => {
@@ -55,7 +62,7 @@
 	let pngPromise = $state(regeneratePng());
 
 	let showCompactBtn = $derived(
-		!nested && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'))
+		!propPrefix && entries.some(({ value }) => typeof value == 'string' && value.includes('\n'))
 	);
 	let compactStacktrace = $state(true);
 
@@ -75,14 +82,14 @@
 					: 100 + JSON.stringify(b.value).length;
 			return aPos - bPos;
 		});
-		if (!nested) {
+		if (!propPrefix) {
 			pngPromise = regeneratePng();
 		}
 	});
 </script>
 
 <div class="pr-36">
-	{#if !nested}
+	{#if !propPrefix}
 		<div class="min-w-36 w-36 absolute right-0">
 			<div class="flex flex-col gap-2 p-2">
 				{#if showCompactBtn}<button
@@ -112,12 +119,12 @@
 			</div>
 		</div>
 	{/if}
-	<div bind:this={container} class={`${nested ? 'bg-transparent' : 'bg-base-300'} grow`}>
+	<div bind:this={container} class={`${propPrefix ? 'bg-transparent' : 'bg-base-300'} grow`}>
 		<table class="table-auto w-full font-mono font-extralight text-xs text-zinc-400">
 			<tbody>
 				{#each entries as { key, value }, index (key)}
-					<tr class={nested ? 'transparent' : index % 2 == 1 ? 'bg-base-200' : 'bg-base-300'}>
-						<td class={`align-top min-w-28 w-28 ${nested ? 'pl-0' : 'pl-2'} text-right`}
+					<tr class={propPrefix ? 'transparent' : index % 2 == 1 ? 'bg-base-200' : 'bg-base-300'}>
+						<td class={`align-top min-w-28 w-28 ${propPrefix ? 'pl-0' : 'pl-2'} text-right`}
 							>{key}:
 						</td>
 						<td class="text-zinc-300">
@@ -211,11 +218,26 @@
 										{/each}
 									</div>
 								{:else}
-									<span class="break-all">{value}</span>
+									<button
+										class={'break-all ' + createFilter
+											? 'cursor-pointer hover:text-accent'
+											: 'cursor-text'}
+										onclick={() => createFilter && createFilter(getFullPropPath(key), value)}
+									>
+										{#if key == 'timestamp'}
+											{value} (Local: {format(new Date(value), 'yyyy-MM-dd HH:mm:ss.SSS')})
+										{:else}
+											{value}
+										{/if}
+									</button>
 								{/if}
 							{:else if typeof value == 'object' && value != null}
 								{#key value}
-									<JsonView log={readable(value)} nested={true} />
+									<JsonView
+										log={readable(value)}
+										propPrefix={getFullPropPath(key)}
+										{createFilter}
+									/>
 								{/key}
 							{:else}
 								<span class="break-all">{JSON.stringify(value)}</span>
