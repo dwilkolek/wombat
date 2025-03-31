@@ -17,7 +17,7 @@
 	{:then logString}
 		{@const log = JSON.parse(logString)}
 		<div class="p-2">
-			<JsonView log={readable(log)} nested={false} />
+			<JsonView log={readable(log)} />
 		</div>
 	{/await}
 </div>
