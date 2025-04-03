@@ -11,7 +11,7 @@ rust-version = "1.85.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "2.1.0", features = [] }
+tauri-build = { version = "2.1.1", features = [] }
 
 [dependencies]
 log = "^0.4"
@@ -19,22 +19,22 @@ regex = "1"
 rand = "0.8.5"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-tauri = { version = "2.4.0", features = [] }
-tauri-plugin = "2.1.0"
-tauri-plugin-dialog = "2.2.0"
-tauri-plugin-shell = "2.2.0"
-tauri-plugin-process = "2.2.0"
+tauri = { version = "2.4.1", features = [] }
+tauri-plugin = "2.1.1"
+tauri-plugin-dialog = "2.2.1"
+tauri-plugin-shell = "2.2.1"
+tauri-plugin-process = "2.2.1"
 tauri-plugin-clipboard-manager = "2.2.2"
-tauri-plugin-updater = "2.6.1"
+tauri-plugin-updater = "2.7.0"
 aws-runtime = "1.5.6"
-aws-config = "1.6.0"
-aws-sdk-ecs = "1.70.0"
-aws-sdk-rds = "1.81.0"
-aws-sdk-ec2 = "1.118.1"
-aws-sdk-ssm = "1.68.0"
-aws-sdk-sts = "1.63.0"
-aws-sdk-cloudwatchlogs = "1.74.0"
-aws-sdk-secretsmanager = "1.66.0"
+aws-config = "1.6.1"
+aws-sdk-ecs = "1.72.1"
+aws-sdk-rds = "1.83.0"
+aws-sdk-ec2 = "1.121.0"
+aws-sdk-ssm = "1.71.0"
+aws-sdk-sts = "1.65.0"
+aws-sdk-cloudwatchlogs = "1.76.0"
+aws-sdk-secretsmanager = "1.68.0"
 tokio = { version = "1", features = ["full"] }
 home = "0.5.11"
 warp-reverse-proxy = "1.0.0"
