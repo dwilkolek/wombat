@@ -562,10 +562,14 @@ async fn profile_set() -> Result<ProfileSet, ProfileFileLoadError> {
     .await
 }
 
-pub async fn is_logged(profile: &str, config: &aws_config::SdkConfig) -> bool {
+pub async fn is_logged(profile: &str, config: &aws_config::SdkConfig, fast_path: bool) -> bool {
     let sts = sts::Client::new(config);
     let sdk_result = sts.get_caller_identity().send().await;
     let sdk_ok = sdk_result.is_ok();
+    if fast_path {
+        info!("Checked is_logged fast path profile={profile}, sdk={sdk_ok}, ");
+        return sdk_ok;
+    }
     let cli_ok = is_cli_logged(profile).await;
     info!("Checked is_logged profile={profile}, sdk={sdk_ok}, cli={cli_ok}");
     sdk_ok && cli_ok

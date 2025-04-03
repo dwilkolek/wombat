@@ -68,6 +68,13 @@ async fn get_authorized(
     app_handle: &AppHandle,
     app_state: &Arc<Mutex<AppContext>>,
 ) -> Result<AuthorizedUser, String> {
+    get_authorized_full(app_handle, app_state, true).await
+}
+async fn get_authorized_full(
+    app_handle: &AppHandle,
+    app_state: &Arc<Mutex<AppContext>>,
+    fast_path: bool,
+) -> Result<AuthorizedUser, String> {
     let mut app_ctx = app_state.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
     let last_check = app_ctx.last_auth_check;
@@ -75,10 +82,14 @@ async fn get_authorized(
     let now = chrono::Local::now().timestamp_millis();
     if now - last_check > CHECK_AUTH_AFTER {
         info!("Checking authentication");
-        for env in profile.sso_profiles.keys() {
+        let mut checked_ssos = HashSet::new();
+        for (env, profile) in &profile.sso_profiles {
+            if !checked_ssos.insert(profile.profile_name.to_owned()) {
+                continue;
+            }
             let aws_config_provider = aws_config_provider.read().await;
             let (aws_profile, config) = aws_config_provider.sso_config(env).await;
-            let login_check = check_login_and_trigger(&aws_profile, &config).await;
+            let login_check = check_login_and_trigger(&aws_profile, &config, fast_path).await;
             if login_check.is_err() {
                 app_ctx.no_of_failed_logins += 1;
                 if app_ctx.no_of_failed_logins == 2 {
@@ -186,7 +197,7 @@ async fn login(
     }
 
     let _ = app_handle.emit("message", "Authenticating...");
-    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
+    if let Err(msg) = get_authorized_full(&app_handle, &app_state.0, false).await {
         return Err(BError::new("login", msg));
     };
 
@@ -1681,12 +1692,13 @@ struct HomeEntry {
 async fn check_login_and_trigger(
     profile: &str,
     config: &aws_config::SdkConfig,
+    fast_path: bool,
 ) -> Result<(), BError> {
-    if !aws::is_logged(profile, config).await {
+    if !aws::is_logged(profile, config, fast_path).await {
         info!("Trigger log in into AWS");
         aws::cli_login(profile);
 
-        if !aws::is_logged(profile, config).await {
+        if !aws::is_logged(profile, config, fast_path).await {
             return Err(BError::new("login", "Failed to log in"));
         } else {
             return Ok(());
