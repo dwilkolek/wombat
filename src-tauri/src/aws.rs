@@ -1,6 +1,7 @@
 use crate::shared::{arn_to_name, cluster_arn_to_name, BError, Env, TrackedName};
 use aws_config::{
     profile::{ProfileFileLoadError, ProfileSet},
+    retry::RetryConfig,
     BehaviorVersion,
 };
 use aws_sdk_cloudwatchlogs as cloudwatchlogs;
@@ -18,6 +19,8 @@ use std::{collections::HashMap, error::Error, sync::Arc};
 use tokio::{process::Command, sync::RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
 use wait_timeout::ChildExt;
+
+const RETRY_MAX_ATTEMPTS: u32 = 5;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
@@ -545,6 +548,7 @@ impl AwsConfigProvider {
             ssm_profile.to_owned(),
             aws_config::defaults(BehaviorVersion::latest())
                 .profile_name(ssm_profile)
+                .retry_config(RetryConfig::standard().with_max_attempts(RETRY_MAX_ATTEMPTS))
                 .region(region_provider)
                 .load()
                 .await,
