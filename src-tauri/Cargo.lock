@@ -347,9 +347,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-ec2"
-version = "1.121.0"
+version = "1.121.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ac4438771f559ca4d6023556ad46bbc0bd8ca46a541d3d323d482e2780b28f2"
+checksum = "1da132c5b212d7f3d0662dd42b618505424eba492b8290ef292f56e2d30ee51c"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -6104,9 +6104,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.44.1"
+version = "1.44.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f382da615b842244d4b8738c82ed1275e6c5dd90c459a30941cd07080b06c91a"
+checksum = "e6b88822cbe49de4185e3a4cbf8321dd487cf5fe0c5c65695fef6346371e9c48"
 dependencies = [
  "backtrace",
  "bytes",
