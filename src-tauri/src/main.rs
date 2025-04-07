@@ -858,7 +858,6 @@ async fn service_details(
     app_state: tauri::State<'_, AppContextState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-    rate_limitter: tauri::State<'_, ServiceDetailsRateLimiter>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), BError> {
     let authorized_user = match get_authorized(&app_handle, &app_state.0).await {
@@ -899,50 +898,8 @@ async fn service_details(
             .filter(|service| app.eq(&service.name) && environments.contains(&service.env))
             .collect()
     }
-    let mut counter = rate_limitter.0.lock().await;
-    let mut services =
+    let services =
         aws::service_details(aws_config_provider.0.clone(), services_to_resolve.clone()).await;
-    let mut retry_count = 3;
-    while services.iter().any(|s| s.is_err()) && retry_count > 0 {
-        retry_count -= 1;
-        counter.inc();
-
-        let err_service_arns: Vec<String> = services
-            .iter()
-            .filter(|s| s.is_err())
-            .map(|s| {
-                let e = s.as_ref().unwrap_err();
-                e.arn.clone()
-            })
-            .collect();
-        warn!(
-            "Calling service details for app {} resulted in {} errors. Backing off for 5s. Retries left: {}. Total back offs: {}",
-           &app, err_service_arns.len(), &retry_count, &counter.count
-        );
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        let err_services = services_to_resolve
-            .iter()
-            .filter(|s| err_service_arns.contains(&s.arn))
-            .cloned()
-            .collect();
-        let services_refetched =
-            aws::service_details(aws_config_provider.0.clone(), err_services).await;
-
-        services = services
-            .into_iter()
-            .map(|s| match s {
-                Ok(s) => Ok(s),
-                Err(s) => services_refetched
-                    .iter()
-                    .find(|rs| match rs {
-                        Ok(rs) => rs.arn == s.arn,
-                        Err(rs) => rs.arn == s.arn,
-                    })
-                    .cloned()
-                    .unwrap(),
-            })
-            .collect();
-    }
 
     app_handle
         .emit(
@@ -1564,9 +1521,6 @@ async fn main() {
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
             RdsResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
-        .manage(ServiceDetailsRateLimiter(Arc::new(Mutex::new(LockCount {
-            count: 0,
-        }))))
         .manage(ClusterResolverInstance(Arc::new(RwLock::new(
             ClusterResolver::new(cache_db.clone(), aws_config_provider.clone()),
         ))))
@@ -1635,16 +1589,6 @@ struct AppContextState(Arc<Mutex<AppContext>>);
 struct UserConfigState(Arc<Mutex<UserConfig>>);
 
 pub struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
-
-struct ServiceDetailsRateLimiter(Arc<Mutex<LockCount>>);
-struct LockCount {
-    count: i64,
-}
-impl LockCount {
-    fn inc(&mut self) {
-        self.count += 1;
-    }
-}
 
 struct AwsConfigProviderInstance(Arc<RwLock<aws::AwsConfigProvider>>);
 struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
