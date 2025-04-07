@@ -1,25 +1,36 @@
 <script lang="ts">
-	import { clusterStore } from '$lib/stores/cluster-store';
 	import { activeProfilePreferences } from '$lib/stores/user-store';
-	import { serviceStore } from '$lib/stores/service-store';
+	import { serviceStore, servicedForActiveCluster } from '$lib/stores/service-store';
 	import type { EcsService } from '$lib/types';
 
 	let open = $state(false);
 	let inputValue = $state('');
 
 	let inputElement: HTMLElement | undefined = $state();
-
-	let activeCluser = clusterStore.activeCluser;
 	let tracked_names = $activeProfilePreferences.tracked_names;
 	let selectedServices = serviceStore.selectedServices;
-
-	let services = serviceStore.getServices($activeCluser).then((services) => {
-		return services.toSorted((a, b) => {
+	let services = $derived(
+		$servicedForActiveCluster.toSorted((a, b) => {
 			const aT = tracked_names.includes(a.name) ? 1 : 0;
 			const bT = tracked_names.includes(b.name) ? 1 : 0;
+			if (bT - aT === 0) {
+				return a.name.localeCompare(b.name);
+			}
 			return bT - aT;
-		});
-	});
+		})
+	);
+	// let services = $derived(
+	// 	serviceStore.getServices($activeCluser).then((services) => {
+	// 		return services.toSorted((a, b) => {
+	// 			const aT = tracked_names.includes(a.name) ? 1 : 0;
+	// 			const bT = tracked_names.includes(b.name) ? 1 : 0;
+	// 			if (bT - aT === 0) {
+	// 				return a.name.localeCompare(b.name);
+	// 			}
+	// 			return bT - aT;
+	// 		});
+	// 	})
+	// );
 
 	const select = (app: EcsService) => {
 		serviceStore.selectService(app);
@@ -117,7 +128,9 @@
 							/>
 						</div>
 						<div class="overflow-auto max-h-[250px]">
-							{#await services then services}
+							{#await services}
+								loading
+							{:then services}
 								{#each services.filter((a) => a.name.includes(inputValue)) as o (o.arn)}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->

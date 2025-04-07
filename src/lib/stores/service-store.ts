@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 import type { Cluster, EcsService } from '$lib/types';
 import { invoke } from '@tauri-apps/api/core';
@@ -12,13 +12,21 @@ const createServiceStore = () => {
 		if (!cluster) {
 			return [];
 		}
-		if (get(innerStore).has(cluster)) {
-			return get(innerStore).get(cluster)!;
+		console.log('do instant', get(innerStore).has(cluster), get(innerStore));
+		const store = get(innerStore);
+		if (store.has(cluster)) {
+			return store.get(cluster)!;
 		} else {
+			console.log('calling services');
 			const services = await invoke<EcsService[]>('services', { cluster });
-			const clone = new Map(get(innerStore));
-			clone.set(cluster, services);
-			innerStore.set(clone);
+			innerStore.update((old) => {
+				const copy = new Map();
+				old.forEach((eValue, eKey) => {
+					copy.set(eKey, eValue);
+				});
+				copy.set(cluster, services);
+				return copy;
+			});
 			return services;
 		}
 	};
@@ -53,7 +61,13 @@ const createServiceStore = () => {
 			selectedServices.set(newSelectedServices);
 		});
 	});
-	return { ...innerStore, selectedService, selectedServices, getServices, selectService };
+	return {
+		...innerStore,
+		selectedService,
+		selectedServices,
+		getServices,
+		selectService
+	};
 };
 
 listen('cache-refreshed', () => {
@@ -63,4 +77,11 @@ listen('cache-refreshed', () => {
 listen('logged-out', () => {
 	serviceStore.set(new Map());
 });
+
 export const serviceStore = createServiceStore();
+export const servicedForActiveCluster = derived(
+	[clusterStore.activeCluser, serviceStore],
+	([cluster, clusterServicesMap]) => {
+		return clusterServicesMap.get(cluster) ?? [];
+	}
+);

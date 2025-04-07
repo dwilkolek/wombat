@@ -1537,7 +1537,7 @@ async fn find_stream_names(
                     || (DateTime::from_timestamp_millis(start_date).unwrap()
                         - DateTime::from_timestamp_millis(log_stream_end).unwrap())
                     .num_hours()
-                        > 12;
+                        > 1;
                 if last_known_creation_time > log_stream_end {
                     last_creation_dates.insert(app.clone(), log_stream_end);
                 };
@@ -1549,7 +1549,7 @@ async fn find_stream_names(
                     i64_to_str(start_date),
                     i64_to_str(end_date),
                 );
-                if overlaps || look_for_first_streams {
+                if overlaps || (look_for_first_streams) {
                     info!("stream {stream_name} matches name & timestamp criteria");
                     stream_names.push(stream_name.to_owned());
                     let mut log_search_monitor = log_search_monitor.lock().await;
