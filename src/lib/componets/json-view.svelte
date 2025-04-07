@@ -34,7 +34,11 @@
 		return new Promise<string>((resolve) => {
 			setTimeout(async () => {
 				if (container) {
-					const dataUrl = await toPng(container);
+					const dataUrl = await toPng(container, {
+						filter: (domNode) => {
+							return !domNode.classList || !domNode.classList.contains('skip-in-image-render');
+						}
+					});
 					resolve(dataUrl);
 				}
 			}, 500);
@@ -218,18 +222,26 @@
 										{/each}
 									</div>
 								{:else}
-									<button
-										class={'break-all ' + createFilter
-											? 'cursor-pointer hover:text-accent'
-											: 'cursor-text'}
-										onclick={() => createFilter && createFilter(getFullPropPath(key), value)}
-									>
-										{#if key == 'timestamp'}
-											{value} (Local: {format(new Date(value), 'yyyy-MM-dd HH:mm:ss.SSS')})
+									{#if key == 'timestamp'}
+										{#if value.match(/[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}/)}
+											{value} (UTC: {format(value, 'yyyy-MM-dd HH:mm:ss.SSS')}, Local: {format(
+												value.at(-1) !== 'Z' ? value + 'Z' : value,
+												'yyyy-MM-dd HH:mm:ss.SSS'
+											)})
 										{:else}
-											{value}
+											{value} (Formatted: {format(value, 'yyyy-MM-dd HH:mm:ss.SSS')})
 										{/if}
-									</button>
+									{:else}
+										{value}
+									{/if}
+									{#if createFilter}
+										<button
+											class="skip-in-image-render break-all text-gray-600 text-[10px] cursor-pointer hover:text-accent"
+											onclick={() => createFilter(getFullPropPath(key), value)}
+										>
+											+filter
+										</button>
+									{/if}
 								{/if}
 							{:else if typeof value == 'object' && value != null}
 								{#key value}
