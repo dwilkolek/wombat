@@ -302,6 +302,24 @@ async fn save_preffered_envs(
     let aws_config_provider = aws_config_provider.0.read().await;
     user_config.save_preffered_envs(&aws_config_provider.active_wombat_profile.name, envs)
 }
+
+#[tauri::command]
+async fn reload_aws_config(
+    app_state: tauri::State<'_, AppContextState>,
+    aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+) -> Result<(), BError> {
+    let mut aws_config_provider = aws_config_provider.0.write().await;
+    let mut app_state = app_state.0.lock().await;
+    let result = aws_config_provider.reload().await;
+    match result {
+        Err(msg) => Err(BError::new("reload_aws_config", msg)),
+        Ok(()) => {
+            app_state.active_profile = Some(aws_config_provider.active_wombat_profile.clone());
+            Ok(())
+        }
+    }
+}
+
 #[tauri::command]
 async fn kv_put(value: String, kv_store: tauri::State<'_, KVStoreInstance>) -> Result<String, ()> {
     let mut kv_store = kv_store.0.lock().await;
@@ -1533,6 +1551,7 @@ async fn main() {
         }))))
         .invoke_handler(tauri::generate_handler![
             user_config,
+            reload_aws_config,
             set_dbeaver_path,
             set_logs_dir_path,
             save_preffered_envs,
