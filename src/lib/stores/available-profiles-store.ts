@@ -11,8 +11,8 @@ const createAvailableProfilesStore = () => {
 		wombatAwsProfiles.set(resp);
 	});
 
-	const refresh = () => {
-		invoke<WombatAwsProfile[]>('wombat_aws_profiles').then((resp) => {
+	const refresh = async () => {
+		return invoke<WombatAwsProfile[]>('wombat_aws_profiles').then((resp) => {
 			wombatAwsProfiles.set(resp);
 		});
 	};
