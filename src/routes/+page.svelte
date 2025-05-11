@@ -20,6 +20,7 @@
 	let userId: string = $state($userStore.id ?? '');
 	let loading = $state(false);
 	let buttonText = $state('Start');
+
 	userStore.subscribe((user) => {
 		wombatAwsProfiles.subscribe((profiles) => {
 			profile = profiles.find((p) => p?.name == user.last_used_profile);
@@ -121,18 +122,51 @@
 						<label class="label" for="aws-profile">
 							<span class="label-text">AWS profile</span>
 						</label>
-						{#if userId}
-							<select class="select w-full" bind:value={profile}>
-								{#each $wombatAwsProfiles as wombatAwsProfile (wombatAwsProfile.name)}
-									<option value={wombatAwsProfile}>
-										{wombatAwsProfile.name}
-										{#if wombatAwsProfile.support_level == 'Full'}✅{/if}
-										{#if wombatAwsProfile.support_level == 'Partial'}⚠️{/if}
-										{#if wombatAwsProfile.support_level == 'None'}🚫{/if}
-									</option>
-								{/each}
-							</select>
-						{/if}
+						<div class="flex items-center gap-2">
+							{#if userId}
+								<select class="select w-full" bind:value={profile}>
+									{#each $wombatAwsProfiles as wombatAwsProfile (wombatAwsProfile)}
+										<option value={wombatAwsProfile}>
+											{wombatAwsProfile.name}
+											{#if wombatAwsProfile.support_level == 'Full'}✅{/if}
+											{#if wombatAwsProfile.support_level == 'Partial'}⚠️{/if}
+											{#if wombatAwsProfile.support_level == 'None'}🚫{/if}
+										</option>
+									{/each}
+								</select>
+							{/if}
+							<button
+								class="btn btn-square mb-1"
+								data-umami-event="reload_aws_config"
+								data-umami-event-uid={userId}
+								aria-label="Reload AWS profiles"
+								onclick={async (e) => {
+									try {
+										e.preventDefault();
+										await invoke('reload_aws_config');
+										await availableProfilesStore.refresh();
+									} catch (e) {
+										console.error(e);
+									} finally {
+										dependenciesPromise = checkDependencies();
+									}
+								}}
+								><svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="w-4 h-4"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+									/>
+								</svg>
+							</button>
+						</div>
 					</div>
 					<div class="mt-2">
 						{#if profile}
@@ -180,7 +214,7 @@
 								<button
 									data-umami-event="recheck_dependencies"
 									data-umami-event-uid={userId}
-									class="btn btn-warning"
+									class="btn btn-warning w-full"
 									type="button"
 									onclick={() => {
 										dependenciesPromise = checkDependencies();

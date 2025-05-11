@@ -68,21 +68,19 @@
 		</ul>
 	</div>
 
-	<div class="flex items-end gap-4">
-		<div class="flex items-center gap-1 text-sm">
+	<div class="flex items-center">
+		<div class="flex items-center gap-1 text-sm mr-4">
 			App: {version}
 		</div>
-		<div class="flex items-center gap-1 text-sm">
+		<div class="flex items-center gap-1 text-sm mr-4">
 			<span>Browser extension</span>
 			<BrowserExtensionDot />
 		</div>
 
 		<FeatureBtn />
 
-		<div class="flex items-center gap-2">
-			<span>{userConfig.last_used_profile}</span>
-		</div>
 		<button
+			class="btn"
 			data-umami-event="cache_refresh"
 			data-umami-event-uid={userConfig.id}
 			aria-label="Refresh cache"
@@ -109,7 +107,7 @@
 			data-umami-event-uid={userConfig.id}
 			onclick={logout}
 			onkeypress={logout}
-			class="px-2 cursor-pointer"
+			class="btn px-2 cursor-pointer"
 			aria-label="Logout"
 		>
 			<svg
