@@ -228,6 +228,19 @@ impl AwsConfigProvider {
         }
     }
 
+    pub async fn reload(&mut self) -> Result<(), String> {
+        let profiles_result = profile_set().await;
+        match profiles_result {
+            Err(err) => Err(format!("Failed to read AWS config. Reason: {:?}", err)),
+            Ok(profiles) => {
+                let wombat_profiles = Self::load_aws_profile_configuration(&profiles);
+                self.profile_set = profiles;
+                self.wombat_profiles = wombat_profiles;
+                return Ok(());
+            }
+        }
+    }
+
     pub fn login(&mut self, profile_name: String, dev_way: bool) {
         self.dev_way = dev_way;
         self.active_wombat_profile = self
