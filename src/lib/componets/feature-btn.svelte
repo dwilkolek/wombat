@@ -11,12 +11,16 @@
 	let loadingAwsConfigs = $state(false);
 
 	let isLoading = $derived(loadingAwsConfigs || $featuresStore.loading);
+
+	let { hideProfileName }: { hideProfileName?: boolean | null } = $props();
 </script>
 
 {#if isLoading}
 	<button disabled={true} class="btn">
 		<img class="h-6" alt="In progress" src={PokeballIcon} />
-		{userConfig.last_used_profile}
+		{#if !hideProfileName}
+			{userConfig.last_used_profile}
+		{/if}
 	</button>
 {:else}
 	<button
@@ -39,6 +43,8 @@
 		{:else}
 			<img class="h-6" alt="platform-way" src={PsyduckIcon} />
 		{/if}
-		{userConfig.last_used_profile}
+		{#if !hideProfileName}
+			{userConfig.last_used_profile}
+		{/if}
 	</button>
 {/if}
