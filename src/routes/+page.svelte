@@ -32,7 +32,14 @@
 	});
 
 	function checkDependencies() {
-		return invoke<{ [key: string]: { Ok: string } & { Err: string } }>('check_dependencies');
+		return invoke<
+			Array<{
+				name: string;
+				ok: boolean;
+				required: boolean;
+				version_or_error: string;
+			}>
+		>('check_dependencies');
 	}
 	let dependenciesPromise = $state(checkDependencies());
 	listen<string>('KILL_ME', () => {
@@ -48,19 +55,18 @@
 	<div class="absolute left-4 top-4 p-2">
 		<div class="flex flex-col gap-1">
 			{#await dependenciesPromise then deps}
-				{@const entries = Object.entries(deps).sort((a, b) => a[0].localeCompare(b[0]))}
-				{#each entries as dep (dep)}
+				{#each deps as dep (dep)}
 					<div class="flex items-center gap-1 text-sm">
-						{#if dep[1].Ok}
-							<div class="bg-lime-500 w-2 h-2 rounded"></div>
+						{#if dep.ok}
+							<div class="bg-lime-500 w-2 h-2 rounded {!dep.required ? 'opacity-50' : ''}"></div>
 						{:else}
-							<div class="bg-rose-500 w-2 h-2 rounded"></div>
+							<div class="bg-rose-500 w-2 h-2 rounded {!dep.required ? 'opacity-50' : ''}"></div>
 						{/if}
 						<span>
-							{dep[0]} :
+							{dep.name} :
 						</span>
 						<span class="">
-							{dep[1].Ok ?? dep[1].Err}
+							{dep.version_or_error}
 						</span>
 					</div>
 				{/each}
@@ -197,7 +203,7 @@
 						{/if}
 					</div>
 					{#await dependenciesPromise then deps}
-						{#if !Object.entries(deps).some((v) => v[1].Err)}
+						{#if deps.filter((d) => d.required).every((d) => d.ok)}
 							<div class="form-control mt-6 flex justify-center">
 								<button
 									data-umami-event="login"
