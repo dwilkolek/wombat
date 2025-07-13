@@ -138,9 +138,9 @@ impl UserConfig {
 
         let used_ports: Vec<u16> = map.values().flat_map(|e| e.values()).copied().collect();
 
-        let mut possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
+        let mut possible_port = rand::rng().random_range(from_port..from_port + range);
         while used_ports.iter().any(|p| *p == possible_port) {
-            possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
+            possible_port = rand::rng().random_range(from_port..from_port + range);
         }
         if !map.contains_key(&tracked_name) {
             map.insert(tracked_name.clone(), HashMap::new());
@@ -202,9 +202,9 @@ impl UserConfig {
 
         let used_ports: Vec<u16> = map.values().copied().collect();
 
-        let mut possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
+        let mut possible_port = rand::rng().random_range(from_port..from_port + range);
         while used_ports.iter().any(|p| *p == possible_port) {
-            possible_port = rand::thread_rng().gen_range(from_port..from_port + range);
+            possible_port = rand::rng().random_range(from_port..from_port + range);
         }
 
         map.insert(address.to_owned(), possible_port);
