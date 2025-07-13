@@ -268,6 +268,10 @@ async fn login(
             ecs_resolver_instance.refresh(clusters).await;
         }
     }));
+    if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
+        let _ = app_handle.emit("message", "Logging in to codeartifact...");
+        let _ = codeartifact_login(app_state).await;
+    }
 
     let _ = app_handle.emit("message", "Success!");
 
@@ -1252,7 +1256,7 @@ async fn all_features_enabled(
 async fn check_dependencies(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<HashMap<String, Result<String, String>>, ()> {
+) -> Result<Vec<dependency_check::Dependency>, ()> {
     let mut wombat_api = wombat_api_instance.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     Ok(dependency_check::check_dependencies(
@@ -1261,6 +1265,44 @@ async fn check_dependencies(
         requirements::REQUIRED_FEATURE,
     )
     .await)
+}
+
+#[tauri::command]
+async fn codeartifact_login(app_state: tauri::State<'_, AppContextState>) -> Result<(), BError> {
+    let app_ctx = app_state.0.lock().await;
+    let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
+
+    if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
+        let original_profile_in_env = std::env::var("AWS_PROFILE");
+        std::env::set_var("AWS_PROFILE", profile.name);
+        let exec_result = Command::new(dependency_check::CODEARTIFACT_LOGIN).output();
+        println!("Execution results: {:?}", exec_result);
+
+        if let Ok(original_profile) = original_profile_in_env {
+            std::env::set_var("AWS_PROFILE", original_profile);
+        }
+        match exec_result {
+            Err(err) => Err(BError::new("codeartifact_login", err.to_string())),
+            Ok(_) => Ok(()),
+        }
+    } else {
+        Err(BError::new(
+            "codeartifact_login",
+            "codeartifact-login not found in path",
+        ))
+    }
+}
+
+#[tauri::command]
+async fn codeartifact_login_check() -> Result<(), BError> {
+    if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
+        Ok(())
+    } else {
+        Err(BError::new(
+            "codeartifact_check",
+            "Missing codeartifact-login",
+        ))
+    }
 }
 
 #[tauri::command]
@@ -1586,6 +1628,8 @@ async fn main() {
             start_user_session_proxy,
             browser_extension_health,
             cookie_jar_status,
+            codeartifact_login,
+            codeartifact_login_check,
             is_debug,
             kv_put,
             kv_get,

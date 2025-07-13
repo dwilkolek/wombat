@@ -8,6 +8,7 @@
 	import { emit } from '@tauri-apps/api/event';
 	import { version } from '$app/environment';
 	import FeatureBtn from '$lib/componets/feature-btn.svelte';
+	import CodeartifactLoginBtn from '$lib/componets/codeartifact-login-btn.svelte';
 	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
 	import { featuresStore } from '$lib/stores/feature-store';
 	interface Props {
@@ -78,6 +79,7 @@
 		</div>
 
 		<FeatureBtn />
+		<CodeartifactLoginBtn />
 
 		<button
 			class="btn"
