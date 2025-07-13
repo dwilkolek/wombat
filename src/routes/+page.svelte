@@ -241,7 +241,7 @@
 				</a>
 			</div>
 			<div class="flex gap-1 items-center">
-				<FeatureBtn />
+				<FeatureBtn hideProfileName={true} />
 				<span class="text-sm">User Id: {userId}</span>
 			</div>
 		</div>
