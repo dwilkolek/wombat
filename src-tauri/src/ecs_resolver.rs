@@ -1,42 +1,42 @@
 use crate::{
     aws, cache_db,
-    shared::{arn_to_name, BError},
+    shared::{self, arn_to_name, BError, Env},
 };
 use log::{info, warn};
 use std::{collections::HashMap, sync::Arc};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite;
 
 const CACHE_NAME: &str = "ecs";
 
 pub struct EcsResolver {
-    db: Arc<RwLock<libsql::Database>>,
+    db_pool: Arc<Pool<SqliteConnectionManager>>,
     aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
 }
 
 impl EcsResolver {
     pub fn new(
-        db: Arc<RwLock<libsql::Database>>,
+        db_pool: Arc<Pool<SqliteConnectionManager>>,
         aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
     ) -> Self {
         EcsResolver {
-            db,
+            db_pool,
             aws_config_resolver,
         }
     }
-    pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
-        {
-            let db = db.read().await;
-            let conn = db.connect().unwrap();
-            EcsResolver::migrate(&conn).await;
-        }
-
-        self.db = db;
+    pub async fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
+        let pool = db_pool.clone();
+        tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            Self::migrate(&conn);
+        });
+        self.db_pool = db_pool;
     }
-
-    async fn migrate(conn: &libsql::Connection) {
-        let version = cache_db::get_cache_version(conn, CACHE_NAME).await;
-
+    fn migrate(conn: &rusqlite::Connection) {
+        let version = cache_db::get_cache_version(conn, CACHE_NAME);
         if version < 1 {
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS services(
@@ -45,29 +45,28 @@ impl EcsResolver {
                             cluster_arn TEXT NOT NULL,
                             env TEXT NOT NULL
                         )",
-                (),
-            )
-            .await
-            .unwrap();
-            cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
+                [],
+            ).unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 1);
         }
         if version < 2 {
             conn.execute(
                 "ALTER TABLE services
                   ADD COLUMN td_family text default ''
                   ",
-                (),
-            )
-            .await
-            .unwrap();
-            cache_db::set_cache_version(conn, CACHE_NAME, 2).await;
+                [],
+            ).unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 2);
         }
     }
 
     pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
         {
-            let db = self.db.read().await;
-            clear_services(&db.connect().unwrap()).await;
+            let pool = self.db_pool.clone();
+            tokio::task::block_in_place(|| {
+                let conn = pool.get().unwrap();
+                clear_services(&conn);
+            });
         }
         self.services(clusters).await
     }
@@ -164,12 +163,14 @@ impl EcsResolver {
         info!("Resolving services for clusters {clusters:?}");
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
-        let db = self.db.read().await;
-        let conn = db.connect().unwrap();
-        let ecses = fetch_services(&conn).await;
-        if !ecses.is_empty() {
+        let pool = self.db_pool.clone();
+        let services: Vec<aws::EcsService> = tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            fetch_services(&conn)
+        });
+        if !services.is_empty() {
             info!("Returning services from cache");
-            return ecses
+            return services
                 .into_iter()
                 .filter(|ecs| {
                     clusters
@@ -201,7 +202,7 @@ impl EcsResolver {
 
         let services = unique_services_map.values().cloned().collect::<Vec<_>>();
 
-        store_services(&conn, &services).await;
+        store_services(&pool, &services);
         info!(
             "Returning services from aws and persisting, count: {}",
             services.len()
@@ -210,9 +211,11 @@ impl EcsResolver {
     }
 
     pub async fn read_services(&self) -> Vec<aws::EcsService> {
-        let db = self.db.read().await;
-        let conn = db.connect().unwrap();
-        let services = fetch_services(&conn).await;
+        let pool = self.db_pool.clone();
+        let services: Vec<aws::EcsService> = tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            fetch_services(&conn)
+        });
         let environments = self.aws_config_resolver.read().await.configured_envs();
         services
             .into_iter()
@@ -221,38 +224,32 @@ impl EcsResolver {
     }
 }
 
-async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::EcsService> {
+fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
     log::info!("reading ecs instances from cache");
-    let result = conn
-        .query(
-            "SELECT arn, name, cluster_arn, env, td_family FROM services",
-            (),
-        )
-        .await;
-    match result {
-        Ok(mut rows) => {
-            let mut services = Vec::new();
-            while let Ok(row) = rows.next().await {
-                match row {
-                    Some(row) => {
-                        let arn = row.get::<String>(0).unwrap();
-                        let name = row.get::<String>(1).unwrap();
-                        let cluster_arn = row.get::<String>(2).unwrap();
-                        let env = serde_json::from_str(&row.get::<String>(3).unwrap()).unwrap();
-                        let td_family = row.get::<String>(4).unwrap();
-                        services.push(aws::EcsService {
-                            arn,
-                            name,
-                            cluster_arn,
-                            env,
-                            td_family,
-                        })
-                    }
-                    None => {
-                        break;
-                    }
-                }
-            }
+    let mut stmt = match conn.prepare("SELECT arn, name, cluster_arn, env, td_family FROM services") {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("reading ecs instances from cache failed, reason: {}", e);
+            return Vec::new();
+        }
+    };
+    let rows = stmt.query_map([], |row| {
+        let arn: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let cluster_arn: String = row.get(2)?;
+        let env: Env = serde_json::from_str(&row.get::<usize, String>(3)?).unwrap();
+        let td_family: String = row.get(4)?;
+        Ok(aws::EcsService {
+            arn,
+            name,
+            cluster_arn,
+            env,
+            td_family,
+        })
+    });
+    match rows {
+        Ok(mapped) => {
+            let services: Vec<_> = mapped.filter_map(Result::ok).collect();
             log::info!("read {} ecs instances from cache", services.len());
             services
         }
@@ -262,29 +259,25 @@ async fn fetch_services(conn: &libsql::Connection) -> Vec<aws::EcsService> {
         }
     }
 }
-async fn clear_services(conn: &libsql::Connection) {
+async fn clear_services(conn: &rusqlite::Connection) {
     info!("dropping ecs instances from cache");
-    conn.execute("DELETE FROM services", ()).await.unwrap();
+    conn.execute("DELETE FROM services", []).unwrap();
 }
 
-async fn store_services(conn: &libsql::Connection, services: &[aws::EcsService]) {
-    clear_services(conn).await;
+async fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[aws::EcsService]) {
+    clear_services(&pool.get().unwrap()).await;
 
     for ecs in services.iter() {
+        let conn = pool.get().unwrap();
         conn.execute(
-            "INSERT INTO
-                    services(arn, name, cluster_arn, env)
-                    VALUES (?, ?, ?, ?)
-                ",
-            libsql::params![
+            "INSERT INTO services(arn, name, cluster_arn, env) VALUES (?, ?, ?, ?)",
+            rusqlite::params![
                 ecs.arn.clone(),
                 ecs.name.clone(),
                 ecs.cluster_arn.clone(),
                 serde_json::to_string(&ecs.env).unwrap(),
             ],
-        )
-        .await
-        .unwrap();
+        ).unwrap();
     }
 
     info!("stored {} ecs instances in cache", services.len());
