@@ -17,6 +17,8 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
+use r2d2::{Pool};
+use r2d2_sqlite::SqliteConnectionManager;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
@@ -205,12 +207,12 @@ async fn login(
     let mut user_config = user_config.0.lock().await;
     user_config.use_profile(profile, environments, tracked_names);
 
-    let cache_db = Arc::new(RwLock::new(initialize_cache_db(profile).await));
+    let cache_db_pool = Arc::new(initialize_cache_db_pool("default"));
 
     let _ = app_handle.emit("message", "Fetching databases...");
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
-        rds_resolver_instance.init(cache_db.clone()).await;
+        rds_resolver_instance.init(cache_db_pool.clone()).await;
         rds_resolver_instance.databases().await;
     }
 
@@ -218,14 +220,14 @@ async fn login(
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
-        cluster_resolver_instance.init(cache_db.clone()).await;
+        cluster_resolver_instance.init(cache_db_pool.clone()).await;
         clusters = cluster_resolver_instance.clusters().await;
     }
 
     let _ = app_handle.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
-        ecs_resolver_instance.init(cache_db.clone()).await;
+        ecs_resolver_instance.init(cache_db_pool.clone()).await;
         ecs_resolver_instance.services(clusters).await;
     }
 
@@ -1462,7 +1464,7 @@ struct AppConfig {
     wombat_api_password: String,
 }
 
-async fn initialize_cache_db(profile: &str) -> libsql::Database {
+fn initialize_cache_db_pool(profile: &str) -> Pool<SqliteConnectionManager> {
     if let Ok(paths) = user::wombat_dir().read_dir() {
         for path in paths.flatten() {
             if let Ok(file_name) = path.file_name().into_string() {
@@ -1478,16 +1480,9 @@ async fn initialize_cache_db(profile: &str) -> libsql::Database {
             }
         }
     }
-
-    libsql::Builder::new_local(
-        user::wombat_dir()
-            .join(format!("v1-cache-{}.db", profile))
-            .to_str()
-            .unwrap_or_log(),
-    )
-    .build()
-    .await
-    .unwrap()
+    let db_path = user::wombat_dir().join(format!("v1-cache-{}.db", profile));
+    let manager = SqliteConnectionManager::file(db_path);
+    Pool::builder().max_size(8).build(manager).unwrap()
 }
 
 #[tokio::main]
@@ -1548,7 +1543,7 @@ async fn main() {
         }
     };
 
-    let cache_db = Arc::new(RwLock::new(initialize_cache_db("default").await));
+    let cache_db_pool = Arc::new(initialize_cache_db_pool("default"));
 
     let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
     let app = tauri::Builder::default()
@@ -1579,13 +1574,13 @@ async fn main() {
         }))))
         .manage(AwsConfigProviderInstance(aws_config_provider.clone()))
         .manage(RdsResolverInstance(Arc::new(RwLock::new(
-            RdsResolver::new(cache_db.clone(), aws_config_provider.clone()),
+            RdsResolver::new(cache_db_pool.clone(), aws_config_provider.clone()),
         ))))
         .manage(ClusterResolverInstance(Arc::new(RwLock::new(
-            ClusterResolver::new(cache_db.clone(), aws_config_provider.clone()),
+            ClusterResolver::new(cache_db_pool.clone(), aws_config_provider.clone()),
         ))))
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
-            EcsResolver::new(cache_db.clone(), aws_config_provider.clone()),
+            EcsResolver::new(cache_db_pool.clone(), aws_config_provider.clone()),
         ))))
         .manage(WombatApiInstance(wombat_api))
         .manage(KVStoreInstance(Arc::new(Mutex::new(KVStore {
