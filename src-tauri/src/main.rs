@@ -268,10 +268,6 @@ async fn login(
             ecs_resolver_instance.refresh(clusters).await;
         }
     }));
-    if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
-        let _ = app_handle.emit("message", "Logging in to codeartifact...");
-        let _ = codeartifact_login(app_state).await;
-    }
 
     let _ = app_handle.emit("message", "Success!");
 
