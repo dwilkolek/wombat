@@ -1,0 +1,37 @@
+name: 'nix-pr_check'
+on: [pull_request]
+
+jobs:
+  test-tauri:
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+      - uses: bluwy/substitute-string-action@v3
+        id: sub
+        with:
+          _input-file: 'src-tauri/src/main.rs'
+          _output-file: 'src-tauri/src/main.rs'
+          _format-key: '%%key%%'
+          PROFILE: 'release'
+          WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
+          WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
+          WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
+      - uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - run: nix-build
+      - run: nix-shell --run "pnpm install && pnpm tauri build"
+      - run: nix-shell --run "cd  ./src-tauri/target/release/bundle/appimage && rm -rf Wombat.AppDir && sh ./build_appimage.sh"
+        if: always()
+      - name: Archive executable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nix-thing
+          path: |
+            ./
+            /nix
