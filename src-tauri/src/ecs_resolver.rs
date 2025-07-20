@@ -3,12 +3,12 @@ use crate::{
     shared::{self, arn_to_name, BError, Env},
 };
 use log::{info, warn};
-use std::{collections::HashMap, sync::Arc};
-use tauri::{AppHandle, Emitter};
-use tokio::sync::RwLock;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite;
+use std::{collections::HashMap, sync::Arc};
+use tauri::{AppHandle, Emitter};
+use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "ecs";
 
@@ -46,7 +46,8 @@ impl EcsResolver {
                             env TEXT NOT NULL
                         )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1);
         }
         if version < 2 {
@@ -55,7 +56,8 @@ impl EcsResolver {
                   ADD COLUMN td_family text default ''
                   ",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 2);
         }
     }
@@ -226,7 +228,8 @@ impl EcsResolver {
 
 fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
     log::info!("reading ecs instances from cache");
-    let mut stmt = match conn.prepare("SELECT arn, name, cluster_arn, env, td_family FROM services") {
+    let mut stmt = match conn.prepare("SELECT arn, name, cluster_arn, env, td_family FROM services")
+    {
         Ok(s) => s,
         Err(e) => {
             log::error!("reading ecs instances from cache failed, reason: {}", e);
@@ -259,13 +262,13 @@ fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
         }
     }
 }
-async fn clear_services(conn: &rusqlite::Connection) {
+fn clear_services(conn: &rusqlite::Connection) {
     info!("dropping ecs instances from cache");
     conn.execute("DELETE FROM services", []).unwrap();
 }
 
-async fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[aws::EcsService]) {
-    clear_services(&pool.get().unwrap()).await;
+fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[aws::EcsService]) {
+    clear_services(&pool.get().unwrap());
 
     for ecs in services.iter() {
         let conn = pool.get().unwrap();
@@ -277,7 +280,8 @@ async fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[aws::E
                 ecs.cluster_arn.clone(),
                 serde_json::to_string(&ecs.env).unwrap(),
             ],
-        ).unwrap();
+        )
+        .unwrap();
     }
 
     info!("stored {} ecs instances in cache", services.len());
