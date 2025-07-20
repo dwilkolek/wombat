@@ -1,53 +1,40 @@
-use libsql::Connection;
+use rusqlite::{Connection, params};
 
-pub async fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
+pub fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS cache_versions(cache STRING PRIMARY KEY, version INTEGER)",
-        (),
-    )
-    .await
-    .unwrap();
+        [],
+    ).unwrap();
 
     log::info!("checking {} cache version", cache);
-    let result = conn
-        .query(
-            "SELECT version FROM cache_versions WHERE cache = ?",
-            libsql::params![cache],
-        )
-        .await;
-
-    match result {
-        Ok(mut rows) => {
-            let first_row = rows.next().await.unwrap();
-            let version = first_row
-                .map(|row| row.get::<u64>(0).unwrap())
-                .unwrap_or_default();
-
-            log::info!("{} cache version is {}", cache, version);
-            version
-        }
+    let mut stmt = match conn.prepare("SELECT version FROM cache_versions WHERE cache = ?") {
+        Ok(s) => s,
         Err(e) => {
             log::info!("{} cache version not found, reason: {}", cache, e);
-            0
+            return 0;
         }
-    }
+    };
+    let mut rows = stmt.query(params![cache]).unwrap();
+    let version = if let Some(row) = rows.next().unwrap() {
+        row.get::<_, u64>(0).unwrap_or_default()
+    } else {
+        0
+    };
+    log::info!("{} cache version is {}", cache, version);
+    version
 }
 
-pub async fn set_cache_version(conn: &Connection, cache: &str, version: u64) {
+pub fn set_cache_version(conn: &Connection, cache: &str, version: u64) {
     log::info!("{} cache version set to {}", cache, version);
     if version == 1 {
         conn.execute(
             "INSERT INTO cache_versions (cache, version) VALUES (?, ?)",
-            libsql::params![cache, version],
-        )
-        .await
-        .unwrap();
+            params![cache, version],
+        ).unwrap();
     } else {
         conn.execute(
             "UPDATE cache_versions SET version = ? WHERE cache = ?",
-            libsql::params![version, cache],
-        )
-        .await
-        .unwrap();
+            params![version, cache],
+        ).unwrap();
     }
 }

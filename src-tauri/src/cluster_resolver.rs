@@ -1,37 +1,39 @@
 use crate::{aws, cache_db};
 use log::info;
 use std::{collections::HashMap, sync::Arc};
+use r2d2::Pool;
+use crate::shared;
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, Connection};
 use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "cluster";
 
 pub struct ClusterResolver {
-    db: Arc<RwLock<libsql::Database>>,
+    db_pool: Arc<Pool<SqliteConnectionManager>>,
     aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
 }
 
 impl ClusterResolver {
     pub fn new(
-        db: Arc<RwLock<libsql::Database>>,
+        db_pool: Arc<Pool<SqliteConnectionManager>>,
         aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
     ) -> Self {
         ClusterResolver {
-            db,
+            db_pool,
             aws_config_resolver,
         }
     }
-    pub async fn init(&mut self, db: Arc<RwLock<libsql::Database>>) {
-        {
-            let db = db.read().await;
-            let conn = db.connect().unwrap();
-            ClusterResolver::migrate(&conn).await;
-        }
-
-        self.db = db;
+    pub async fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
+        let pool = db_pool.clone();
+        tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            Self::migrate(&conn);
+        });
+        self.db_pool = db_pool;
     }
-    async fn migrate(conn: &libsql::Connection) {
-        let version = cache_db::get_cache_version(conn, CACHE_NAME).await;
-
+    fn migrate(conn: &Connection) {
+        let version = cache_db::get_cache_version(conn, CACHE_NAME);
         if version < 1 {
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS clusters(
@@ -39,30 +41,27 @@ impl ClusterResolver {
                             name TEXT NOT NULL,
                             env TEXT NOT NULL
                         )",
-                (),
-            )
-            .await
-            .unwrap();
-            cache_db::set_cache_version(conn, CACHE_NAME, 1).await;
+                [],
+            ).unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 1);
         }
         if version < 2 {
             conn.execute(
                 "ALTER TABLE clusters
                   ADD COLUMN platform_version int default 0
                   ",
-                (),
-            )
-            .await
-            .unwrap();
-            cache_db::set_cache_version(conn, CACHE_NAME, 2).await;
+                [],
+            ).unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 2);
         }
     }
 
     pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
-        {
-            let db = self.db.read().await;
-            clear_clusters(&db.connect().unwrap()).await;
-        }
+        let pool = self.db_pool.clone();
+        tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            clear_clusters(&conn);
+        });
         self.clusters().await.clone()
     }
 
@@ -70,9 +69,11 @@ impl ClusterResolver {
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         info!("Resolving clusters");
-        let db = self.db.read().await;
-        let conn = db.connect().unwrap();
-        let clusters = fetch_clusters(&conn).await;
+        let pool = self.db_pool.clone();
+        let clusters = tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            fetch_clusters(&conn)
+        });
         if !clusters.is_empty() {
             info!("Returning clusters from cache");
             return clusters
@@ -93,7 +94,10 @@ impl ClusterResolver {
 
         let clusters = unique_clusters_map.values().cloned().collect::<Vec<_>>();
 
-        store_clusters(&conn, &clusters).await;
+        tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            store_clusters(&conn, &clusters);
+        });
         info!(
             "Returning clusters from aws and persisting, count: {}",
             clusters.len()
@@ -103,9 +107,11 @@ impl ClusterResolver {
 
     pub async fn read_clusters(&self) -> Vec<aws::Cluster> {
         info!("Resolving clusters");
-        let db = self.db.read().await;
-        let conn = db.connect().unwrap();
-        let clusters = fetch_clusters(&conn).await;
+        let pool = self.db_pool.clone();
+        let clusters = tokio::task::block_in_place(|| {
+            let conn = pool.get().unwrap();
+            fetch_clusters(&conn)
+        });
         let environments = self.aws_config_resolver.read().await.configured_envs();
         clusters
             .into_iter()
@@ -114,33 +120,30 @@ impl ClusterResolver {
     }
 }
 
-async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::Cluster> {
+fn fetch_clusters(conn: &Connection) -> Vec<aws::Cluster> {
     log::info!("reading clusters from cache");
-    let result = conn
-        .query("SELECT arn, name, env, platform_version FROM clusters;", ())
-        .await;
-    match result {
-        Ok(mut rows) => {
-            let mut clusters = Vec::new();
-            while let Ok(row) = rows.next().await {
-                match row {
-                    Some(row) => {
-                        let arn = row.get::<String>(0).unwrap();
-                        let name = row.get::<String>(1).unwrap();
-                        let env = serde_json::from_str(&row.get::<String>(2).unwrap()).unwrap();
-                        let platform_version = row.get::<i32>(3).unwrap_or(0);
-                        clusters.push(aws::Cluster {
-                            arn,
-                            name,
-                            env,
-                            platform_version,
-                        })
-                    }
-                    None => {
-                        break;
-                    }
-                }
-            }
+    let mut stmt = match conn.prepare("SELECT arn, name, env, platform_version FROM clusters;") {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("reading clusters cache failed, reason: {}", e);
+            return Vec::new();
+        }
+    };
+    let rows = stmt.query_map([], |row| {
+        let arn: String = row.get(0)?;
+        let name: String = row.get(1)?;
+        let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(2)?).unwrap();
+        let platform_version: i32 = row.get(3).unwrap_or(0);
+        Ok(aws::Cluster {
+            arn,
+            name,
+            env,
+            platform_version,
+        })
+    });
+    match rows {
+        Ok(mapped) => {
+            let clusters: Vec<_> = mapped.filter_map(Result::ok).collect();
             log::info!("read {} clusters from cache", clusters.len());
             clusters
         }
@@ -150,29 +153,21 @@ async fn fetch_clusters(conn: &libsql::Connection) -> Vec<aws::Cluster> {
         }
     }
 }
-async fn clear_clusters(conn: &libsql::Connection) {
+fn clear_clusters(conn: &Connection) {
     info!("dropping clusters from cache");
-    conn.execute("DELETE FROM clusters", ()).await.unwrap();
+    conn.execute("DELETE FROM clusters", []).unwrap();
 }
-
-async fn store_clusters(conn: &libsql::Connection, clusters: &[aws::Cluster]) {
-    clear_clusters(conn).await;
-
+fn store_clusters(conn: &Connection, clusters: &[aws::Cluster]) {
+    clear_clusters(conn);
     for db in clusters.iter() {
         conn.execute(
-            "INSERT INTO
-                    clusters(arn, name, env)
-                    VALUES (?, ?, ?)
-                ",
-            libsql::params![
+            "INSERT INTO clusters(arn, name, env) VALUES (?, ?, ?)",
+            params![
                 db.arn.clone(),
                 db.name.clone(),
                 serde_json::to_string(&db.env).unwrap()
             ],
-        )
-        .await
-        .unwrap();
+        ).unwrap();
     }
-
     info!("stored {} clusters in cache", clusters.len());
 }
