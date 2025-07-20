@@ -1,10 +1,10 @@
+use crate::shared;
 use crate::{aws, cache_db};
 use log::info;
-use std::{collections::HashMap, sync::Arc};
 use r2d2::Pool;
-use crate::shared;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "cluster";
@@ -24,7 +24,7 @@ impl ClusterResolver {
             aws_config_resolver,
         }
     }
-    pub async fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
+    pub fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
         let pool = db_pool.clone();
         tokio::task::block_in_place(|| {
             let conn = pool.get().unwrap();
@@ -42,7 +42,8 @@ impl ClusterResolver {
                             env TEXT NOT NULL
                         )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1);
         }
         if version < 2 {
@@ -51,7 +52,8 @@ impl ClusterResolver {
                   ADD COLUMN platform_version int default 0
                   ",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 2);
         }
     }
@@ -167,7 +169,8 @@ fn store_clusters(conn: &Connection, clusters: &[aws::Cluster]) {
                 db.name.clone(),
                 serde_json::to_string(&db.env).unwrap()
             ],
-        ).unwrap();
+        )
+        .unwrap();
     }
     info!("stored {} clusters in cache", clusters.len());
 }

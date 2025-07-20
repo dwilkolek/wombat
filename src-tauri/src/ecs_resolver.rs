@@ -1,11 +1,10 @@
 use crate::{
     aws, cache_db,
-    shared::{self, arn_to_name, BError, Env},
+    shared::{arn_to_name, CommandError, Env},
 };
 use log::{info, warn};
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite;
 use std::{collections::HashMap, sync::Arc};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::RwLock;
@@ -27,7 +26,7 @@ impl EcsResolver {
             aws_config_resolver,
         }
     }
-    pub async fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
+    pub fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
         let pool = db_pool.clone();
         tokio::task::block_in_place(|| {
             let conn = pool.get().unwrap();
@@ -81,7 +80,7 @@ impl EcsResolver {
         service_arn: String,
         desired_version: Option<String>,
         include_terraform_tag: bool,
-    ) -> Result<String, BError> {
+    ) -> Result<String, CommandError> {
         let deplyoment_res = aws::deploy_service(
             &config,
             &cluster_arn,

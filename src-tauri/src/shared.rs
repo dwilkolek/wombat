@@ -124,13 +124,13 @@ pub enum ResourceType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BError {
+pub struct CommandError {
     pub message: String,
     pub command: String,
 }
-impl BError {
-    pub fn new(command: &str, message: impl Into<String>) -> BError {
-        BError {
+impl CommandError {
+    pub fn new(command: &str, message: impl Into<String>) -> CommandError {
+        CommandError {
             command: command.to_owned(),
             message: message.into(),
         }
@@ -184,12 +184,12 @@ impl Env {
 }
 
 fn ecs_arn_to_name(arn: &str) -> TrackedName {
-    arn.split('/').last().unwrap_or_log().to_owned()
+    arn.split('/').next_back().unwrap_or_log().to_owned()
 }
 
 fn rds_arn_to_name(arn: &str) -> TrackedName {
     arn.split(':')
-        .last()
+        .next_back()
         .unwrap_or_log()
         .split('-')
         .filter(|part| part != &"dsi" && !(["play", "lab", "dev", "demo", "prod"].contains(part)))
@@ -198,7 +198,7 @@ fn rds_arn_to_name(arn: &str) -> TrackedName {
 }
 
 pub fn cluster_arn_to_name(arn: &str) -> TrackedName {
-    arn.split('/').last().unwrap_or_log().to_owned()
+    arn.split('/').next_back().unwrap_or_log().to_owned()
 }
 
 pub fn arn_to_name(arn: &str) -> TrackedName {

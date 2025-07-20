@@ -1,11 +1,10 @@
+use crate::shared;
 use crate::{aws, cache_db};
 use log::info;
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::RwLock;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite;
-use crate::shared;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::RwLock;
 
 const CACHE_NAME: &str = "rds";
 
@@ -24,7 +23,7 @@ impl RdsResolver {
             aws_config_resolver,
         }
     }
-    pub async fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
+    pub fn init(&mut self, db_pool: Arc<Pool<SqliteConnectionManager>>) {
         let pool = db_pool.clone();
         tokio::task::block_in_place(|| {
             let conn = pool.get().unwrap();
@@ -49,7 +48,8 @@ impl RdsResolver {
                             appname_tag TEXT NOT NULL
                         )",
                 [],
-            ).unwrap();
+            )
+            .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1);
         }
     }
