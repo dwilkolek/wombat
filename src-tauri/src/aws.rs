@@ -1,4 +1,4 @@
-use crate::shared::{arn_to_name, cluster_arn_to_name, BError, Env, TrackedName};
+use crate::shared::{arn_to_name, cluster_arn_to_name, CommandError, Env, TrackedName};
 use aws_config::{
     profile::{ProfileFileLoadError, ProfileSet},
     retry::RetryConfig,
@@ -236,7 +236,7 @@ impl AwsConfigProvider {
                 let wombat_profiles = Self::load_aws_profile_configuration(&profiles);
                 self.profile_set = profiles;
                 self.wombat_profiles = wombat_profiles;
-                return Ok(());
+                Ok(())
             }
         }
     }
@@ -358,6 +358,7 @@ impl AwsConfigProvider {
         let mut wombat_profiles: HashMap<String, WombatAwsProfile> = HashMap::new();
         let infra_profiles = Self::read_infra_profiles(profile_set);
 
+        let provile_env_regex = Regex::new("^(.*)-(play|lab|dev|demo|prod)$").unwrap_or_log();
         for profile in profile_set.profiles() {
             if let Some(profile_details) = profile_set.get_profile(profile) {
                 let role_arn = profile_details.get("role_arn");
@@ -386,8 +387,6 @@ impl AwsConfigProvider {
                         },
                         env: Env::DEVNULL,
                     };
-                    let provile_env_regex =
-                        Regex::new("^(.*)-(play|lab|dev|demo|prod)$").unwrap_or_log();
                     match provile_env_regex.captures(profile) {
                         Some(caps) => {
                             let base_profile_name = &caps[1];
@@ -442,6 +441,7 @@ impl AwsConfigProvider {
 
     fn read_infra_profiles(profile_set: &ProfileSet) -> Vec<InfraProfile> {
         let mut infra_profiles: Vec<InfraProfile> = Vec::new();
+        let app_regex = Regex::new(r".*/(.*)-infra").unwrap();
         for profile in profile_set.profiles() {
             info!("analizying potential infra profile: {profile}");
             if let Some(profile_details) = profile_set.get_profile(profile) {
@@ -466,7 +466,6 @@ impl AwsConfigProvider {
                     }
                 };
 
-                let app_regex = Regex::new(r".*/(.*)-infra").unwrap();
                 let app = match app_regex.captures(role_arn) {
                     None => {
                         warn!("\t failed to read app from role");
@@ -530,22 +529,17 @@ impl AwsConfigProvider {
     }
 
     pub async fn get_region(&self, profile: &str) -> String {
-        let region_provider = self.region_provider(profile).await;
+        let region_provider = self.region_provider(profile);
         region_provider.region().await.unwrap_or_log().to_string()
     }
 
-    async fn region_provider(
-        &self,
-        profile: &str,
-    ) -> aws_config::meta::region::RegionProviderChain {
-        aws_config::meta::region::RegionProviderChain::first_try(
-            self.region_from_profile(profile).await,
-        )
-        .or_default_provider()
-        .or_else(aws_config::Region::new("eu-west-1"))
+    fn region_provider(&self, profile: &str) -> aws_config::meta::region::RegionProviderChain {
+        aws_config::meta::region::RegionProviderChain::first_try(self.region_from_profile(profile))
+            .or_default_provider()
+            .or_else(aws_config::Region::new("eu-west-1"))
     }
 
-    async fn region_from_profile(&self, profile: &str) -> Option<aws_config::Region> {
+    fn region_from_profile(&self, profile: &str) -> Option<aws_config::Region> {
         if let Some(profile) = self.profile_set.get_profile(profile) {
             if let Some(region) = profile.get("region") {
                 return Some(aws_config::Region::new(region.to_owned()));
@@ -555,7 +549,7 @@ impl AwsConfigProvider {
     }
 
     async fn use_aws_config(&self, ssm_profile: &str) -> (String, aws_config::SdkConfig) {
-        let region_provider = self.region_provider(ssm_profile).await;
+        let region_provider = self.region_provider(ssm_profile);
 
         (
             ssm_profile.to_owned(),
@@ -633,7 +627,7 @@ pub async fn db_secret(
     config: &aws_config::SdkConfig,
     name: &str,
     env: &Env,
-) -> Result<DbSecret, BError> {
+) -> Result<DbSecret, CommandError> {
     let mut possible_secrets = Vec::new();
     if name.contains("-migrated") {
         possible_secrets.push(format!(
@@ -672,7 +666,7 @@ pub async fn db_secret(
                 .map(|s| s.to_string())
                 .unwrap_or(err.to_string());
             warn!("failed to fetch secret, reason: {}", error_str);
-            return Err(BError::new("db_secret", "Auth error?"));
+            return Err(CommandError::new("db_secret", "Auth error?"));
         }
         let secret_arn = secret_arn.expect("Failed to fetch!");
 
@@ -693,7 +687,7 @@ pub async fn db_secret(
                     .map(|s| s.to_string())
                     .unwrap_or(err.to_string());
                 warn!("failed to get secret value, reason: {}", error_str);
-                return Err(BError::new("db_secret", "Access denied"));
+                return Err(CommandError::new("db_secret", "Access denied"));
             }
             let secret = secret.unwrap_or_log();
             let secret = secret.secret_string().expect("There should be a secret");
@@ -754,13 +748,13 @@ pub async fn db_secret(
         }
     }
 
-    Err(BError::new("db_secret", "No secret found"))
+    Err(CommandError::new("db_secret", "No secret found"))
 }
 
 pub async fn get_secret(
     config: &aws_config::SdkConfig,
     secret_name: &str,
-) -> Result<String, BError> {
+) -> Result<String, CommandError> {
     let ssm_client = ssm::Client::new(config);
     let param = ssm_client
         .get_parameter()
@@ -778,7 +772,7 @@ pub async fn get_secret(
         }
     }
 
-    Err(BError::new("secret", "Secret not found"))
+    Err(CommandError::new("secret", "Secret not found"))
 }
 
 pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
@@ -805,7 +799,13 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     .captures(&db_instance_arn)
                     .and_then(|c| c.get(2))
                     .map(|c| c.as_str().to_owned())
-                    .unwrap_or(db_instance_arn.split(':').last().unwrap_or_log().to_owned());
+                    .unwrap_or(
+                        db_instance_arn
+                            .split(':')
+                            .next_back()
+                            .unwrap_or_log()
+                            .to_owned(),
+                    );
                 let tags = rds.tag_list();
                 let mut appname_tag = String::from("");
                 let mut environment_tag = String::from("");
@@ -887,7 +887,7 @@ pub async fn get_deploment_status(
     cluster_arn: &str,
     service_name: &str,
     deployment_id: &str,
-) -> Result<aws_sdk_ecs::types::DeploymentRolloutState, BError> {
+) -> Result<aws_sdk_ecs::types::DeploymentRolloutState, CommandError> {
     let ecs_client = ecs::Client::new(config);
     let result = ecs_client
         .describe_services()
@@ -912,9 +912,9 @@ pub async fn get_deploment_status(
     });
 
     match rollout_state {
-        Err(err) => Err(BError::new("deployment_status", err.to_string())),
+        Err(err) => Err(CommandError::new("deployment_status", err.to_string())),
         Ok(rollout_state) => {
-            rollout_state.ok_or(BError::new("deployment_status", "missing deployment"))
+            rollout_state.ok_or(CommandError::new("deployment_status", "missing deployment"))
         }
     }
 }
@@ -925,7 +925,7 @@ pub async fn deploy_service(
     service_arn: &str,
     desired_version: Option<String>,
     include_terraform_tag: bool,
-) -> Result<String, BError> {
+) -> Result<String, CommandError> {
     let command = match desired_version {
         Some(_) => "deploy-new-service-version".to_owned(),
         None => "restart-service".to_owned(),
@@ -939,14 +939,14 @@ pub async fn deploy_service(
         Some(desired_version) => {
             let service = get_ecs_service(&ecs_client, service_arn)
                 .await
-                .map_err(|e| BError {
+                .map_err(|e| CommandError {
                     command: command.to_owned(),
                     message: e,
                 })?;
             let task_definition =
                 get_task_definition(&ecs_client, &service)
                     .await
-                    .map_err(|e| BError {
+                    .map_err(|e| CommandError {
                         command: command.to_owned(),
                         message: e,
                     })?;
@@ -987,7 +987,7 @@ pub async fn deploy_service(
             );
             match deployment_id {
                 Some(deployment_id) => Ok(deployment_id.to_owned()),
-                None => Err(BError::new(&command, "missing deployment id")),
+                None => Err(CommandError::new(&command, "missing deployment id")),
             }
         }
         Err(err) => {
@@ -996,7 +996,7 @@ pub async fn deploy_service(
                 &command, service_arn, cluster_arn, err
             );
             error!("Deployment error: {error_msg}");
-            Err(BError::new(&command, error_msg))
+            Err(CommandError::new(&command, error_msg))
         }
     }
 }
@@ -1021,7 +1021,11 @@ pub async fn services(config: &aws_config::SdkConfig, cluster: &Cluster) -> Vec<
         has_more = next_token.is_some();
 
         services_resp.service_arns().iter().for_each(|service_arn| {
-            let service_name = service_arn.split('/').last().unwrap_or_log().to_owned();
+            let service_name = service_arn
+                .split('/')
+                .next_back()
+                .unwrap_or_log()
+                .to_owned();
             let env = cluster.env.clone();
             let td_family = format!(
                 "{}-{}-{}",
@@ -1160,10 +1164,10 @@ pub async fn remove_non_platform_task_definitions(
             .send()
             .await;
         let task_definition = arn_result.unwrap();
-        let has_terraform_tag = task_definition.tags.map_or(false, |t| {
+        let has_terraform_tag = task_definition.tags.is_some_and(|t| {
             t.into_iter()
                 .map(|tag| tag.key)
-                .any(|f| f.unwrap_or("-".to_owned()) == "Terraform".to_owned())
+                .any(|f| f.unwrap_or("-".to_owned()) == *"Terraform")
         });
         let task_definition = &task_definition.task_definition.unwrap();
         let is_registered_by_terraform = task_definition
@@ -1182,22 +1186,24 @@ pub async fn remove_non_platform_task_definitions(
             info!("Found cheated terraform task definition: {}", &arn)
         }
         if !is_registered_by_terraform && !excluded_task_definition {
-            if dry_run {
-                removed.push(arn);
-            } else if let Ok(_) = client
-                .deregister_task_definition()
-                .task_definition(arn.clone())
-                .send()
-                .await
-            {
-                if let Ok(_) = client
-                    .delete_task_definitions()
-                    .set_task_definitions(Some(vec![arn.clone()]))
+            if !dry_run {
+                if client
+                    .deregister_task_definition()
+                    .task_definition(arn.clone())
                     .send()
                     .await
+                    .is_ok()
+                    && client
+                        .delete_task_definitions()
+                        .set_task_definitions(Some(vec![arn.clone()]))
+                        .send()
+                        .await
+                        .is_ok()
                 {
                     removed.push(arn);
                 }
+            } else {
+                removed.push(arn);
             }
         }
     }
@@ -1292,7 +1298,7 @@ async fn service_detail(
         .image()
         .unwrap_or_log()
         .split(':')
-        .last()
+        .next_back()
         .unwrap_or("missing")
         .to_owned();
 
@@ -1327,12 +1333,12 @@ pub async fn find_logs(
     config: &aws_config::SdkConfig,
     env: Env,
     apps: Vec<String>,
-    start_date: i64,
-    end_date: i64,
+    start_timestamp: i64,
+    end_timestamp: i64,
     filter: Option<String>,
     log_search_monitor: Arc<tokio::sync::Mutex<dyn LogSearchMonitor>>,
     limit: Option<usize>,
-) -> Result<usize, BError> {
+) -> Result<usize, CommandError> {
     let client = cloudwatchlogs::Client::new(config);
     let response = client
         .describe_log_groups()
@@ -1362,8 +1368,8 @@ pub async fn find_logs(
                 &client,
                 group_name,
                 &apps,
-                start_date,
-                end_date,
+                start_timestamp,
+                end_timestamp,
                 log_search_monitor.clone(),
             )
             .await;
@@ -1385,12 +1391,11 @@ pub async fn find_logs(
                         "No log streams found having logs in given timeframe.",
                     ));
                     return Result::Ok(0);
-                } else {
-                    notifier.message(format!(
-                        "Searching in {} log stream(s)...",
-                        stream_names.len()
-                    ));
                 }
+                notifier.message(format!(
+                    "Searching in {} log stream(s)...",
+                    stream_names.len()
+                ));
             }
 
             info!(
@@ -1409,8 +1414,8 @@ pub async fn find_logs(
                         .set_log_stream_names(Some(chunk.to_vec()))
                         .set_next_token(marker)
                         .set_filter_pattern(filter.clone())
-                        .set_start_time(Some(start_date))
-                        .set_end_time(Some(end_date))
+                        .set_start_time(Some(start_timestamp))
+                        .set_end_time(Some(end_timestamp))
                         .send()
                         .await;
 
@@ -1426,7 +1431,7 @@ pub async fn find_logs(
                         let mut notifier = log_search_monitor.lock().await;
                         notifier.error(format!("Error: {}", &message).to_owned());
 
-                        return Result::Err(BError {
+                        return Result::Err(CommandError {
                             message,
                             command: "find_logs".to_owned(),
                         });
@@ -1462,7 +1467,7 @@ pub async fn find_logs(
                             .to_owned();
                             warn!("exceeded max log count, Limit {log_count}/{limit}");
                             notifier.error(msg.to_owned());
-                            return Result::Err(BError {
+                            return Result::Err(CommandError {
                                 message: msg,
                                 command: "find_logs".to_owned(),
                             });
@@ -1486,8 +1491,8 @@ async fn find_stream_names(
     client: &cloudwatchlogs::Client,
     group_name: &str,
     apps: &[String],
-    start_date: i64,
-    end_date: i64,
+    start_timestamp: i64,
+    end_timestamp: i64,
     log_search_monitor: Arc<tokio::sync::Mutex<dyn LogSearchMonitor>>,
 ) -> Result<Vec<String>, String> {
     let mut stream_names = vec![];
@@ -1495,7 +1500,7 @@ async fn find_stream_names(
 
     let log_stream_update_frequency_in_h = 4;
     let look_for_first_streams =
-        (Utc::now() - DateTime::from_timestamp_millis(start_date).unwrap()).num_hours()
+        (Utc::now() - DateTime::from_timestamp_millis(start_timestamp).unwrap()).num_hours()
             <= log_stream_update_frequency_in_h;
     info!(
         "looking for stream names: apps={}, look_for_first_streams={look_for_first_streams}",
@@ -1547,11 +1552,11 @@ async fn find_stream_names(
                 let overlaps = range_overlap::has_incl_overlap(
                     log_stream_start,
                     log_stream_end,
-                    start_date,
-                    end_date,
+                    start_timestamp,
+                    end_timestamp,
                 );
                 outdated_streams = outdated_streams
-                    || (DateTime::from_timestamp_millis(start_date).unwrap()
+                    || (DateTime::from_timestamp_millis(start_timestamp).unwrap()
                         - DateTime::from_timestamp_millis(log_stream_end).unwrap())
                     .num_hours()
                         > 1;
@@ -1563,8 +1568,8 @@ async fn find_stream_names(
                     "matched: app={app}, overlaps={overlaps}, look_for_first_streams={look_for_first_streams} [{} -> {}] overlaps with criteria [{} -> {}]",
                     i64_to_str(log_stream_start),
                     i64_to_str(log_stream_end),
-                    i64_to_str(start_date),
-                    i64_to_str(end_date),
+                    i64_to_str(start_timestamp),
+                    i64_to_str(end_timestamp),
                 );
                 if overlaps || (look_for_first_streams) {
                     info!("stream {stream_name} matches name & timestamp criteria");
