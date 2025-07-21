@@ -7,9 +7,11 @@ use cluster_resolver::ClusterResolver;
 use dotenvy::dotenv;
 use ecs_resolver::EcsResolver;
 use log::{error, info, warn};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use rds_resolver::RdsResolver;
 use sha2::{Digest, Sha256};
-use shared::{arn_to_name, BError, BrowserExtension, CookieJar, Env};
+use shared::{arn_to_name, BrowserExtension, CommandError, CookieJar, Env};
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
@@ -17,8 +19,6 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
-use r2d2::{Pool};
-use r2d2_sqlite::SqliteConnectionManager;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
@@ -98,9 +98,8 @@ async fn get_authorized_full(
                     let _ = app_handle.emit("KILL_ME", "".to_owned());
                 }
                 return Err("Authentication failed".to_owned());
-            } else {
-                app_ctx.no_of_failed_logins = 0;
             }
+            app_ctx.no_of_failed_logins = 0;
         }
         app_ctx.no_of_failed_logins = 0;
         app_ctx.last_auth_check = now;
@@ -114,7 +113,9 @@ async fn get_authorized_full(
 }
 
 #[tauri::command]
-async fn user_config(user_config: tauri::State<'_, UserConfigState>) -> Result<UserConfig, BError> {
+async fn user_config(
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<UserConfig, CommandError> {
     let user_config = user_config.0.lock().await;
     Ok(user_config.clone())
 }
@@ -146,7 +147,7 @@ async fn favorite(
     name: &str,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<UserConfig, BError> {
+) -> Result<UserConfig, CommandError> {
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     user_config.favorite(
@@ -175,7 +176,7 @@ async fn login(
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
 
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<UserConfig, BError> {
+) -> Result<UserConfig, CommandError> {
     let environments: Vec<Env>;
     let tracked_names: HashSet<String>;
     {
@@ -200,7 +201,7 @@ async fn login(
 
     let _ = app_handle.emit("message", "Authenticating...");
     if let Err(msg) = get_authorized_full(&app_handle, &app_state.0, false).await {
-        return Err(BError::new("login", msg));
+        return Err(CommandError::new("login", msg));
     };
 
     let _ = app_handle.emit("message", "Updating profile...");
@@ -212,7 +213,7 @@ async fn login(
     let _ = app_handle.emit("message", "Fetching databases...");
     {
         let mut rds_resolver_instance = rds_resolver_instance.0.write().await;
-        rds_resolver_instance.init(cache_db_pool.clone()).await;
+        rds_resolver_instance.init(cache_db_pool.clone());
         rds_resolver_instance.databases().await;
     }
 
@@ -220,14 +221,14 @@ async fn login(
     let clusters;
     {
         let mut cluster_resolver_instance = cluster_resolver_instance.0.write().await;
-        cluster_resolver_instance.init(cache_db_pool.clone()).await;
+        cluster_resolver_instance.init(cache_db_pool.clone());
         clusters = cluster_resolver_instance.clusters().await;
     }
 
     let _ = app_handle.emit("message", "Fetching services...");
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
-        ecs_resolver_instance.init(cache_db_pool.clone()).await;
+        ecs_resolver_instance.init(cache_db_pool.clone());
         ecs_resolver_instance.services(clusters).await;
     }
 
@@ -235,7 +236,7 @@ async fn login(
     let mut api = wombat_api_instance.0.lock().await;
     let api_status = api.status(requirements::REQUIRED_FEATURE).await;
     if let Err(status) = api_status {
-        return Err(BError::new(
+        return Err(CommandError::new(
             "login",
             format!("Wombat backend API is not ok. Reason: {}", status),
         ));
@@ -284,7 +285,7 @@ async fn login(
 async fn set_dbeaver_path(
     dbeaver_path: &str,
     user_config: tauri::State<'_, UserConfigState>,
-) -> Result<UserConfig, BError> {
+) -> Result<UserConfig, CommandError> {
     let mut user_config = user_config.0.lock().await;
     user_config.set_dbeaver_path(dbeaver_path)
 }
@@ -293,7 +294,7 @@ async fn set_dbeaver_path(
 async fn set_logs_dir_path(
     logs_dir: &str,
     user_config: tauri::State<'_, UserConfigState>,
-) -> Result<UserConfig, BError> {
+) -> Result<UserConfig, CommandError> {
     let mut user_config = user_config.0.lock().await;
     user_config.set_logs_path(logs_dir)
 }
@@ -303,7 +304,7 @@ async fn save_preffered_envs(
     envs: Vec<shared::Env>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<UserConfig, BError> {
+) -> Result<UserConfig, CommandError> {
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     user_config.save_preffered_envs(&aws_config_provider.active_wombat_profile.name, envs)
@@ -313,12 +314,12 @@ async fn save_preffered_envs(
 async fn reload_aws_config(
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     let mut aws_config_provider = aws_config_provider.0.write().await;
     let mut app_state = app_state.0.lock().await;
     let result = aws_config_provider.reload().await;
     match result {
-        Err(msg) => Err(BError::new("reload_aws_config", msg)),
+        Err(msg) => Err(CommandError::new("reload_aws_config", msg)),
         Ok(()) => {
             app_state.active_profile = Some(aws_config_provider.active_wombat_profile.clone());
             Ok(())
@@ -357,9 +358,9 @@ async fn credentials(
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<DbSecret, BError> {
+) -> Result<DbSecret, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("credentials", msg));
+        return Err(CommandError::new("credentials", msg));
     };
 
     let aws_config_provider = aws_config_provider.0.read().await;
@@ -395,9 +396,9 @@ async fn stop_job(
     arn: &str,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("stop_job", msg));
+        return Err(CommandError::new("stop_job", msg));
     };
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handle) = tracker.task_handlers.remove(arn) {
@@ -467,7 +468,7 @@ async fn stop_job(
 async fn logout(
     app_state: tauri::State<'_, AppContextState>,
     task_tracker: tauri::State<'_, AsyncTaskManager>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     let mut app_state = app_state.0.lock().await;
 
     let home_details_refresher = &mut task_tracker.0.lock().await;
@@ -529,7 +530,7 @@ impl aws::LogSearchMonitor for FileNotifier {
                 vec![LogEntry {
                     log_stream_name: log.log_stream_name.to_owned(),
                     ingestion_time: log.ingestion_time,
-                    timestamp: timestamp.as_millis() as i64,
+                    timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
                     message: format!("INFO Stored {} logs", logs.len()),
                 }],
             );
@@ -542,8 +543,8 @@ impl aws::LogSearchMonitor for FileNotifier {
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
-                ingestion_time: timestamp.as_millis() as i64,
-                timestamp: timestamp.as_millis() as i64,
+                ingestion_time: i64::try_from(timestamp.as_millis()).unwrap(),
+                timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
                 message: format!("TRACE File: {}", self.filename_location),
             }],
         );
@@ -557,9 +558,9 @@ impl aws::LogSearchMonitor for FileNotifier {
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
-                ingestion_time: timestamp.as_millis() as i64,
-                timestamp: timestamp.as_millis() as i64,
-                message: format!("ERROR {}", msg),
+                ingestion_time: i64::try_from(timestamp.as_millis()).unwrap(),
+                timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
+                message: format!("ERROR {msg}"),
             }],
         );
         let _ = self.app_handle.emit("find-logs-error", msg);
@@ -572,9 +573,9 @@ impl aws::LogSearchMonitor for FileNotifier {
             "new-log-found",
             vec![LogEntry {
                 log_stream_name: "-".to_owned(),
-                ingestion_time: timestamp.as_millis() as i64,
-                timestamp: timestamp.as_millis() as i64,
-                message: format!("INFO {}", msg.clone()),
+                ingestion_time: i64::try_from(timestamp.as_millis()).unwrap(),
+                timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
+                message: format!("INFO {msg}"),
             }],
         );
         let _ = self.app_handle.emit("find-logs-message", msg);
@@ -587,23 +588,23 @@ async fn find_logs(
     app_handle: AppHandle,
     apps: Vec<String>,
     env: Env,
-    start: i64,
-    end: i64,
+    start_timestamp: i64,
+    end_timestamp: i64,
     filter: String,
     filename: Option<String>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("find_logs", msg));
-    };
+        return Err(CommandError::new("find_logs", msg));
+    }
 
     {
         let handler = &async_task_tracker.0.lock().await.search_log_handler;
         if let Some(handler) = handler {
-            handler.abort()
+            handler.abort();
         }
     }
     {
@@ -617,18 +618,19 @@ async fn find_logs(
         //TODO: it will be annoying to do to search logs with different sdk_configs...
         //Let's hope it will keep working.
         let app_config = aws_config_provider.sso_config(&env).await;
-        sdk_config = app_config.1
+        sdk_config = app_config.1;
     }
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
         let _ = aws::find_logs(
             &sdk_config,
             env,
             apps,
-            start,
-            end,
-            match filter.is_empty() {
-                true => None,
-                false => Some(filter),
+            start_timestamp,
+            end_timestamp,
+            if filter.is_empty() {
+                None
+            } else {
+                Some(filter)
             },
             match &filename {
                 None => Arc::new(Mutex::new(WindowNotifier { app_handle })),
@@ -668,7 +670,7 @@ async fn find_logs(
 async fn abort_find_logs(
     reason: String,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     info!("Attempt to abort find logs: {}", &reason);
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handler) = &tracker.search_log_handler {
@@ -682,7 +684,7 @@ async fn abort_find_logs(
 #[tauri::command]
 async fn clusters(
     cache_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
-) -> Result<Vec<aws::Cluster>, BError> {
+) -> Result<Vec<aws::Cluster>, CommandError> {
     let cache_resolver_instance = cache_resolver_instance.0.read().await;
 
     let clusters = cache_resolver_instance.read_clusters().await;
@@ -693,7 +695,7 @@ async fn clusters(
 async fn services(
     cluster: Cluster,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-) -> Result<Vec<aws::EcsService>, BError> {
+) -> Result<Vec<aws::EcsService>, CommandError> {
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     let services = ecs_resolver_instance.read_services().await;
     Ok(services
@@ -713,9 +715,9 @@ async fn deploy_ecs_service(
     app_state: tauri::State<'_, AppContextState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<String, BError> {
+) -> Result<String, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("deploy_ecs_service", msg));
+        return Err(CommandError::new("deploy_ecs_service", msg));
     };
 
     let service_name = arn_to_name(&service_arn);
@@ -750,10 +752,10 @@ async fn remove_task_definitions(
     app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<String>, BError> {
+) -> Result<Vec<String>, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("remove_task_definitions", msg));
-    };
+        return Err(CommandError::new("remove_task_definitions", msg));
+    }
     let aws_config_provider = aws_config_provider.0.read().await;
     let (_, aws_config) = aws_config_provider
         .app_config(&service.name, &service.env)
@@ -772,7 +774,7 @@ async fn remove_task_definitions(
 async fn databases(
     env: shared::Env,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-) -> Result<Vec<aws::RdsInstance>, BError> {
+) -> Result<Vec<aws::RdsInstance>, CommandError> {
     let rds_resolver_instance = rds_resolver_instance.0.read().await;
     let databases = rds_resolver_instance.read_databases().await;
     Ok(databases.into_iter().filter(|db| db.env == env).collect())
@@ -787,9 +789,9 @@ async fn discover(
     user_config: tauri::State<'_, UserConfigState>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-) -> Result<Vec<String>, BError> {
+) -> Result<Vec<String>, CommandError> {
     let authorized_user = match get_authorized(&app_handle, &app_state.0).await {
-        Err(msg) => return Err(BError::new("discover", msg)),
+        Err(msg) => return Err(CommandError::new("discover", msg)),
         Ok(authorized_user) => authorized_user,
     };
     let name = &name.to_lowercase();
@@ -832,7 +834,7 @@ async fn discover(
                 .into_iter()
                 .filter(|s| s.arn.contains(name) && !tracked_names.contains(&arn_to_name(&s.arn)))
                 .map(|service| arn_to_name(&service.arn)),
-        )
+        );
     }
 
     Ok(found_names.into_iter().collect())
@@ -845,7 +847,7 @@ async fn refresh_cache(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     {
         let mut app_state = app_state.0.lock().await;
         app_state.no_of_failed_logins = 0;
@@ -853,8 +855,8 @@ async fn refresh_cache(
     }
 
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("refresh_cache", msg));
-    };
+        return Err(CommandError::new("refresh_cache", msg));
+    }
 
     let clusters;
     {
@@ -883,9 +885,9 @@ async fn service_details(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     let authorized_user = match get_authorized(&app_handle, &app_state.0).await {
-        Err(msg) => return Err(BError::new("service_details", msg)),
+        Err(msg) => return Err(CommandError::new("service_details", msg)),
         Ok(authorized_user) => authorized_user,
     };
 
@@ -920,7 +922,7 @@ async fn service_details(
         services_to_resolve = services
             .into_iter()
             .filter(|service| app.eq(&service.name) && environments.contains(&service.env))
-            .collect()
+            .collect();
     }
     let services =
         aws::service_details(aws_config_provider.0.clone(), services_to_resolve.clone()).await;
@@ -948,10 +950,10 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<NewTaskParams, BError> {
+) -> Result<NewTaskParams, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("start_db_proxy", msg));
-    };
+        return Err(CommandError::new("start_db_proxy", msg));
+    }
 
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
@@ -989,7 +991,7 @@ async fn start_db_proxy(
             port,
             proxy_auth_config: None,
         }),
-        Err(proxy_err) => Err(BError::new("start_db_proxy", format!("{proxy_err}"))),
+        Err(proxy_err) => Err(CommandError::new("start_db_proxy", format!("{proxy_err}"))),
     }
 }
 
@@ -1006,7 +1008,7 @@ async fn start_service_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<NewTaskParams, BError> {
+) -> Result<NewTaskParams, CommandError> {
     dbg!(&headers);
     let local_port;
     {
@@ -1016,8 +1018,8 @@ async fn start_service_proxy(
 
     let aws_local_port = local_port + 10000;
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("start_service_proxy", msg));
-    };
+        return Err(CommandError::new("start_service_proxy", msg));
+    }
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
         .with_dev_way_check(&infra_profile, &sso_profile)
@@ -1032,7 +1034,7 @@ async fn start_service_proxy(
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
-            path_prefix: String::from(""),
+            path_prefix: String::new(),
             headers,
         })];
 
@@ -1075,10 +1077,9 @@ async fn start_service_proxy(
 
     let handle = proxy::start_proxy_to_adress(
         local_port,
-        format!("http://localhost:{}/", aws_local_port).to_owned(),
+        format!("http://localhost:{aws_local_port}/").to_owned(),
         Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
-    )
-    .await;
+    );
 
     let region = aws_config_provider.get_region(&aws_profile).await;
 
@@ -1108,7 +1109,7 @@ async fn start_service_proxy(
             port,
             proxy_auth_config,
         }),
-        Err(proxy_err) => Err(BError::new("start_ecs_proxy", format!("{proxy_err}"))),
+        Err(proxy_err) => Err(CommandError::new("start_ecs_proxy", format!("{proxy_err}"))),
     }
 }
 
@@ -1120,7 +1121,7 @@ async fn start_user_session_proxy(
     cookie_jar: tauri::State<'_, CookieJarInstance>,
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-) -> Result<NewTaskParams, BError> {
+) -> Result<NewTaskParams, CommandError> {
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1131,7 +1132,7 @@ async fn start_user_session_proxy(
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
-            path_prefix: String::from(""),
+            path_prefix: String::new(),
             headers,
         })];
 
@@ -1144,8 +1145,7 @@ async fn start_user_session_proxy(
         local_port,
         address.clone(),
         Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
-    )
-    .await;
+    );
 
     async_task_tracker
         .0
@@ -1175,7 +1175,7 @@ async fn start_lambda_app_proxy(
     cookie_jar: tauri::State<'_, CookieJarInstance>,
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
-) -> Result<NewTaskParams, BError> {
+) -> Result<NewTaskParams, CommandError> {
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1185,7 +1185,7 @@ async fn start_lambda_app_proxy(
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
-            path_prefix: String::from(""),
+            path_prefix: String::new(),
             headers,
         })];
 
@@ -1198,8 +1198,7 @@ async fn start_lambda_app_proxy(
         local_port,
         address.clone(),
         Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
-    )
-    .await;
+    );
 
     async_task_tracker
         .0
@@ -1219,7 +1218,7 @@ async fn start_lambda_app_proxy(
 #[tauri::command]
 async fn log_filters(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<Vec<wombat_api::LogFilter>, BError> {
+) -> Result<Vec<wombat_api::LogFilter>, CommandError> {
     let mut wombat_api = wombat_api_instance.0.lock().await;
     let filters = wombat_api.log_filters().await;
     Ok(filters)
@@ -1228,7 +1227,7 @@ async fn log_filters(
 #[tauri::command]
 async fn proxy_auth_configs(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<Vec<wombat_api::ProxyAuthConfig>, BError> {
+) -> Result<Vec<wombat_api::ProxyAuthConfig>, CommandError> {
     let mut wombat_api = wombat_api_instance.0.lock().await;
     let configs = wombat_api.get_proxy_auth_configs().await;
 
@@ -1239,7 +1238,7 @@ async fn proxy_auth_configs(
 async fn is_feature_enabled(
     feature: &str,
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<bool, BError> {
+) -> Result<bool, CommandError> {
     let mut wombat_api = wombat_api_instance.0.lock().await;
     let is_enabled = wombat_api.is_feature_enabled(feature).await;
 
@@ -1249,7 +1248,7 @@ async fn is_feature_enabled(
 #[tauri::command]
 async fn all_features_enabled(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<Vec<String>, BError> {
+) -> Result<Vec<String>, CommandError> {
     let mut wombat_api = wombat_api_instance.0.lock().await;
     Ok(wombat_api.all_features_enabled().await)
 }
@@ -1270,7 +1269,9 @@ async fn check_dependencies(
 }
 
 #[tauri::command]
-async fn codeartifact_login(app_state: tauri::State<'_, AppContextState>) -> Result<(), BError> {
+async fn codeartifact_login(
+    app_state: tauri::State<'_, AppContextState>,
+) -> Result<(), CommandError> {
     let app_ctx = app_state.0.lock().await;
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
 
@@ -1278,17 +1279,17 @@ async fn codeartifact_login(app_state: tauri::State<'_, AppContextState>) -> Res
         let original_profile_in_env = std::env::var("AWS_PROFILE");
         std::env::set_var("AWS_PROFILE", profile.name);
         let exec_result = Command::new(dependency_check::CODEARTIFACT_LOGIN).output();
-        println!("Execution results: {:?}", exec_result);
+        println!("Execution results: {exec_result:?}");
 
         if let Ok(original_profile) = original_profile_in_env {
             std::env::set_var("AWS_PROFILE", original_profile);
         }
         match exec_result {
-            Err(err) => Err(BError::new("codeartifact_login", err.to_string())),
+            Err(err) => Err(CommandError::new("codeartifact_login", err.to_string())),
             Ok(_) => Ok(()),
         }
     } else {
-        Err(BError::new(
+        Err(CommandError::new(
             "codeartifact_login",
             "codeartifact-login not found in path",
         ))
@@ -1296,11 +1297,11 @@ async fn codeartifact_login(app_state: tauri::State<'_, AppContextState>) -> Res
 }
 
 #[tauri::command]
-async fn codeartifact_login_check() -> Result<(), BError> {
+async fn codeartifact_login_check() -> Result<(), CommandError> {
     if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
         Ok(())
     } else {
-        Err(BError::new(
+        Err(CommandError::new(
             "codeartifact_check",
             "Missing codeartifact-login",
         ))
@@ -1310,7 +1311,7 @@ async fn codeartifact_login_check() -> Result<(), BError> {
 #[tauri::command]
 async fn available_infra_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<aws::InfraProfile>, BError> {
+) -> Result<Vec<aws::InfraProfile>, CommandError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider
         .active_wombat_profile
@@ -1323,7 +1324,7 @@ async fn available_infra_profiles(
 #[tauri::command]
 async fn available_sso_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<aws::SsoProfile>, BError> {
+) -> Result<Vec<aws::SsoProfile>, CommandError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider
         .active_wombat_profile
@@ -1336,7 +1337,7 @@ async fn available_sso_profiles(
 #[tauri::command]
 async fn wombat_aws_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<aws::WombatAwsProfile>, BError> {
+) -> Result<Vec<aws::WombatAwsProfile>, CommandError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider.wombat_profiles.clone())
 }
@@ -1350,7 +1351,7 @@ async fn open_dbeaver(
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
         if secret.auto_rotated {
             format!(
@@ -1365,8 +1366,8 @@ async fn open_dbeaver(
         }
     }
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(BError::new("open_dbeaver", msg));
-    };
+        return Err(CommandError::new("open_dbeaver", msg));
+    }
 
     let dbeaver_path: String;
     {
@@ -1398,7 +1399,7 @@ async fn open_dbeaver(
                 warn!("Falling back to user profile: {}", &override_aws_profile);
                 secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
             } else {
-                return Err(BError::new("db_secret", "No secret found"));
+                return Err(CommandError::new("db_secret", "No secret found"));
             }
         }
     }
@@ -1415,7 +1416,7 @@ async fn open_dbeaver(
         .args([
             "-con",
             &db_beaver_con_parma(
-                db.arn.split(':').last().unwrap_or_log(),
+                db.arn.split(':').next_back().unwrap_or_log(),
                 "localhost",
                 port,
                 &db_secret,
@@ -1468,19 +1469,19 @@ fn initialize_cache_db_pool(profile: &str) -> Pool<SqliteConnectionManager> {
     if let Ok(paths) = user::wombat_dir().read_dir() {
         for path in paths.flatten() {
             if let Ok(file_name) = path.file_name().into_string() {
-                info!("file name: {}", file_name);
+                info!("file name: {file_name}");
                 if file_name.starts_with("wombat.db") {
-                    info!("deleting wombat db: {}", file_name);
+                    info!("deleting wombat db: {file_name}");
                     let _ = fs::remove_file(path.path());
                 }
                 if file_name.starts_with("cache-") {
-                    info!("deleting cache file: {}", file_name);
+                    info!("deleting cache file: {file_name}");
                     let _ = fs::remove_file(path.path());
                 }
             }
         }
     }
-    let db_path = user::wombat_dir().join(format!("v1-cache-{}.db", profile));
+    let db_path = user::wombat_dir().join(format!("v1-cache-{profile}.db"));
     let manager = SqliteConnectionManager::file(db_path);
     Pool::builder().max_size(8).build(manager).unwrap()
 }
@@ -1673,7 +1674,7 @@ impl KVStore {
     }
 
     fn get(&self, key: &str) -> Option<String> {
-        self.store.get(key).map(|x| x.to_owned())
+        self.store.get(key).map(std::borrow::ToOwned::to_owned)
     }
 }
 
@@ -1695,16 +1696,15 @@ async fn check_login_and_trigger(
     profile: &str,
     config: &aws_config::SdkConfig,
     fast_path: bool,
-) -> Result<(), BError> {
+) -> Result<(), CommandError> {
     if !aws::is_logged(profile, config, fast_path).await {
         info!("Trigger log in into AWS");
         aws::cli_login(profile);
 
-        if !aws::is_logged(profile, config, fast_path).await {
-            return Err(BError::new("login", "Failed to log in"));
-        } else {
+        if aws::is_logged(profile, config, fast_path).await {
             return Ok(());
         }
+        return Err(CommandError::new("login", "Failed to log in"));
     }
     Ok(())
 }

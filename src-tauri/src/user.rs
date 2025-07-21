@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 use tracing_unwrap::OptionExt;
 
-use crate::shared::{arn_to_name, BError, Env, TrackedName};
+use crate::shared::{arn_to_name, CommandError, Env, TrackedName};
 use uuid::Uuid;
 
 pub fn wombat_dir() -> PathBuf {
@@ -115,7 +115,7 @@ impl UserConfig {
         &mut self,
         profile_name: &str,
         envs: Vec<Env>,
-    ) -> Result<UserConfig, BError> {
+    ) -> Result<UserConfig, CommandError> {
         let preferences = self.preferences.as_mut().unwrap_or_log();
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
         preference.preffered_environments = envs;
@@ -139,7 +139,7 @@ impl UserConfig {
         let used_ports: Vec<u16> = map.values().flat_map(|e| e.values()).copied().collect();
 
         let mut possible_port = rand::rng().random_range(from_port..from_port + range);
-        while used_ports.iter().any(|p| *p == possible_port) {
+        while used_ports.contains(&possible_port) {
             possible_port = rand::rng().random_range(from_port..from_port + range);
         }
         if !map.contains_key(&tracked_name) {
@@ -203,7 +203,7 @@ impl UserConfig {
         let used_ports: Vec<u16> = map.values().copied().collect();
 
         let mut possible_port = rand::rng().random_range(from_port..from_port + range);
-        while used_ports.iter().any(|p| *p == possible_port) {
+        while used_ports.contains(&possible_port) {
             possible_port = rand::rng().random_range(from_port..from_port + range);
         }
 
@@ -213,20 +213,20 @@ impl UserConfig {
         possible_port
     }
 
-    pub fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, BError> {
+    pub fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, CommandError> {
         if std::path::Path::new(dbeaver_path).exists() {
             self.dbeaver_path = Some(dbeaver_path.to_owned());
             self.save();
             Ok(self.clone())
         } else {
-            Err(BError::new("set_dbeaver_path", "Invalid path!"))
+            Err(CommandError::new("set_dbeaver_path", "Invalid path!"))
         }
     }
-    pub fn set_logs_path(&mut self, logs_dir_path: &str) -> Result<UserConfig, BError> {
+    pub fn set_logs_path(&mut self, logs_dir_path: &str) -> Result<UserConfig, CommandError> {
         let path = std::path::Path::new(logs_dir_path);
         let res = fs::create_dir_all(path);
         match res {
-            Err(msg) => Err(BError::new(
+            Err(msg) => Err(CommandError::new(
                 "set_logs_path",
                 format!("Invalid path! {}", msg),
             )),
@@ -258,7 +258,7 @@ impl UserConfig {
         &mut self,
         profile_name: &str,
         tracked_name: TrackedName,
-    ) -> Result<UserConfig, BError> {
+    ) -> Result<UserConfig, CommandError> {
         info!("Favorite {} ", &tracked_name);
         let preferences = self.preferences.as_mut().unwrap_or_log();
         let preference = preferences.get_mut(profile_name).unwrap_or_log();

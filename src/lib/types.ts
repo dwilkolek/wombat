@@ -131,7 +131,7 @@ export type MonitoringConfig = {
 	database_arn: string | undefined;
 };
 
-export type BError = {
+export type CommandError = {
 	message: string;
 	command: string;
 };

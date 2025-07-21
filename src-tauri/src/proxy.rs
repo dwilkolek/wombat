@@ -60,7 +60,7 @@ pub async fn start_aws_ssm_proxy(
     );
 
     warn!("making sure {} is free", &local_port);
-    kill_pid_on_port(local_port).await;
+    kill_pid_on_port(local_port);
 
     let tmp_dir = TempDir::new().unwrap();
     let out_log: File =
@@ -108,7 +108,7 @@ pub async fn start_aws_ssm_proxy(
             let contents = fs::read_to_string(err_log_path.clone()).unwrap_or_default();
             error!("Failed to start proxy: {}", contents);
 
-            kill_pid_on_port(local_port).await;
+            kill_pid_on_port(local_port);
             return Err(if contents.contains("Error loading SSO Token") {
                 ProxyError::ErrorSsoToken
             } else {
@@ -132,7 +132,7 @@ pub async fn start_aws_ssm_proxy(
         app_handle
             .emit("task-killed", TaskKilled { arn: arn.clone() })
             .unwrap_or_log();
-        kill_pid_on_port(local_port).await;
+        kill_pid_on_port(local_port);
     });
 
     Ok(access_port)
@@ -186,12 +186,12 @@ async fn handle(
     }
 }
 
-pub async fn start_proxy_to_adress(
+pub fn start_proxy_to_adress(
     local_port: u16,
     address: String,
     request_handler: Arc<tokio::sync::RwLock<RequestHandler>>,
 ) -> tokio::sync::oneshot::Sender<()> {
-    kill_pid_on_port(local_port).await;
+    kill_pid_on_port(local_port);
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let request_filter = extract_request_data_filter();
@@ -232,7 +232,7 @@ pub async fn start_proxy_to_adress(
 }
 
 #[cfg(target_os = "windows")]
-async fn kill_pid_on_port(port: u16) {
+fn kill_pid_on_port(port: u16) {
     info!("Killing {} on windows", &port);
     let process = Command::new("powershell")
         .args([
@@ -267,46 +267,55 @@ async fn kill_pid_on_port(port: u16) {
 }
 
 #[cfg(target_os = "linux")]
-async fn kill_pid_on_port(port: u16) {
-    let lsof = Command::new("lsof")
+fn kill_pid_on_port(port: u16) {
+    let mut lsof = Command::new("lsof")
         .args([format!("-i:{}", port)])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_log();
-    let grep_by_port = Command::new("grep")
+    let _ = lsof.wait();
+
+    let mut grep_by_port = Command::new("grep")
         .arg(format!(":{}", port))
         .stdin(Stdio::from(lsof.stdout.unwrap())) // Pipe through.
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
-    let cut = Command::new("cut")
+    let _ = grep_by_port.wait();
+
+    let mut cut = Command::new("cut")
         .args(["-d", " ", "-f", "2"])
         .stdin(Stdio::from(grep_by_port.stdout.unwrap()))
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
+    let _ = cut.wait();
+
     let _ = Command::new("xargs")
         .arg("kill")
         .stdin(Stdio::from(cut.stdout.unwrap()))
         .stdout(Stdio::piped())
         .spawn()
-        .unwrap();
+        .unwrap()
+        .wait();
 }
 
 #[cfg(target_os = "macos")]
-async fn kill_pid_on_port(port: u16) {
+fn kill_pid_on_port(port: u16) {
     // lsof -X -i -n | grep :62809 | cut -d' ' -f 2 | xargs kill
-    let lsof = Command::new("lsof")
+    let mut lsof = Command::new("lsof")
         .args(["-X", "-i", "-n"])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_log();
-    let grep_by_port = Command::new("grep")
+    let _ = lsof.wait();
+    let mut grep_by_port = Command::new("grep")
         .arg(format!(":{}", port))
         .stdin(Stdio::from(lsof.stdout.unwrap()))
         .stdout(Stdio::piped())
         .spawn()
         .unwrap_or_log();
+    let _ = grep_by_port.wait();
     let grep_by_listen = Command::new("grep")
         .arg("(LISTEN)")
         .stdin(Stdio::from(grep_by_port.stdout.unwrap()))
@@ -318,7 +327,7 @@ async fn kill_pid_on_port(port: u16) {
         if let Some(pid_str) = trim_whitespace_v2(line).split_whitespace().nth(1) {
             if let Ok(pid) = pid_str.parse::<u32>() {
                 warn!("Killing pid {}", pid);
-                let _ = Command::new("kill").arg(pid_str).spawn().unwrap();
+                let _ = Command::new("kill").arg(pid_str).spawn().unwrap().wait();
             }
         }
     }

@@ -80,7 +80,6 @@ impl WombatApi {
                         Claims::from_token(&jwt)
                             .expiry_date()
                             .format("%Y-%m-%d %H:%M:%S")
-                            .to_string()
                     );
                     self.jwt = Some(jwt);
                     return true;
