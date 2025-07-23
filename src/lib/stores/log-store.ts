@@ -187,17 +187,19 @@ const createLogStore = () => {
 		});
 	});
 
-	const timerangeToPartial = (timerange: Timerange): { start: number; end: number } => {
+	const timerangeToPartial = (
+		timerange: Timerange
+	): { startTimestamp: number; endTimestamp: number } => {
 		switch (timerange.type) {
 			case 'absolute':
 				return {
-					start: timerange.from.getTime(),
-					end: timerange.to.getTime()
+					startTimestamp: timerange.from.getTime(),
+					endTimestamp: timerange.to.getTime()
 				};
 			case 'relative':
 				return {
-					start: new Date().getTime() - timerange.amount * unitToMs(timerange.unit),
-					end: new Date().getTime()
+					startTimestamp: new Date().getTime() - timerange.amount * unitToMs(timerange.unit),
+					endTimestamp: new Date().getTime()
 				};
 		}
 	};
