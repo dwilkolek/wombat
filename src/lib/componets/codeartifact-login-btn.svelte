@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { userStore } from '$lib/stores/user-store';
 	import { invoke } from '@tauri-apps/api/core';
 	let disabled = $state(true);
 	let loading = $state(true);
@@ -18,6 +19,8 @@
 <button
 	class="btn btn-square relative"
 	type="button"
+	data-umami-event={disabled ? 'codeartifact_login_check' : 'codeartifact_login'}
+	data-umami-event-uid={$userStore.id}
 	onclick={() => {
 		if (disabled) {
 			invoke('codeartifact_login_check')
