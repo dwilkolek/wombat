@@ -115,14 +115,6 @@ pub enum CookieHealth {
     Old,
 }
 
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum ResourceType {
-    RDS,
-    ECS,
-    LambdaApp,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommandError {
     pub message: String,
@@ -211,5 +203,5 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
     if arn.starts_with("lambdaApp::") {
         return arn.split("::").skip(1).take(1).collect();
     }
-    format!("unknown!#{}", arn)
+    format!("unknown!#{arn}")
 }

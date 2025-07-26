@@ -49,8 +49,7 @@ pub async fn start_aws_ssm_proxy(
         "AWS-StartPortForwardingSessionToRemoteHost",
         "--parameters",
         &format!(
-            "{{\"host\":[\"{}\"], \"portNumber\":[\"{}\"], \"localPortNumber\":[\"{}\"]}}",
-            target, target_port, local_port
+            "{{\"host\":[\"{target}\"], \"portNumber\":[\"{target_port}\"], \"localPortNumber\":[\"{local_port}\"]}}",
         ),
     ]);
 
@@ -63,10 +62,8 @@ pub async fn start_aws_ssm_proxy(
     kill_pid_on_port(local_port);
 
     let tmp_dir = TempDir::new().unwrap();
-    let out_log: File =
-        File::create(tmp_dir.path().join(format!("out-{}.log", local_port))).unwrap();
-    let err_log: File =
-        File::create(tmp_dir.path().join(format!("err-{}.log", local_port))).unwrap();
+    let out_log: File = File::create(tmp_dir.path().join(format!("out-{local_port}.log"))).unwrap();
+    let err_log: File = File::create(tmp_dir.path().join(format!("err-{local_port}.log"))).unwrap();
 
     let out_log_path = format!("{}", out_log.path().unwrap().display());
     let err_log_path = format!("{}", err_log.path().unwrap().display());
@@ -74,9 +71,9 @@ pub async fn start_aws_ssm_proxy(
     command.stdout(Stdio::from(out_log));
     command.stderr(Stdio::from(err_log));
 
-    info!("Out log path: {:?}", out_log_path.clone());
-    info!("Error log path: {:?}", err_log_path.clone());
-    info!("Executnig cmd: {:?} ", command);
+    info!("Out log path: {out_log_path:?}");
+    info!("Error log path: {err_log_path:?}");
+    info!("Executnig cmd: {command:?} ");
 
     let shared_child = SharedChild::spawn(&mut command).unwrap_or_log();
 
@@ -95,7 +92,7 @@ pub async fn start_aws_ssm_proxy(
         sleep(Duration::from_millis(100)).await;
         let contents = fs::read_to_string(out_log_path.clone()).unwrap_or_default();
 
-        info!("Output: {}", contents);
+        info!("Output: {contents}");
         if contents.contains("Waiting for connections...") {
             break;
         }
@@ -106,7 +103,7 @@ pub async fn start_aws_ssm_proxy(
             > 10
         {
             let contents = fs::read_to_string(err_log_path.clone()).unwrap_or_default();
-            error!("Failed to start proxy: {}", contents);
+            error!("Failed to start proxy: {contents}");
 
             kill_pid_on_port(local_port);
             return Err(if contents.contains("Error loading SSO Token") {
@@ -310,7 +307,7 @@ fn kill_pid_on_port(port: u16) {
         .unwrap_or_log();
     let _ = lsof.wait();
     let mut grep_by_port = Command::new("grep")
-        .arg(format!(":{}", port))
+        .arg(format!(":{port}"))
         .stdin(Stdio::from(lsof.stdout.unwrap()))
         .stdout(Stdio::piped())
         .spawn()
@@ -326,7 +323,7 @@ fn kill_pid_on_port(port: u16) {
         info!("lsof line: {}", &line);
         if let Some(pid_str) = trim_whitespace_v2(line).split_whitespace().nth(1) {
             if let Ok(pid) = pid_str.parse::<u32>() {
-                warn!("Killing pid {}", pid);
+                warn!("Killing pid {pid}");
                 let _ = Command::new("kill").arg(pid_str).spawn().unwrap().wait();
             }
         }

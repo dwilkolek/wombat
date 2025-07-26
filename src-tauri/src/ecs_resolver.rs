@@ -122,7 +122,7 @@ impl EcsResolver {
                             aws_sdk_ecs::types::DeploymentRolloutState::InProgress => "In Progress",
                             _ => {
                                 error_count += 1;
-                                error_message = Some(format!("Unknown status: {:?}", status));
+                                error_message = Some(format!("Unknown status: {status:?}"));
                                 "Unknown"
                             }
                         };
@@ -231,7 +231,7 @@ fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
     {
         Ok(s) => s,
         Err(e) => {
-            log::error!("reading ecs instances from cache failed, reason: {}", e);
+            log::error!("reading ecs instances from cache failed, reason: {e}");
             return Vec::new();
         }
     };
@@ -256,7 +256,7 @@ fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
             services
         }
         Err(e) => {
-            log::error!("reading ecs instances from cache failed, reason: {}", e);
+            log::error!("reading ecs instances from cache failed, reason: {e}");
             Vec::new()
         }
     }

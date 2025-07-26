@@ -41,8 +41,7 @@ impl UserConfig {
             match fs::copy(config_file_v3, &config_file) {
                 Ok(_) => info!("created copy of v3 config file"),
                 Err(e) => error!(
-                    "failed to create copy of v3 config file to use as base for v4, reason: {}",
-                    e,
+                    "failed to create copy of v3 config file to use as base for v4, reason: {e}"
                 ),
             };
         }
@@ -228,7 +227,7 @@ impl UserConfig {
         match res {
             Err(msg) => Err(CommandError::new(
                 "set_logs_path",
-                format!("Invalid path! {}", msg),
+                format!("Invalid path! {msg}"),
             )),
             Ok(()) => {
                 self.logs_dir = Some(PathBuf::from(logs_dir_path.to_owned()));

@@ -239,7 +239,7 @@ async fn login(
     if let Err(status) = api_status {
         return Err(CommandError::new(
             "login",
-            format!("Wombat backend API is not ok. Reason: {}", status),
+            format!("Wombat backend API is not ok. Reason: {status}"),
         ));
     }
     api.report_versions(None).await;
@@ -1721,13 +1721,6 @@ struct TaskTracker {
     proxies_handlers: HashMap<String, Arc<SharedChild>>,
     task_handlers: HashMap<String, tokio::sync::oneshot::Sender<()>>,
     search_log_handler: Option<tokio::task::JoinHandle<()>>,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-struct HomeEntry {
-    tracked_name: shared::TrackedName,
-    services: HashMap<String, aws::ServiceDetails>,
-    dbs: Vec<aws::RdsInstance>,
 }
 
 async fn check_login_and_trigger(

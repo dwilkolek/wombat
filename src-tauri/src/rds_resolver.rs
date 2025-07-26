@@ -117,7 +117,7 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
     let mut stmt = match conn.prepare("SELECT arn, name, engine, engine_version, endpoint, environment_tag, env, appname_tag FROM databases;") {
         Ok(s) => s,
         Err(e) => {
-            log::error!("reading rds instances from cache failed, reason: {}", e);
+            log::error!("reading rds instances from cache failed, reason: {e}");
             return Vec::new();
         }
     };
@@ -149,7 +149,7 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
             databases
         }
         Err(e) => {
-            log::error!("reading rds instances from cache failed, reason: {}", e);
+            log::error!("reading rds instances from cache failed, reason: {e}");
             Vec::new()
         }
     }
