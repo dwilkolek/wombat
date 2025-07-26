@@ -141,7 +141,7 @@ impl WombatAwsProfile {
             if env_str.is_empty() {
                 env_str = format!("{env}");
             } else {
-                env_str = format!("{}|{}", env_str, env);
+                env_str = format!("{env_str}|{env}");
             }
         }
         self.single_source_profile = self
@@ -231,7 +231,7 @@ impl AwsConfigProvider {
     pub async fn reload(&mut self) -> Result<(), String> {
         let profiles_result = profile_set().await;
         match profiles_result {
-            Err(err) => Err(format!("Failed to read AWS config. Reason: {:?}", err)),
+            Err(err) => Err(format!("Failed to read AWS config. Reason: {err:?}")),
             Ok(profiles) => {
                 let wombat_profiles = Self::load_aws_profile_configuration(&profiles);
                 self.profile_set = profiles;
@@ -646,9 +646,9 @@ pub async fn db_secret(
             env
         ));
     }
-    possible_secrets.push(format!("{}-{}/db-credentials", name, env));
-    possible_secrets.push(format!("{}-{}/spring-datasource-password", name, env));
-    possible_secrets.push(format!("{}-{}/datasource-password", name, env));
+    possible_secrets.push(format!("{name}-{env}/db-credentials"));
+    possible_secrets.push(format!("{name}-{env}/spring-datasource-password"));
+    possible_secrets.push(format!("{name}-{env}/datasource-password"));
 
     let secret_client = secretsmanager::Client::new(config);
 
@@ -659,13 +659,12 @@ pub async fn db_secret(
             .values(&secret)
             .build();
         let secret_arn = secret_client.list_secrets().filters(filter).send().await;
-        if secret_arn.is_err() {
-            let err = secret_arn.unwrap_err();
+        if let Err(err) = secret_arn {
             let error_str = err
                 .source()
                 .map(|s| s.to_string())
                 .unwrap_or(err.to_string());
-            warn!("failed to fetch secret, reason: {}", error_str);
+            warn!("failed to fetch secret, reason: {error_str}");
             return Err(CommandError::new("db_secret", "Auth error?"));
         }
         let secret_arn = secret_arn.expect("Failed to fetch!");
@@ -680,13 +679,12 @@ pub async fn db_secret(
                 .secret_id(secret_arn)
                 .send()
                 .await;
-            if secret.is_err() {
-                let err = secret.unwrap_err();
+            if let Err(err) = secret {
                 let error_str = err
                     .source()
                     .map(|s| s.to_string())
                     .unwrap_or(err.to_string());
-                warn!("failed to get secret value, reason: {}", error_str);
+                warn!("failed to get secret value, reason: {error_str}");
                 return Err(CommandError::new("db_secret", "Access denied"));
             }
             let secret = secret.unwrap_or_log();
@@ -721,12 +719,9 @@ pub async fn db_secret(
             env
         ));
     }
-    possible_secrets.push(format!("/config/{}_{}/db-credentials", name, env));
-    possible_secrets.push(format!(
-        "/config/{}_{}/spring-datasource-password",
-        name, env
-    ));
-    possible_secrets.push(format!("/config/{}_{}/datasource-password", name, env));
+    possible_secrets.push(format!("/config/{name}_{env}/db-credentials"));
+    possible_secrets.push(format!("/config/{name}_{env}/spring-datasource-password"));
+    possible_secrets.push(format!("/config/{name}_{env}/datasource-password"));
     let ssm_client = ssm::Client::new(config);
     for secret in possible_secrets {
         let param = ssm_client
@@ -1087,16 +1082,12 @@ async fn get_ecs_service(
         .cluster(cluster)
         .send()
         .await;
-    if service.is_err() {
-        let err = service.unwrap_err();
+    if let Err(err) = service {
         let error_str = err
             .source()
             .map(|s| s.to_string())
             .unwrap_or(err.to_string());
-        error!(
-            "Failed to describe service for {}, reason {}",
-            &service_arn, error_str
-        );
+        error!("Failed to describe service for {service_arn}, reason {error_str}");
         return Err("Failed to describe service".to_owned());
     }
     service
@@ -1120,16 +1111,12 @@ async fn get_task_definition(
         .send()
         .await;
 
-    if task_def.is_err() {
-        let err = task_def.unwrap_err();
+    if let Err(err) = task_def {
         let error_str = err
             .source()
             .map(|s| s.to_string())
             .unwrap_or(err.to_string());
-        error!(
-            "Failed to fetch task definition for {}, reason {}",
-            &task_def_arn, error_str
-        );
+        error!("Failed to fetch task definition for {task_def_arn}, reason {error_str}");
         return Err("Failed to fetch task definition".to_owned());
     }
     let task_def = task_def.unwrap();
@@ -1227,7 +1214,7 @@ async fn register_task_definition(
                 let mut new_cd = cd.clone();
                 let desired_image = new_cd.image.and_then(|img| {
                     img.split_once(":")
-                        .map(|(image, _)| format!("{}:{}", image, new_version))
+                        .map(|(image, _)| format!("{image}:{new_version}"))
                 });
                 new_cd.image = desired_image;
                 new_cd
@@ -1276,7 +1263,7 @@ async fn service_detail(
     config: &aws_config::SdkConfig,
     service_arn: String,
 ) -> Result<ServiceDetails, ServiceErr> {
-    info!("Fetching service details for {}", service_arn);
+    info!("Fetching service details for {service_arn}");
 
     let ecs_client = ecs::Client::new(config);
     let service = get_ecs_service(&ecs_client, &service_arn)
@@ -1342,7 +1329,7 @@ pub async fn find_logs(
     let client = cloudwatchlogs::Client::new(config);
     let response = client
         .describe_log_groups()
-        .set_log_group_name_prefix(Some(format!("dsi-{}-", env).to_owned()))
+        .set_log_group_name_prefix(Some(format!("dsi-{env}-").to_owned()))
         .send()
         .await;
 
@@ -1419,9 +1406,8 @@ pub async fn find_logs(
                         .send()
                         .await;
 
-                    if logs_response.is_err() {
-                        let message = logs_response
-                            .unwrap_err()
+                    if let Err(err) = logs_response {
+                        let message = err
                             .into_service_error()
                             .meta()
                             .message()
@@ -1520,8 +1506,8 @@ async fn find_stream_names(
             .send()
             .await;
 
-        if describe_log_streams_response.is_err() {
-            let message = describe_log_streams_response.unwrap_err().to_string();
+        if let Err(err) = describe_log_streams_response {
+            let message = err.to_string();
             return Err(format!("Error: {}", &message));
         }
         let data = describe_log_streams_response.unwrap();

@@ -127,7 +127,7 @@ fn fetch_clusters(conn: &Connection) -> Vec<aws::Cluster> {
     let mut stmt = match conn.prepare("SELECT arn, name, env, platform_version FROM clusters;") {
         Ok(s) => s,
         Err(e) => {
-            log::error!("reading clusters cache failed, reason: {}", e);
+            log::error!("reading clusters cache failed, reason: {e}");
             return Vec::new();
         }
     };
@@ -150,7 +150,7 @@ fn fetch_clusters(conn: &Connection) -> Vec<aws::Cluster> {
             clusters
         }
         Err(e) => {
-            log::error!("reading clusters cache failed, reason: {}", e);
+            log::error!("reading clusters cache failed, reason: {e}");
             Vec::new()
         }
     }

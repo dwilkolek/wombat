@@ -105,8 +105,7 @@ pub async fn check_dependencies(
         ok: *sso_profile > 0,
         required: true,
         version_or_error: format!(
-            "wombat: {}, sso: {}, infra: {}",
-            wombat_profiles, sso_profile, infra_profiles
+            "wombat: {wombat_profiles}, sso: {sso_profile}, infra: {infra_profiles}"
         ),
     });
 
@@ -145,7 +144,7 @@ pub async fn check_dependencies(
 pub fn is_program_in_path(program: &str) -> bool {
     if let Ok(path) = env::var("PATH") {
         for p in path.split(":") {
-            let p_str = format!("{}/{}", p, program);
+            let p_str = format!("{p}/{program}");
             if fs::metadata(p_str).is_ok() {
                 return true;
             }
