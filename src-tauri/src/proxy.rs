@@ -32,7 +32,7 @@ pub async fn start_aws_ssm_proxy(
 
     abort_on_exit: Option<tokio::sync::oneshot::Sender<()>>,
     access_port: u16,
-    async_task_manager: tauri::State<'_, AsyncTaskManager>,
+    async_task_manager: &tauri::State<'_, AsyncTaskManager>,
 ) -> Result<u16, ProxyError> {
     let mut command = Command::new("aws");
 
