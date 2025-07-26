@@ -94,7 +94,7 @@ impl WombatApi {
             let mut headers = reqwest::header::HeaderMap::new();
             headers.append(
                 "Authorization",
-                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", jwt)).unwrap(),
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {jwt}")).unwrap(),
             );
             let client = reqwest::Client::builder().default_headers(headers).build();
             if let Ok(client) = client {
@@ -105,7 +105,7 @@ impl WombatApi {
     }
 
     pub async fn is_feature_enabled(&mut self, feature: &str) -> bool {
-        log::info!("checking feature {}", feature);
+        log::info!("checking feature {feature}");
         self.auth().await;
         if let Some(client) = self.client() {
             let response = client
@@ -152,7 +152,7 @@ impl WombatApi {
             return match body {
                 Ok(body) => body,
                 Err(e) => {
-                    log::error!("fetching log filters failed, error: {}", e);
+                    log::error!("fetching log filters failed, error: {e}");
                     vec![]
                 }
             };
@@ -172,7 +172,7 @@ impl WombatApi {
             return match body {
                 Ok(body) => body,
                 Err(e) => {
-                    log::error!("fetching proxy auth configs failed, error: {}", e);
+                    log::error!("fetching proxy auth configs failed, error: {e}");
                     vec![]
                 }
             };
@@ -204,11 +204,6 @@ impl WombatApi {
             false
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct TrackedEvent {
-    name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
