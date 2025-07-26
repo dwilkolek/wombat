@@ -13,6 +13,7 @@ use rds_resolver::RdsResolver;
 use sha2::{Digest, Sha256};
 use shared::{arn_to_name, BrowserExtension, CommandError, CookieJar, Env};
 use shared_child::SharedChild;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::process::Command;
@@ -946,6 +947,7 @@ async fn start_db_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    bastion_failure_map: tauri::State<'_, BastionFailureMap>,
 ) -> Result<NewTaskParams, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(CommandError::new("start_db_proxy", msg));
@@ -961,34 +963,52 @@ async fn start_db_proxy(
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
 
-    let bastions = aws::bastions(&aws_config).await;
-    let bastion = bastions
-        .into_iter()
-        .find(|b| b.env == db.env)
-        .expect("No bastion found");
+    let mut bastions = aws::bastions(&aws_config).await;
 
-    let proxy_started = proxy::start_aws_ssm_proxy(
-        db.arn.clone(),
-        app_handle.clone(),
-        bastion.instance_id,
-        aws_profile,
-        region,
-        db.endpoint.address,
-        db.endpoint.port,
-        local_port,
-        None,
-        local_port,
-        async_task_tracker.clone(),
-    )
-    .await;
+    let bastion_failure_map_inner = bastion_failure_map.0.read().await;
+    let bastion_failures = bastion_failure_map_inner.to_owned();
+    drop(bastion_failure_map_inner);
 
-    match proxy_started {
-        Ok(port) => Ok(NewTaskParams {
-            port,
-            proxy_auth_config: None,
-        }),
-        Err(proxy_err) => Err(CommandError::new("start_db_proxy", format!("{proxy_err}"))),
+    bastions.sort_by(|a, b| {
+        let a_failures = bastion_failures.get(&a.instance_id).unwrap_or(&0);
+        let b_failures = bastion_failures.get(&b.instance_id).unwrap_or(&0);
+        a_failures.cmp(b_failures)
+    });
+    for bastion in bastions.into_iter().filter(|b| b.env == db.env) {
+        let proxy_started = proxy::start_aws_ssm_proxy(
+            db.arn.clone(),
+            app_handle.clone(),
+            bastion.instance_id.clone(),
+            aws_profile.clone(),
+            region.clone(),
+            db.endpoint.address.clone(),
+            db.endpoint.port,
+            local_port,
+            None,
+            local_port,
+            &async_task_tracker,
+        )
+        .await;
+        if let Ok(port) = proxy_started {
+            let mut bastion_failure_map_inner = bastion_failure_map.0.write().await;
+            bastion_failure_map_inner.remove(&bastion.instance_id.clone());
+            return Ok(NewTaskParams {
+                port,
+                proxy_auth_config: None,
+            });
+        } else {
+            let mut bastion_failure_map_inner = bastion_failure_map.0.write().await;
+            let error_count = bastion_failure_map_inner
+                .remove(&bastion.instance_id)
+                .unwrap_or(0);
+            bastion_failure_map_inner.insert(bastion.instance_id.clone(), error_count + 1);
+        }
     }
+
+    Err(CommandError::new(
+        "start_db_proxy",
+        "No valid bastion found",
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1004,8 +1024,8 @@ async fn start_service_proxy(
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    bastion_failure_map: tauri::State<'_, BastionFailureMap>,
 ) -> Result<NewTaskParams, CommandError> {
-    dbg!(&headers);
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
@@ -1022,11 +1042,17 @@ async fn start_service_proxy(
         .await
         .expect("Missing sdk_config to start service proxy");
 
-    let bastions = aws::bastions(&aws_config).await;
-    let bastion = bastions
-        .into_iter()
-        .find(|b| b.env == service.env)
-        .expect("No bastion found");
+    let mut bastions = aws::bastions(&aws_config).await;
+
+    let bastion_failure_map_inner = bastion_failure_map.0.read().await;
+    let bastion_failures = bastion_failure_map_inner.to_owned();
+    drop(bastion_failure_map_inner);
+
+    bastions.sort_by(|a, b| {
+        let a_failures = bastion_failures.get(&a.instance_id).unwrap_or(&0);
+        let b_failures = bastion_failures.get(&b.instance_id).unwrap_or(&0);
+        a_failures.cmp(b_failures)
+    });
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
@@ -1070,43 +1096,57 @@ async fn start_service_proxy(
             }
         }
     }
-
-    let handle = proxy::start_proxy_to_adress(
-        local_port,
-        format!("http://localhost:{aws_local_port}/").to_owned(),
-        Arc::new(RwLock::new(proxy::RequestHandler { interceptors })),
-    );
+    let request_handler = Arc::new(RwLock::new(proxy::RequestHandler { interceptors }));
 
     let region = aws_config_provider.get_region(&aws_profile).await;
-
     let host = format!("{}.service", service.name);
-    let proxy_started = proxy::start_aws_ssm_proxy(
-        service.arn,
-        app_handle,
-        bastion.instance_id,
-        aws_profile,
-        region,
-        host,
-        80,
-        aws_local_port,
-        Some(handle),
-        local_port,
-        async_task_tracker,
-    )
-    .await;
+    for bastion in bastions.iter().filter(|b| b.env == service.env) {
+        let handle = proxy::start_proxy_to_adress(
+            local_port,
+            format!("http://localhost:{aws_local_port}/").to_owned(),
+            Arc::clone(&request_handler),
+        );
+        let proxy_started = proxy::start_aws_ssm_proxy(
+            service.arn.clone(),
+            app_handle.clone(),
+            bastion.instance_id.clone(),
+            aws_profile.clone(),
+            region.clone(),
+            host.clone(),
+            80,
+            aws_local_port,
+            Some(handle),
+            local_port,
+            &async_task_tracker,
+        )
+        .await;
 
-    info!(
-        "Proxy to {} started={}",
-        &service.name,
-        proxy_started.is_ok()
-    );
-    match proxy_started {
-        Ok(port) => Ok(NewTaskParams {
-            port,
-            proxy_auth_config,
-        }),
-        Err(proxy_err) => Err(CommandError::new("start_ecs_proxy", format!("{proxy_err}"))),
+        info!(
+            "Proxy to {} started={}",
+            &service.name,
+            proxy_started.is_ok()
+        );
+
+        if let Ok(port) = proxy_started {
+            let mut bastion_failure_map_inner = bastion_failure_map.0.write().await;
+            bastion_failure_map_inner.remove(&bastion.instance_id.clone());
+            return Ok(NewTaskParams {
+                port,
+                proxy_auth_config: None,
+            });
+        } else {
+            let mut bastion_failure_map_inner = bastion_failure_map.0.write().await;
+            let error_count = bastion_failure_map_inner
+                .remove(&bastion.instance_id)
+                .unwrap_or(0);
+            bastion_failure_map_inner.insert(bastion.instance_id.clone(), error_count + 1);
+        }
     }
+
+    Err(CommandError::new(
+        "start_ecs_proxy",
+        "No valid bastion found",
+    ))
 }
 
 #[tauri::command]
@@ -1583,6 +1623,7 @@ async fn main() {
         .manage(KVStoreInstance(Arc::new(Mutex::new(KVStore {
             store: HashMap::new(),
         }))))
+        .manage(BastionFailureMap(Arc::new(RwLock::new(HashMap::new()))))
         .invoke_handler(tauri::generate_handler![
             user_config,
             reload_aws_config,
@@ -1654,6 +1695,7 @@ struct WombatApiInstance(Arc<Mutex<wombat_api::WombatApi>>);
 struct BrowserExtensionInstance(Arc<Mutex<BrowserExtension>>);
 struct CookieJarInstance(Arc<Mutex<CookieJar>>);
 struct KVStoreInstance(Arc<Mutex<KVStore>>);
+struct BastionFailureMap(Arc<RwLock<HashMap<String, isize>>>);
 
 struct KVStore {
     store: HashMap<String, String>,
