@@ -13,7 +13,6 @@ use rds_resolver::RdsResolver;
 use sha2::{Digest, Sha256};
 use shared::{arn_to_name, BrowserExtension, CommandError, CookieJar, Env};
 use shared_child::SharedChild;
-use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::process::Command;

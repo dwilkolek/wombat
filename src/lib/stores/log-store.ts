@@ -73,7 +73,7 @@ function transformLog(newLog: LogEntry) {
 			app,
 			timestamp: newLog.timestamp,
 			level,
-			message: logData.message,
+			message: logData.message ?? logData.exception?.split('\n')?.at(0),
 			data: logData,
 			style: logStyle(level)
 		};
