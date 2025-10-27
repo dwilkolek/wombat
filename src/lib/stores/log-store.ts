@@ -25,8 +25,32 @@ type UiLogEntry = {
 	data: LogData;
 	style: LogStyle;
 	app: string;
+	tagBox: {
+		adUserId: string;
+		adUserName: string;
+		adUserIdColor: string;
+		requestTraceId: string;
+		requestTraceIdColor: string;
+	} | null;
 };
-function transformLog(newLog: LogEntry) {
+
+function colorFromString(str: string | null): string {
+	if (str == null || str.trim().length === 0) {
+		return `rgba(131, 0, 0, 0.78)`;
+	}
+	let hash = 0;
+	for (let i = 0; i < str.length; i++) {
+		hash = str.charCodeAt(i) + ((hash << 5) - hash);
+		hash = hash & hash;
+	}
+	const rgb = [0, 0, 0];
+	for (let i = 0; i < 3; i++) {
+		const value = (hash >> (i * 8)) & 255;
+		rgb[i] = value;
+	}
+	return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+function transformLog(newLog: LogEntry): Omit<UiLogEntry, 'id'> {
 	let isString;
 	try {
 		if (typeof newLog.message == 'object') {
@@ -64,7 +88,8 @@ function transformLog(newLog: LogEntry) {
 				level,
 				message: newLog.message
 			},
-			style: logStyle(level)
+			style: logStyle(level),
+			tagBox: null
 		};
 	} else {
 		const logData = JSON.parse(newLog.message);
@@ -75,7 +100,17 @@ function transformLog(newLog: LogEntry) {
 			level,
 			message: logData.message ?? logData.exception?.split('\n')?.at(0),
 			data: logData,
-			style: logStyle(level)
+			style: logStyle(level),
+			tagBox:
+				logData['mdc'] && logData['mdc']['traceId']
+					? {
+							adUserId: logData['mdc']['adUserId'],
+							adUserName: logData['mdc']['userName'],
+							adUserIdColor: colorFromString(logData['mdc']['userName']),
+							requestTraceId: logData['mdc']['traceId'],
+							requestTraceIdColor: colorFromString(logData['mdc']['traceId'])
+						}
+					: null
 		};
 	}
 }
