@@ -357,7 +357,25 @@
 							$selectedLog === log.data ? log.style.active : ''
 						}`}
 					>
-						<td class="break-keep">{log.app}</td>
+						<td class="break-keep">
+							<div class="flex gap-2">
+								{log.app}
+								{#if log.tagBox}
+									<div
+										class="tooltip tooltip-right rounded-r-sm"
+										data-tip={log.tagBox.adUserName}
+										style={`background: ${log.tagBox.adUserIdColor}; width: 16px; border-left: 4px solid ${log.tagBox.requestTraceIdColor}`}
+									>
+										<div class="tooltip-content">
+											<div class="flex flex-col gap-1 text-left">
+												<div class="grow">{log.tagBox.adUserName}</div>
+												<div class="grow">{log.tagBox.requestTraceId.substring(10) + '...'}</div>
+											</div>
+										</div>
+									</div>
+								{/if}
+							</div>
+						</td>
 						<td>{log.level}</td>
 						<td class="min-w-[170px] max-w-[170px]"
 							>{format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss.SSS')}</td
