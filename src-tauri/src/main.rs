@@ -1385,18 +1385,36 @@ async fn open_dbeaver(
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
+    read_only: bool,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<(), CommandError> {
-    fn db_beaver_con_parma(db_name: &str, host: &str, port: u16, secret: &aws::DbSecret) -> String {
+    fn db_beaver_con_parma(
+        db_name: &str,
+        host: &str,
+        port: u16,
+        secret: &aws::DbSecret,
+        read_only: bool,
+    ) -> String {
+        let id = if read_only {
+            format!("{db_name}-R")
+        } else {
+            format!("{db_name}-RW")
+        };
+
+        let name = if read_only {
+            db_name.to_string()
+        } else {
+            format!("{db_name} WRITE")
+        };
         if secret.auto_rotated {
             format!(
-                "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|url=jdbc:postgresql://{}:{}/{}?user={}&password={}",
-                db_name, db_name, host,port, secret.dbname, secret.username, encode(&secret.password)
+                "driver=postgresql|id={id}|name={name}|prop.readOnly={read_only}|autoCommit=false|openConsole=true|folder=wombat|url=jdbc:postgresql://{host}:{port}/{}?user={}&password={}",
+                 secret.dbname, secret.username, encode(&secret.password)
                 )
         } else {
             format!(
-                "driver=postgresql|id={}|name={}|openConsole=true|folder=wombat|savePassword=true|create=true|save=true|host={}|port={}|database={}|user={}|password={}",
-                db_name, db_name, host,port, secret.dbname, secret.username, &secret.password
+                "driver=postgresql|id={id}|name={name}|prop.readOnly={read_only}|autoCommit=false|openConsole=true|folder=wombat|savePassword=true|create=true|save=true|host={host}|port={port}|database={}|user={}|password={}",
+                secret.dbname, secret.username, &secret.password
                 )
         }
     }
@@ -1455,6 +1473,7 @@ async fn open_dbeaver(
                 "localhost",
                 port,
                 &db_secret,
+                read_only,
             ),
         ])
         .output()

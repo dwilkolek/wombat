@@ -12,6 +12,8 @@ node_modules
 src-tauri/gen
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+/target
+
 
 NOTES.md
 
