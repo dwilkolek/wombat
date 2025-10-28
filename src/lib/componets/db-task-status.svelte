@@ -65,6 +65,10 @@
 
 <dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
 	<div class="modal-box">
+		<button
+			class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+			onclick={() => dialog?.close()}>✕</button
+		>
 		<h3 class="text-lg font-bold">Open Dbeaver console</h3>
 		<p class="py-4">
 			All connections are opened with <span class="font-mono text-warning">autoCommit=false</span>.
