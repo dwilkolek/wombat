@@ -1,3 +1,5 @@
+cargo-features = ["profile-rustflags"]
+
 [package]
 name = "wombat"
 version = "4.12.0"
@@ -6,7 +8,7 @@ authors = ["dwilkolek@protonmail.com"]
 license = ""
 repository = "https://github.com/dwilkolek/wombat"
 edition = "2021"
-rust-version = "1.88.0"
+rust-version = "1.93.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -82,11 +84,31 @@ custom-protocol = ["tauri/custom-protocol"]
 
 
 [profile.dev.package.aws-sdk-ecs]
-hint-mostly-unused = true
+rustflags = ["-Zhint-mostly-unused"]
 [profile.dev.package.aws-sdk-rds]
-hint-mostly-unused = true
+rustflags = ["-Zhint-mostly-unused"]
 [profile.dev.package.aws-sdk-ec2]
-hint-mostly-unused = true
+rustflags = ["-Zhint-mostly-unused"]
 [profile.dev.package.aws-sdk-ssm]
-hint-mostly-unused = true
+rustflags = ["-Zhint-mostly-unused"]
 [profile.dev.package.aws-sdk-sts]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.dev.package.aws-sdk-cloudwatchlogs]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.dev.package.aws-sdk-secretsmanager]
+rustflags = ["-Zhint-mostly-unused"]
+
+[profile.release.package.aws-sdk-ecs]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.release.package.aws-sdk-rds]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.release.package.aws-sdk-ec2]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.release.package.aws-sdk-ssm]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.release.package.aws-sdk-sts]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.release.package.aws-sdk-cloudwatchlogs]
+rustflags = ["-Zhint-mostly-unused"]
+[profile.release.package.aws-sdk-secretsmanager]
+rustflags = ["-Zhint-mostly-unused"]

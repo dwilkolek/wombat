@@ -42,7 +42,7 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - name: install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@nightly
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
