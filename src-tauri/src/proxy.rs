@@ -221,7 +221,7 @@ pub fn start_proxy_to_adress(
 
     tokio::task::spawn(async move {
         warp::serve(app)
-            .bind(([0, 0, 0, 0], local_port))
+            .bind(([127, 0, 0, 1], local_port))
             .await
             .graceful(async {
                 rx.await.ok();
