@@ -1568,7 +1568,7 @@ async fn main() {
         let mut wombat_api_ref_clone = wombat_api_ref_clone.lock().await;
         wombat_api_ref_clone.auth().await;
     });
-    tokio::task::spawn(rest_api::serve(
+    rest_api::serve(
         cookie_jar.clone(),
         browser_ext.clone(),
         Arc::new(Mutex::new(wombat_api::WombatApi::new(
@@ -1577,7 +1577,7 @@ async fn main() {
             app_config.wombat_api_password.clone(),
             user.id,
         ))),
-    ));
+    );
 
     let _guard = match app_config.logger.as_str() {
         "console" => {

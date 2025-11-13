@@ -219,11 +219,16 @@ pub fn start_proxy_to_adress(
         )
         .with(warp::log("proxy::log"));
 
-    let (_addr, server) =
-        warp::serve(app).bind_with_graceful_shutdown(([0, 0, 0, 0], local_port), async {
-            rx.await.ok();
-        });
-    tokio::task::spawn(server);
+    tokio::task::spawn(async move {
+        warp::serve(app)
+            .bind(([127, 0, 0, 1], local_port))
+            .await
+            .graceful(async {
+                rx.await.ok();
+            })
+            .run()
+            .await;
+    });
 
     tx
 }
