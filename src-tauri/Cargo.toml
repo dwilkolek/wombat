@@ -8,7 +8,7 @@ authors = ["dwilkolek@protonmail.com"]
 license = ""
 repository = "https://github.com/dwilkolek/wombat"
 edition = "2021"
-rust-version = "1.93.0"
+rust-version = "1.91.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
