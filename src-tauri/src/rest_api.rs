@@ -50,11 +50,17 @@ async fn delete_cookie(
     jar.cookies.retain(|cookie| cookie.name != name);
     Ok(warp::reply().into_response())
 }
-async fn health(
+#[derive(Serialize, Deserialize)]
+struct HealthBody {
     version: String,
+}
+
+async fn health(
+    body: HealthBody,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
     wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) -> Result<warp::reply::Response, warp::Rejection> {
+    let version = body.version;
     let mut browser_ext = browser_ext.lock().await;
     browser_ext.last_health_check = chrono::Utc::now();
     let new_version = Some(version.clone());
@@ -109,33 +115,32 @@ fn with_wombat_api(
     warp::any().map(move || wombat_api.clone())
 }
 
-pub async fn serve(
+pub fn serve(
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
     wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) {
-    warp::serve(
-        warp::put()
-            .and(warp::path("cookies"))
+    tokio::task::spawn(async move {
+        let routes = warp::put()
+            .and(warp::path!("cookies"))
             .and(warp::body::json())
             .and(with_jar(jar.clone()))
             .and_then(put_cookie)
             .or(warp::delete()
-                .and(warp::path("cookies"))
-                .and(warp::path::param::<String>())
+                .and(warp::path!("cookies" / String))
                 .and(with_jar(jar.clone()))
                 .and_then(delete_cookie))
             .or(warp::post()
-                .and(warp::path("health"))
+                .and(warp::path!("health"))
                 .and(warp::body::json())
                 .and(with_browser_extension(browser_ext.clone()))
                 .and(with_wombat_api(wombat_api.clone()))
                 .and_then(health))
             .or(warp::post()
-                .and(warp::path("browser-extension-event"))
+                .and(warp::path!("browser-extension-event"))
                 .and(warp::body::json())
-                .and_then(browser_extension_event)),
-    )
-    .run(([127, 0, 0, 1], 6891))
-    .await;
+                .and_then(browser_extension_event));
+
+        warp::serve(routes).run(([127, 0, 0, 1], 6891)).await;
+    });
 }
