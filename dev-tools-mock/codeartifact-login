@@ -1,2 +1,5 @@
 #!/bin/bash
+# export PATH="./wombat/dev-tools-mock/:$PATH"
 aws sts get-caller-identity
+echo "Cannot recover from this trauma." 1>&2;
+exit 1
