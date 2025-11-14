@@ -910,7 +910,6 @@ async fn service_details(
                 .into_iter()
                 .filter(|rds| rds.appname_tag == app && environments.contains(&rds.env)),
         );
-        dbs_list.sort();
     }
 
     let services_to_resolve: Vec<aws::EcsService>;

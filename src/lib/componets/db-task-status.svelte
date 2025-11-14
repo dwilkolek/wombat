@@ -57,7 +57,7 @@
 			</div>
 		</div>
 	{:else}
-		<span class="text-sm text-amber-300/[.6] animate-pulse">{port}</span>
+		<span class="text-sm text-amber-300/60 animate-pulse">{port}</span>
 	{/if}
 {:else}
 	<span class="text-sm text-gray-600">{port}</span>

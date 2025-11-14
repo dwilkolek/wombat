@@ -75,19 +75,12 @@ impl std::cmp::Ord for RdsInstance {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let other_key = format!(
             "{}/{}",
-            other
-                .cdk_stack_id
-                .as_ref()
-                .cloned()
-                .unwrap_or("".to_string()),
+            other.cdk_stack_id.as_deref().unwrap_or(""),
             &other.identifier
         );
         let self_key = format!(
             "{}/{}",
-            self.cdk_stack_id
-                .as_ref()
-                .cloned()
-                .unwrap_or("".to_string()),
+            self.cdk_stack_id.as_deref().unwrap_or(""),
             &self.identifier
         );
 
@@ -697,16 +690,12 @@ pub async fn db_secret(
             let secret_arn = secret_arn.first().unwrap_or_log();
             let secret_arn = secret_arn.arn().expect("Expected arn password");
 
-            let secret = secret_client
-                .get_secret_value()
-                .secret_id(secret_arn)
-                .send()
-                .await;
             let secret_details = secret_client
                 .describe_secret()
                 .secret_id(secret_arn)
                 .send()
                 .await;
+
             // Check if the secret has the matching CloudFormation stack tag
             let secret_cdk_stack_id = secret_details
                 .as_ref()
@@ -739,6 +728,12 @@ pub async fn db_secret(
                 .and_then(DateTime::from_timestamp_millis)
                 .unwrap_or_else(y2000);
 
+            let secret = secret_client
+                .get_secret_value()
+                .secret_id(secret_arn)
+                .send()
+                .await;
+
             if let Err(err) = secret {
                 let error_str = err
                     .source()
@@ -753,7 +748,9 @@ pub async fn db_secret(
                 serde_json::from_str::<DbSecretDTO>(secret_str).expect("Deserialzied DbSecret");
 
             return Ok(DbSecret {
-                arn: secret.arn.unwrap(),
+                arn: secret
+                    .arn
+                    .ok_or_else(|| CommandError::new("db_secret", "Secret ARN is missing"))?,
                 dbname: secret_value.dbname,
                 password: secret_value.password,
                 username: secret_value.username,
@@ -782,7 +779,9 @@ pub async fn db_secret(
                     .and_then(DateTime::from_timestamp_millis)
                     .unwrap_or_else(y2000);
                 return Ok(DbSecret {
-                    arn: param.arn.as_ref().unwrap_or_log().to_owned(),
+                    arn: param.arn.as_ref().map(|s| s.to_owned()).ok_or_else(|| {
+                        CommandError::new("db_secret", "Secret Param ARN is missing")
+                    })?,
                     dbname: rds.name.clone(),
                     password: param.value().unwrap_or_log().to_owned(),
                     username: rds
@@ -890,8 +889,6 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     .and_then(|s| s.db_subnet_group_name())
                     .unwrap_or_default()
                     .to_owned();
-
-                info!("DB USER {appname_tag} -> {:?}", rds.master_username());
 
                 let db = RdsInstance {
                     arn: db_instance_arn,
