@@ -40,12 +40,10 @@ export function startRdsProxyDisabledReason(rds: RdsInstance) {
 			return 'RDS Proxies disabled';
 		}
 		if (
-			!stores[1].infraProfiles.some(
-				({ app, env }) => app == rds.normalized_name && env == rds.env
-			) &&
+			!stores[1].infraProfiles.some(({ app, env }) => app == rds.appname_tag && env == rds.env) &&
 			!devWay
 		) {
-			return `Missing infra profile: ${rds.normalized_name}`;
+			return `Missing infra profile: ${rds.appname_tag}`;
 		}
 		if (AwsEnv.PROD === rds.env && !rdsProdActions) {
 			return PROD_ACTIONS_DISABLED_REASON;
@@ -164,10 +162,9 @@ export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 		if (!getRdsSecret) {
 			return 'Get RDS secret action disabled';
 		}
-		if (
-			!stores[1].infraProfiles.some(({ app, env }) => app == rds.normalized_name && env == rds.env)
-		) {
-			return `Missing infra profile: ${rds.normalized_name}`;
+		if (!stores[1].infraProfiles.some(({ app, env }) => app == rds.appname_tag && env == rds.env)) {
+			console.log(rds);
+			return `Missing infra profile: ${rds.appname_tag}`;
 		}
 		if (AwsEnv.PROD === rds.env && !rdsProdActions) {
 			return PROD_ACTIONS_DISABLED_REASON;

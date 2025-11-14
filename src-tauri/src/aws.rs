@@ -22,6 +22,10 @@ use wait_timeout::ChildExt;
 
 const RETRY_MAX_ATTEMPTS: u32 = 5;
 
+fn y2000() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bastion {
     pub instance_id: String,
@@ -44,12 +48,13 @@ pub struct Endpoint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RdsInstance {
     pub arn: String,
+    pub identifier: String,
     pub name: String,
-    pub normalized_name: String,
     pub engine: String,
     pub engine_version: String,
     pub endpoint: Endpoint,
     pub environment_tag: String,
+    pub subnet_name: String,
     pub env: Env,
     pub appname_tag: String,
 }
@@ -72,6 +77,7 @@ pub struct DbSecret {
     pub password: String,
     pub username: String,
     pub auto_rotated: bool,
+    pub last_changed: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -636,6 +642,11 @@ pub async fn db_secret(
             env
         ));
         possible_secrets.push(format!(
+            "{}-{}/db_credentials",
+            name.replace("-migrated", ""),
+            env
+        ));
+        possible_secrets.push(format!(
             "{}-{}/spring-datasource-password",
             name.replace("-migrated", ""),
             env
@@ -646,7 +657,9 @@ pub async fn db_secret(
             env
         ));
     }
+    // TODO: figure out which secret belongs to which database
     possible_secrets.push(format!("{name}-{env}/db-credentials"));
+    possible_secrets.push(format!("{name}-{env}/db_credentials"));
     possible_secrets.push(format!("{name}-{env}/spring-datasource-password"));
     possible_secrets.push(format!("{name}-{env}/datasource-password"));
 
@@ -679,6 +692,24 @@ pub async fn db_secret(
                 .secret_id(secret_arn)
                 .send()
                 .await;
+            let secret_details = secret_client
+                .describe_secret()
+                .secret_id(secret_arn)
+                .send()
+                .await;
+            let rotation_enabled = secret_details
+                .as_ref()
+                .map(|op| op.rotation_enabled().unwrap_or_default())
+                .unwrap_or_default();
+
+            let last_secret_change = secret_details
+                .as_ref()
+                .map(|op| op.last_changed_date())
+                .unwrap_or(None)
+                .and_then(|t| t.to_millis().ok())
+                .and_then(DateTime::from_timestamp_millis)
+                .unwrap_or_else(y2000);
+
             if let Err(err) = secret {
                 let error_str = err
                     .source()
@@ -688,6 +719,7 @@ pub async fn db_secret(
                 return Err(CommandError::new("db_secret", "Access denied"));
             }
             let secret = secret.unwrap_or_log();
+
             let secret = secret.secret_string().expect("There should be a secret");
             let secret =
                 serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
@@ -696,7 +728,8 @@ pub async fn db_secret(
                 dbname: secret.dbname,
                 password: secret.password,
                 username: secret.username,
-                auto_rotated: true,
+                auto_rotated: rotation_enabled,
+                last_changed: last_secret_change,
             });
         }
     }
@@ -733,11 +766,17 @@ pub async fn db_secret(
 
         if let Ok(param) = param {
             if let Some(param) = param.parameter() {
+                let last_modified = param
+                    .last_modified_date()
+                    .and_then(|t| t.to_millis().ok())
+                    .and_then(DateTime::from_timestamp_millis)
+                    .unwrap_or_else(y2000);
                 return Ok(DbSecret {
                     dbname: name.to_owned(),
                     password: param.value().unwrap_or_log().to_owned(),
                     username: name.to_owned(),
                     auto_rotated: false,
+                    last_changed: last_modified,
                 });
             }
         }
@@ -828,15 +867,23 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     }
                 }
 
+                let rds_identifier = rds.db_instance_identifier().unwrap_or_default().to_owned();
+                let subnet_name = rds
+                    .db_subnet_group()
+                    .and_then(|s| s.db_subnet_group_name())
+                    .unwrap_or_default()
+                    .to_owned();
+
                 let db = RdsInstance {
                     arn: db_instance_arn,
-                    normalized_name: name.replace("-migrated", ""),
+                    identifier: rds_identifier,
                     name,
                     engine,
                     engine_version,
                     endpoint,
                     appname_tag,
                     environment_tag,
+                    subnet_name,
                     env: env.clone(),
                 };
                 databases.push(db)

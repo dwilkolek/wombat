@@ -109,10 +109,11 @@ export type Endpoint = {
 
 export type RdsInstance = {
 	name: string;
-	normalized_name: string;
+	identifier: string;
 	engine: string;
 	engine_version: string;
 	endpoint: Endpoint;
+	subnet_name: string;
 	env: AwsEnv;
 	arn: string;
 	environment_tag: string;
@@ -124,6 +125,7 @@ export type DatabaseCredentials = {
 	password: string;
 	username: string;
 	auto_rotated: boolean;
+	last_changed: any;
 };
 
 export type MonitoringConfig = {

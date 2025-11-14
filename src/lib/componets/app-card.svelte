@@ -148,7 +148,10 @@
 										<div class="flex flex-row items-center gap-1 px-1">
 											<DatabaseCell database={db} />
 											<div class="flex gap-2 justify-between items-center grow">
-												<span class="truncate">{db.engine_version}</span>
+												<span class="truncate">
+													{db.identifier}
+													{db.engine_version}
+												</span>
 												<AppCardHr {task} />
 												<DbTaskStatus {task} {db} />
 											</div>

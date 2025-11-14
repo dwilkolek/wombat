@@ -27,7 +27,7 @@
 			try {
 				const credentials = await invoke<DatabaseCredentials>('credentials', { db: database });
 				const copyToClipboard = await ask(
-					`Database name: ${credentials.dbname}\nUser: ${credentials.username}\nPassword: ${credentials.password}\nRotated: ${credentials.auto_rotated}\nWhen 'Rotated'=false then User & Database name might be wrong.`,
+					`Database name: ${credentials.dbname}\nUser: ${credentials.username}\nPassword: ${credentials.password}\nRotated: ${credentials.auto_rotated}\nLast changed: ${credentials.last_changed}\nWhen 'Rotated'=false then User & Database name might be wrong.`,
 					{ title: 'Credentials', okLabel: 'Copy password to clipboard', cancelLabel: 'K THX BYE' }
 				);
 				if (copyToClipboard) {

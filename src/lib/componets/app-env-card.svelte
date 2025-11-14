@@ -43,12 +43,14 @@
 							{#each envDetails.dbs as db (db.arn)}
 								<div class="flex flex-col">
 									<h5>ARN: {db.arn}</h5>
+									<span>Identifier: {db.identifier}</span>
 									<span>Engine: {db.engine}</span>
 									<span>Engine Version:{db.engine_version}</span>
 									<div class="flex flex-row gap-2 items-center">
 										<span>Proxy:</span>
 										<DatabaseCell database={db} />
 									</div>
+									<span>Subnet: {db.subnet_name}</span>
 								</div>
 							{/each}
 						</div>

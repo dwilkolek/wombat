@@ -35,6 +35,7 @@ impl RdsResolver {
     fn migrate(conn: &rusqlite::Connection) {
         let version = cache_db::get_cache_version(conn, CACHE_NAME);
         info!("Version {}", &version);
+
         if version < 1 {
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS databases(
@@ -51,6 +52,25 @@ impl RdsResolver {
             )
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 1);
+            clear_databases(conn);
+        }
+        if version < 2 {
+            conn.execute(
+                "ALTER TABLE databases ADD COLUMN identifier TEXT DEFAULT ''",
+                [],
+            )
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 2);
+            clear_databases(conn);
+        }
+        if version < 3 {
+            conn.execute(
+                "ALTER TABLE databases ADD COLUMN subnet_name TEXT DEFAULT ''",
+                [],
+            )
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 3);
+            clear_databases(conn);
         }
     }
 
@@ -114,7 +134,7 @@ impl RdsResolver {
 
 fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
     log::info!("reading rds instances from cache");
-    let mut stmt = match conn.prepare("SELECT arn, name, engine, engine_version, endpoint, environment_tag, env, appname_tag FROM databases;") {
+    let mut stmt = match conn.prepare("SELECT arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag FROM databases;") {
         Ok(s) => s,
         Err(e) => {
             log::error!("reading rds instances from cache failed, reason: {e}");
@@ -124,19 +144,22 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
     let rows = stmt.query_map([], |row| {
         let arn: String = row.get(0)?;
         let name: String = row.get(1)?;
-        let engine: String = row.get(2)?;
-        let engine_version: String = row.get(3)?;
-        let endpoint: aws::Endpoint = serde_json::from_str(&row.get::<usize, String>(4)?).unwrap();
-        let environment_tag: String = row.get(5)?;
-        let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(6)?).unwrap();
-        let appname_tag: String = row.get(7)?;
+        let identifier: String = row.get(2)?;
+        let engine: String = row.get(3)?;
+        let engine_version: String = row.get(4)?;
+        let endpoint: aws::Endpoint = serde_json::from_str(&row.get::<usize, String>(5)?).unwrap();
+        let subnet_name: String = row.get(6)?;
+        let environment_tag: String = row.get(7)?;
+        let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(8)?).unwrap();
+        let appname_tag: String = row.get(9)?;
         Ok(aws::RdsInstance {
             arn,
-            normalized_name: name.replace("-migrated", ""),
+            identifier,
             name,
             engine,
             engine_version,
             endpoint,
+            subnet_name,
             environment_tag,
             env,
             appname_tag,
@@ -164,13 +187,15 @@ fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) 
 
     for db in databases.iter() {
         conn.execute(
-            "INSERT INTO databases(arn, name, engine, engine_version, endpoint, environment_tag, env, appname_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO databases(arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rusqlite::params![
                 db.arn.clone(),
                 db.name.clone(),
+                db.identifier.clone(),
                 db.engine.clone(),
                 db.engine_version.clone(),
                 serde_json::to_string(&db.endpoint).unwrap(),
+                db.subnet_name.clone(),
                 db.environment_tag.clone(),
                 serde_json::to_string(&db.env).unwrap(),
                 db.appname_tag.clone()
