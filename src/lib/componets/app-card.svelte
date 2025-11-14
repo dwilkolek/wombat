@@ -31,7 +31,7 @@
 
 {#if displayConfig.favorite == null || isFavourite === displayConfig.favorite}
 	<div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
-		<div class="flex gap-2 flex-col justify-around">
+		<div class="flex gap-2 flex-col justify-between">
 			<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
 				<button
 					class="text-xs"
@@ -113,28 +113,24 @@
 
 										<div class="flex flex-row items-center gap-1 px-1">
 											<ServiceCell {service} />
-											<div class="flex gap-2 justify-between items-center grow">
-												<div
-													class="flex flex-col tooltip tooltip-left"
-													data-tip={`Deployed ${
-														service.version.length < 18
-															? service.version
-															: service.version.substring(0, 15) + '...'
-													} at: ${
-														service.task_registered_at
-															? format(service.task_registered_at, 'yyyy-MM-dd HH:mm:ss')
-															: ''
-													}`}
-												>
-													{service.version.length < 18
+											<DeployOrRestartServiceBtn {service} />
+											<RemoveNonPlatformTaskDefinitionsBtn {service} />
+											<div
+												class="flex flex-col tooltip tooltip-left truncate max-w-3/5 min-w-5"
+												data-tip={`Deployed ${
+													service.version.length < 18
 														? service.version
-														: service.version.substring(0, 15) + '...'}
-												</div>
-												<DeployOrRestartServiceBtn {service} />
-												<RemoveNonPlatformTaskDefinitionsBtn {service} />
-												<AppCardHr {task} />
-												<ServiceTaskStatus {task} {service} />
+														: service.version.substring(0, 15) + '...'
+												} at: ${
+													service.task_registered_at
+														? format(service.task_registered_at, 'yyyy-MM-dd HH:mm:ss')
+														: ''
+												}`}
+											>
+												{service.version}
 											</div>
+											<AppCardHr {task} />
+											<ServiceTaskStatus {task} {service} />
 										</div>
 									{/each}
 									{#each value.services.filter((service) => service.error) as service (service.arn)}
@@ -147,14 +143,12 @@
 										{@const task = $taskStore.find((task) => task.arn == db.arn)}
 										<div class="flex flex-row items-center gap-1 px-1">
 											<DatabaseCell database={db} />
-											<div class="flex gap-2 justify-between items-center grow">
-												<span class="truncate">
-													{db.identifier}
-													{db.engine_version}
-												</span>
-												<AppCardHr {task} />
-												<DbTaskStatus {task} {db} />
-											</div>
+											<span class="truncate shrink max-w-3/5 min-w-5">
+												{db.identifier}
+												{db.engine_version}
+											</span>
+											<AppCardHr {task} />
+											<DbTaskStatus {task} {db} />
 										</div>
 									{/each}
 								{/if}

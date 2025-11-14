@@ -118,14 +118,17 @@ export type RdsInstance = {
 	arn: string;
 	environment_tag: string;
 	appname_tag: string;
+	cdk_stack_id?: string | null;
+	master_username?: string | null;
 };
 
 export type DatabaseCredentials = {
+	arn: string;
 	dbname: string;
 	password: string;
 	username: string;
 	auto_rotated: boolean;
-	last_changed: any;
+	last_changed: string;
 };
 
 export type MonitoringConfig = {

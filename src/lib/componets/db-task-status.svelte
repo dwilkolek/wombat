@@ -69,7 +69,7 @@
 			class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
 			onclick={() => dialog?.close()}>✕</button
 		>
-		<h3 class="text-lg font-bold">Open Dbeaver console</h3>
+		<h3 class="text-lg font-bold">Open Dbeaver console to {db.identifier}</h3>
 		<p class="py-4">
 			All connections are opened with <span class="font-mono text-warning">autoCommit=false</span>.
 			<br />

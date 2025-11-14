@@ -163,7 +163,6 @@ export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 			return 'Get RDS secret action disabled';
 		}
 		if (!stores[1].infraProfiles.some(({ app, env }) => app == rds.appname_tag && env == rds.env)) {
-			console.log(rds);
 			return `Missing infra profile: ${rds.appname_tag}`;
 		}
 		if (AwsEnv.PROD === rds.env && !rdsProdActions) {

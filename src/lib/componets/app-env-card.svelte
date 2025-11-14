@@ -44,6 +44,7 @@
 								<div class="flex flex-col">
 									<h5>ARN: {db.arn}</h5>
 									<span>Identifier: {db.identifier}</span>
+									<span>Database name: {db.name}</span>
 									<span>Engine: {db.engine}</span>
 									<span>Engine Version:{db.engine_version}</span>
 									<div class="flex flex-row gap-2 items-center">
@@ -51,6 +52,9 @@
 										<DatabaseCell database={db} />
 									</div>
 									<span>Subnet: {db.subnet_name}</span>
+									<span>Cloudformation stack id: {db.cdk_stack_id}</span>
+									<span>AppName tag: {db.appname_tag}</span>
+									<span>Master username: {db.master_username}</span>
 								</div>
 							{/each}
 						</div>

@@ -57,6 +57,42 @@ pub struct RdsInstance {
     pub subnet_name: String,
     pub env: Env,
     pub appname_tag: String,
+    pub cdk_stack_id: Option<String>,
+    pub master_username: Option<String>,
+}
+impl std::cmp::Eq for RdsInstance {}
+impl std::cmp::PartialEq for RdsInstance {
+    fn eq(&self, other: &Self) -> bool {
+        self.arn == other.arn
+    }
+}
+impl std::cmp::PartialOrd for RdsInstance {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl std::cmp::Ord for RdsInstance {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let other_key = format!(
+            "{}/{}",
+            other
+                .cdk_stack_id
+                .as_ref()
+                .cloned()
+                .unwrap_or("".to_string()),
+            &other.identifier
+        );
+        let self_key = format!(
+            "{}/{}",
+            self.cdk_stack_id
+                .as_ref()
+                .cloned()
+                .unwrap_or("".to_string()),
+            &self.identifier
+        );
+
+        self_key.cmp(&other_key)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -73,6 +109,7 @@ pub struct DbSecretDTO {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DbSecret {
+    pub arn: String,
     pub dbname: String,
     pub password: String,
     pub username: String,
@@ -631,46 +668,16 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
 
 pub async fn db_secret(
     config: &aws_config::SdkConfig,
-    name: &str,
-    env: &Env,
+    rds: &RdsInstance,
 ) -> Result<DbSecret, CommandError> {
-    let mut possible_secrets = Vec::new();
-    if name.contains("-migrated") {
-        possible_secrets.push(format!(
-            "{}-{}/db-credentials",
-            name.replace("-migrated", ""),
-            env
-        ));
-        possible_secrets.push(format!(
-            "{}-{}/db_credentials",
-            name.replace("-migrated", ""),
-            env
-        ));
-        possible_secrets.push(format!(
-            "{}-{}/spring-datasource-password",
-            name.replace("-migrated", ""),
-            env
-        ));
-        possible_secrets.push(format!(
-            "{}-{}/datasource-password",
-            name.replace("-migrated", ""),
-            env
-        ));
-    }
-    // TODO: figure out which secret belongs to which database
-    possible_secrets.push(format!("{name}-{env}/db-credentials"));
-    possible_secrets.push(format!("{name}-{env}/db_credentials"));
-    possible_secrets.push(format!("{name}-{env}/spring-datasource-password"));
-    possible_secrets.push(format!("{name}-{env}/datasource-password"));
-
     let secret_client = secretsmanager::Client::new(config);
-
-    for secret in possible_secrets {
+    for secret in get_possible_secret_names_for_prefix(format!("{}-{}", rds.appname_tag, rds.env)) {
         info!("Looking for db credentials by name: {secret}");
         let filter = secretsmanager::types::Filter::builder()
             .key("name".into())
             .values(&secret)
             .build();
+
         let secret_arn = secret_client.list_secrets().filters(filter).send().await;
         if let Err(err) = secret_arn {
             let error_str = err
@@ -678,7 +685,10 @@ pub async fn db_secret(
                 .map(|s| s.to_string())
                 .unwrap_or(err.to_string());
             warn!("failed to fetch secret, reason: {error_str}");
-            return Err(CommandError::new("db_secret", "Auth error?"));
+            return Err(CommandError::new(
+                "db_secret",
+                format!("Fetch error: {error_str}"),
+            ));
         }
         let secret_arn = secret_arn.expect("Failed to fetch!");
 
@@ -697,6 +707,25 @@ pub async fn db_secret(
                 .secret_id(secret_arn)
                 .send()
                 .await;
+            // Check if the secret has the matching CloudFormation stack tag
+            let secret_cdk_stack_id = secret_details
+                .as_ref()
+                .map(|sd| {
+                    sd.tags()
+                        .iter()
+                        .find(|tag| tag.key() == Some("aws:cloudformation:stack-id"))
+                        .and_then(|tag| tag.value())
+                })
+                .unwrap_or_default();
+
+            if secret_cdk_stack_id != rds.cdk_stack_id.as_deref() {
+                info!(
+                    "Secret {} does not have matching CloudFormation stack tag, skipping",
+                    secret_arn
+                );
+                continue;
+            }
+
             let rotation_enabled = secret_details
                 .as_ref()
                 .map(|op| op.rotation_enabled().unwrap_or_default())
@@ -719,44 +748,25 @@ pub async fn db_secret(
                 return Err(CommandError::new("db_secret", "Access denied"));
             }
             let secret = secret.unwrap_or_log();
-
-            let secret = secret.secret_string().expect("There should be a secret");
-            let secret =
-                serde_json::from_str::<DbSecretDTO>(secret).expect("Deserialzied DbSecret");
+            let secret_str = secret.secret_string().expect("There should be a secret");
+            let secret_value =
+                serde_json::from_str::<DbSecretDTO>(secret_str).expect("Deserialzied DbSecret");
 
             return Ok(DbSecret {
-                dbname: secret.dbname,
-                password: secret.password,
-                username: secret.username,
+                arn: secret.arn.unwrap(),
+                dbname: secret_value.dbname,
+                password: secret_value.password,
+                username: secret_value.username,
                 auto_rotated: rotation_enabled,
                 last_changed: last_secret_change,
             });
         }
     }
 
-    let mut possible_secrets = Vec::new();
-    if name.contains("-migrated") {
-        possible_secrets.push(format!(
-            "/config/{}_{}/db-credentials",
-            name.replace("-migrated", ""),
-            env
-        ));
-        possible_secrets.push(format!(
-            "/config/{}_{}/spring-datasource-password",
-            name.replace("-migrated", ""),
-            env
-        ));
-        possible_secrets.push(format!(
-            "/config/{}_{}/datasource-password",
-            name.replace("-migrated", ""),
-            env
-        ));
-    }
-    possible_secrets.push(format!("/config/{name}_{env}/db-credentials"));
-    possible_secrets.push(format!("/config/{name}_{env}/spring-datasource-password"));
-    possible_secrets.push(format!("/config/{name}_{env}/datasource-password"));
     let ssm_client = ssm::Client::new(config);
-    for secret in possible_secrets {
+    for secret in
+        get_possible_secret_names_for_prefix(format!("/config/{}_{}", rds.appname_tag, rds.env))
+    {
         let param = ssm_client
             .get_parameter()
             .name(&secret)
@@ -772,9 +782,14 @@ pub async fn db_secret(
                     .and_then(DateTime::from_timestamp_millis)
                     .unwrap_or_else(y2000);
                 return Ok(DbSecret {
-                    dbname: name.to_owned(),
+                    arn: param.arn.as_ref().unwrap_or_log().to_owned(),
+                    dbname: rds.name.clone(),
                     password: param.value().unwrap_or_log().to_owned(),
-                    username: name.to_owned(),
+                    username: rds
+                        .master_username
+                        .as_deref()
+                        .unwrap_or("postgres")
+                        .to_owned(),
                     auto_rotated: false,
                     last_changed: last_modified,
                 });
@@ -783,6 +798,15 @@ pub async fn db_secret(
     }
 
     Err(CommandError::new("db_secret", "No secret found"))
+}
+
+fn get_possible_secret_names_for_prefix(prefix: String) -> Vec<String> {
+    vec![
+        format!("{prefix}/db_credentials"),
+        format!("{prefix}/db-credentials"),
+        format!("{prefix}/spring-datasource-password"),
+        format!("{prefix}/datasource-password"),
+    ]
 }
 
 pub async fn get_secret(
@@ -812,7 +836,6 @@ pub async fn get_secret(
 pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
     let mut there_is_more = true;
     let mut marker = None;
-    let name_regex = Regex::new(".*(play|lab|dev|demo|prod)-(.*)").unwrap_or_log();
     let rds_client = rds::Client::new(config);
     let mut databases = vec![];
     while there_is_more {
@@ -829,20 +852,11 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
         rdses.iter().for_each(|rds| {
             if rds.db_name().is_some() {
                 let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
-                let name = name_regex
-                    .captures(&db_instance_arn)
-                    .and_then(|c| c.get(2))
-                    .map(|c| c.as_str().to_owned())
-                    .unwrap_or(
-                        db_instance_arn
-                            .split(':')
-                            .next_back()
-                            .unwrap_or_log()
-                            .to_owned(),
-                    );
+                let name = rds.db_name().unwrap_or("postgres").to_owned();
                 let tags = rds.tag_list();
                 let mut appname_tag = String::from("");
                 let mut environment_tag = String::from("");
+                let mut cdk_stack_id = None;
                 let endpoint = rds
                     .endpoint()
                     .map(|e| Endpoint {
@@ -865,6 +879,9 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                             .clone_into(&mut environment_tag);
                         env = Env::from_exact(&environment_tag);
                     }
+                    if t.key().unwrap_or_log() == "aws:cloudformation:stack-id" {
+                        cdk_stack_id = t.value().map(|t| t.to_owned())
+                    }
                 }
 
                 let rds_identifier = rds.db_instance_identifier().unwrap_or_default().to_owned();
@@ -873,6 +890,8 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     .and_then(|s| s.db_subnet_group_name())
                     .unwrap_or_default()
                     .to_owned();
+
+                info!("DB USER {appname_tag} -> {:?}", rds.master_username());
 
                 let db = RdsInstance {
                     arn: db_instance_arn,
@@ -885,6 +904,8 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     environment_tag,
                     subnet_name,
                     env: env.clone(),
+                    cdk_stack_id,
+                    master_username: rds.master_username().map(|u| u.to_owned()),
                 };
                 databases.push(db)
             }
@@ -1063,11 +1084,7 @@ pub async fn services(config: &aws_config::SdkConfig, cluster: &Cluster) -> Vec<
         has_more = next_token.is_some();
 
         services_resp.service_arns().iter().for_each(|service_arn| {
-            let service_name = service_arn
-                .split('/')
-                .next_back()
-                .unwrap_or_log()
-                .to_owned();
+            let service_name = arn_to_name(service_arn);
             let env = cluster.env.clone();
             let td_family = format!(
                 "{}-{}-{}",

@@ -72,6 +72,18 @@ impl RdsResolver {
             cache_db::set_cache_version(conn, CACHE_NAME, 3);
             clear_databases(conn);
         }
+        if version < 4 {
+            conn.execute("ALTER TABLE databases ADD COLUMN cdk_stack_id TEXT", [])
+                .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 4);
+            clear_databases(conn);
+        }
+        if version < 5 {
+            conn.execute("ALTER TABLE databases ADD COLUMN master_username TEXT", [])
+                .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 5);
+            clear_databases(conn);
+        }
     }
 
     pub async fn refresh(&mut self) -> Vec<aws::RdsInstance> {
@@ -134,7 +146,7 @@ impl RdsResolver {
 
 fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
     log::info!("reading rds instances from cache");
-    let mut stmt = match conn.prepare("SELECT arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag FROM databases;") {
+    let mut stmt = match conn.prepare("SELECT arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, master_username FROM databases;") {
         Ok(s) => s,
         Err(e) => {
             log::error!("reading rds instances from cache failed, reason: {e}");
@@ -152,6 +164,8 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
         let environment_tag: String = row.get(7)?;
         let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(8)?).unwrap();
         let appname_tag: String = row.get(9)?;
+        let cdk_stack_id: Option<String> = row.get(10).ok();
+        let master_username: Option<String> = row.get(11).ok();
         Ok(aws::RdsInstance {
             arn,
             identifier,
@@ -163,6 +177,8 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
             environment_tag,
             env,
             appname_tag,
+            cdk_stack_id,
+            master_username,
         })
     });
     match rows {
@@ -187,7 +203,7 @@ fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) 
 
     for db in databases.iter() {
         conn.execute(
-            "INSERT INTO databases(arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO databases(arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, master_username) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rusqlite::params![
                 db.arn.clone(),
                 db.name.clone(),
@@ -198,7 +214,9 @@ fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) 
                 db.subnet_name.clone(),
                 db.environment_tag.clone(),
                 serde_json::to_string(&db.env).unwrap(),
-                db.appname_tag.clone()
+                db.appname_tag.clone(),
+                db.cdk_stack_id.clone(),
+                db.master_username.clone()
             ],
         ).unwrap();
     }
