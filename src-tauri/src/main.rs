@@ -1305,9 +1305,13 @@ async fn check_dependencies(
 
 #[tauri::command]
 async fn codeartifact_login(
+    app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
 ) -> Result<(), CommandError> {
     let app_ctx = app_state.0.lock().await;
+    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
+        return Err(CommandError::new("codeartifact_login", msg));
+    };
     let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
 
     if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
@@ -1321,7 +1325,21 @@ async fn codeartifact_login(
         }
         match exec_result {
             Err(err) => Err(CommandError::new("codeartifact_login", err.to_string())),
-            Ok(_) => Ok(()),
+            Ok(msg) => {
+                if msg.status.success() {
+                    Ok(())
+                } else {
+                    Err(CommandError::new(
+                        "codeartifact_login",
+                        format!(
+                            "Command failed with exit code {:?}\nStdout: {}\nStderr: {}",
+                            msg.status.code(),
+                            String::from_utf8_lossy(&msg.stdout),
+                            String::from_utf8_lossy(&msg.stderr)
+                        ),
+                    ))
+                }
+            }
         }
     } else {
         Err(CommandError::new(
