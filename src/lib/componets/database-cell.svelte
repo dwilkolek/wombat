@@ -4,6 +4,7 @@
 	import DbSecretBtn from './db-secret-btn.svelte';
 	import DbProxyStartBtn from './db-proxy-start-btn.svelte';
 	import DbProxyStopBtn from './db-proxy-stop-btn.svelte';
+	import DbSelfServiceChip from './db-self-service-chip.svelte';
 	interface Props {
 		database: RdsInstance;
 	}
@@ -19,3 +20,5 @@
 	<DbProxyStopBtn database_arn={database.arn} />
 {/if}
 <DbSecretBtn {database} />
+
+<DbSelfServiceChip {database} />

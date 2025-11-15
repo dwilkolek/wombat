@@ -35,7 +35,10 @@
 	};
 </script>
 
-<div class="tooltip tooltip-left" data-tip={$disabledReason ?? 'Start proxy'}>
+<div
+	class="tooltip tooltip-left"
+	data-tip={$disabledReason ?? `Start proxy ${database.identifier}`}
+>
 	<button
 		data-umami-event="rds_proxy_start"
 		data-umami-event-uid={$userStore.id}

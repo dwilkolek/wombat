@@ -361,12 +361,12 @@ async fn credentials(
 
     let aws_config_provider = aws_config_provider.0.read().await;
     let (_, aws_config) = aws_config_provider
-        .app_config(&db.normalized_name, &db.env)
+        .app_config(&db.appname_tag, &db.env)
         .await
         .expect_or_log("Config doesn't exist");
 
     let secret;
-    let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
+    let found_db_secret = aws::db_secret(&aws_config, &db).await;
     match found_db_secret {
         Ok(found_secret) => {
             secret = Ok(found_secret);
@@ -376,7 +376,7 @@ async fn credentials(
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
+                secret = aws::db_secret(&override_aws_config, &db).await;
             } else {
                 secret = Err(err)
             }
@@ -815,12 +815,13 @@ async fn discover(
             .read_databases()
             .await
             .into_iter()
-            .filter(|db| db.arn.contains(name) && !tracked_names.contains(&arn_to_name(&db.arn)))
+            .filter(|db| db.appname_tag.contains(name) && !tracked_names.contains(&db.appname_tag))
             .collect();
 
-        found_names.extend(found_dbs.into_iter().map(|d| arn_to_name(&d.arn)));
+        found_names.extend(found_dbs.into_iter().map(|d| d.appname_tag.clone()));
     }
 
+    // it uses arn to figure out app name. using tags would be expensive operations to fill cache.
     {
         let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
         let services = ecs_resolver_instance.read_services().await;
@@ -828,8 +829,8 @@ async fn discover(
         found_names.extend(
             services
                 .into_iter()
-                .filter(|s| s.arn.contains(name) && !tracked_names.contains(&arn_to_name(&s.arn)))
-                .map(|service| arn_to_name(&service.arn)),
+                .filter(|s| s.name.contains(name) && !tracked_names.contains(&s.name))
+                .map(|service| service.name.clone()),
         );
     }
 
@@ -954,7 +955,7 @@ async fn start_db_proxy(
 
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
-        .app_config(&db.normalized_name, &db.env)
+        .app_config(&db.appname_tag, &db.env)
         .await
         .expect("Missing sdk_config to start db proxy");
     let region = aws_config_provider.get_region(&aws_profile).await;
@@ -1413,17 +1414,19 @@ async fn open_dbeaver(
         secret: &aws::DbSecret,
         read_only: bool,
     ) -> String {
-        let id = if read_only {
-            format!("{db_name}-R")
-        } else {
-            format!("{db_name}-RW")
-        };
+        let rw_suffix = if read_only { "R" } else { "RW" };
 
-        let name = if read_only {
-            db_name.to_string()
-        } else {
-            format!("{db_name} WRITE")
-        };
+        let id = format!(
+            "{}-{rw_suffix}-{}",
+            db_name,
+            secret.last_changed.format("%Y-%m-%d-%H-%M-%S")
+        );
+        let name = format!(
+            "{} {rw_suffix} {}",
+            db_name,
+            secret.last_changed.format("%Y-%m-%d %H:%M:%S")
+        );
+
         if secret.auto_rotated {
             format!(
                 "driver=postgresql|id={id}|name={name}|prop.readOnly={read_only}|autoCommit=false|openConsole=true|folder=wombat|url=jdbc:postgresql://{host}:{port}/{}?user={}&password={}",
@@ -1453,12 +1456,12 @@ async fn open_dbeaver(
     }
     let aws_config_provider = aws_config_provider.0.read().await;
     let (_, aws_config) = aws_config_provider
-        .app_config(&db.normalized_name, &db.env)
+        .app_config(&db.appname_tag, &db.env)
         .await
         .expect("Missing sdk_config to get secreto for dbBeaver");
 
     let secret;
-    let found_db_secret = aws::db_secret(&aws_config, &db.name, &db.env).await;
+    let found_db_secret = aws::db_secret(&aws_config, &db).await;
     match found_db_secret {
         Ok(found_secret) => {
             secret = Ok(found_secret);
@@ -1468,7 +1471,7 @@ async fn open_dbeaver(
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = aws::db_secret(&override_aws_config, &db.name, &db.env).await;
+                secret = aws::db_secret(&override_aws_config, &db).await;
             } else {
                 return Err(CommandError::new("db_secret", "No secret found"));
             }
