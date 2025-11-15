@@ -68,9 +68,7 @@ export type UserConfig = {
 	known_profiles: string[];
 	dbeaver_path: string | undefined;
 	logs_dir: string;
-	db_proxy_port_map: { [key: string]: EnvPortMap };
-	service_proxy_port_map: { [key: string]: EnvPortMap };
-	lambda_app_proxy_port_map: { [key: string]: EnvPortMap };
+	arn_to_proxy_port_map: EnvPortMap;
 	preferences: { [key: string]: WombatProfilePreferences };
 };
 

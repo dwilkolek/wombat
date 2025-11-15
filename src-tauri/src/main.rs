@@ -635,7 +635,7 @@ async fn find_logs(
                     let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
 
                     let user = user_config.lock().await;
-                    let logs_dir = user.logs_dir.as_ref().unwrap_or_log().clone();
+                    let logs_dir = user.logs_dir.clone();
                     fs::create_dir_all(&logs_dir).unwrap_or_log();
                     let pathbuf =
                         logs_dir.join(format!("{}-{}.log", filename, timestamp.as_millis()));
@@ -794,13 +794,10 @@ async fn discover(
     let tracked_names: HashSet<String>;
     {
         let user_config = &user_config.0.lock().await;
-        let preferences = user_config.preferences.as_ref();
+        let preferences = &user_config.preferences;
         tracked_names = preferences
-            .and_then(|prefereces| {
-                prefereces
-                    .get(&authorized_user.profile)
-                    .map(|preferences| preferences.tracked_names.clone())
-            })
+            .get(&authorized_user.profile)
+            .map(|preferences| preferences.tracked_names.clone())
             .unwrap_or(HashSet::new());
     }
 
@@ -1150,7 +1147,7 @@ async fn start_service_proxy(
 }
 
 #[tauri::command]
-async fn start_user_session_proxy(
+async fn start_cookie_session_proxy(
     address: String,
     env: Env,
     headers: HashMap<String, String>,
@@ -1158,13 +1155,12 @@ async fn start_user_session_proxy(
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<NewTaskParams, CommandError> {
+    let cookie_session_proxy = format!("wombat::cookieSessionProxy::{address}::{env}");
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
-        local_port = user_config.get_user_session_proxy_port(&address);
+        local_port = user_config.get_user_session_proxy_port(&cookie_session_proxy);
     }
-
-    let arn = format!("cookieSessionProxy::{address}::{env}");
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
@@ -1188,10 +1184,10 @@ async fn start_user_session_proxy(
         .lock()
         .await
         .task_handlers
-        .insert(arn.clone(), handle);
+        .insert(cookie_session_proxy.clone(), handle);
 
     info!(
-        "Started cookie session proxy with id={arn} with cookie forom env={env} to {}",
+        "Started cookie session proxy with id={cookie_session_proxy} with cookie forom env={env} to {}",
         &address
     );
 
@@ -1212,12 +1208,12 @@ async fn start_lambda_app_proxy(
     user_config: tauri::State<'_, UserConfigState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<NewTaskParams, CommandError> {
+    let lambda_arn = format!("wombat::lambdaApp::{app}::{env}");
     let local_port;
     {
         let mut user_config = user_config.0.lock().await;
-        local_port = user_config.get_lambda_app_port(&app, &env);
+        local_port = user_config.get_lambda_app_port(&lambda_arn);
     }
-    let lambda_arn = format!("lambdaApp::{app}::{env}");
 
     let mut interceptors: Vec<Box<dyn proxy::ProxyInterceptor>> =
         vec![Box::new(proxy::StaticHeadersInterceptor {
@@ -1697,7 +1693,7 @@ async fn main() {
             available_sso_profiles,
             wombat_aws_profiles,
             start_lambda_app_proxy,
-            start_user_session_proxy,
+            start_cookie_session_proxy,
             browser_extension_health,
             cookie_jar_status,
             codeartifact_login,

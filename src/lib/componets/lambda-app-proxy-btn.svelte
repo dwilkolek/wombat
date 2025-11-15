@@ -8,7 +8,7 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
-	import { getFromList } from '$lib/utils';
+	import { getFromList, lambdaAppArn } from '$lib/utils';
 
 	interface Props {
 		app: string;
@@ -16,11 +16,12 @@
 	}
 
 	let { app, env }: Props = $props();
-	const lambdaArn = `lambdaApp::${app}::${env.toLowerCase()}`;
+	const lambdaArn = lambdaAppArn(app, env);
 	let disabledReason = startLambdaProxyDisabledReason(lambdaArn, env);
-
+	console.log($taskStore, lambdaArn);
 	let port = $derived(
 		$taskStore?.find((t) => {
+			console.log('\t', t.arn, lambdaArn, t.arn === lambdaArn);
 			return t.arn === lambdaArn;
 		})?.port
 	);
@@ -84,7 +85,7 @@
 </script>
 
 {#if !port}
-	<div class="tooltip tooltip-left h-[20px]" data-tip={$disabledReason ?? 'Start proxy'}>
+	<div class="tooltip tooltip-left h-5" data-tip={$disabledReason ?? 'Start proxy'}>
 		<button
 			aria-label="Start proxy"
 			disabled={!!$disabledReason}

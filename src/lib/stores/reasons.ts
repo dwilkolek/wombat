@@ -70,10 +70,10 @@ export function startLambdaProxyDisabledReason(lambdaArn: string, env: AwsEnv) {
 		}
 	);
 }
-export function startUserSessionProxyDisabledReason(address: string) {
-	return derived([featuresStore, taskStore], ([{ userSessionProxy }, taskStore]) => {
-		if (!userSessionProxy) {
-			return 'User session proxy disabled';
+export function startCookieSessionProxyDisabledReason(address: string) {
+	return derived([featuresStore, taskStore], ([{ cookieSessionProxy }, taskStore]) => {
+		if (!cookieSessionProxy) {
+			return 'User cookie proxy disabled';
 		}
 		if (taskStore.some((t) => t.arn == address && t.status == TaskStatus.STARTING)) {
 			return 'Starting...';

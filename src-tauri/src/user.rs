@@ -1,4 +1,4 @@
-use log::{error, info};
+use log::{error, info, warn};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -6,8 +6,14 @@ use std::fs;
 use std::path::PathBuf;
 use tracing_unwrap::OptionExt;
 
-use crate::shared::{arn_to_name, CommandError, Env, TrackedName};
+use crate::shared::{CommandError, Env, TrackedName};
+use std::ops::Range;
 use uuid::Uuid;
+
+const RDS_PORT_RANGE: Range<u16> = 52000..52100;
+const ECS_PORT_RANGE: Range<u16> = 53000..53100;
+const LAMBDA_PORT_RANGE: Range<u16> = 54000..54100;
+const COOKIE_SESSION_PORT_RANGE: Range<u16> = 55000..55100;
 
 pub fn wombat_dir() -> PathBuf {
     home::home_dir().unwrap_or_log().as_path().join(".wombat")
@@ -24,43 +30,44 @@ pub struct UserConfig {
     pub id: Uuid,
     verson: i8,
     last_used_profile: Option<String>,
-    db_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
-    service_proxy_port_map: HashMap<TrackedName, HashMap<Env, u16>>,
-    lambda_app_proxy_port_map: Option<HashMap<TrackedName, HashMap<Env, u16>>>,
-    user_session_proxy_port_map: Option<HashMap<String, u16>>,
+    arn_to_proxy_port_map: Option<HashMap<String, u16>>,
     pub dbeaver_path: Option<String>,
-    pub logs_dir: Option<PathBuf>,
-    pub preferences: Option<HashMap<String, WombatAwsProfilePreferences>>,
+    pub logs_dir: PathBuf,
+    pub preferences: HashMap<String, WombatAwsProfilePreferences>,
 }
 
 impl UserConfig {
     pub fn default() -> UserConfig {
-        let config_file = UserConfig::config_path();
+        let config_file_latest = UserConfig::config_path_latest();
+        let config_file_v4 = UserConfig::config_path_v4();
         let config_file_v3 = UserConfig::config_path_v3();
-        if !config_file.exists() && config_file_v3.exists() {
-            match fs::copy(config_file_v3, &config_file) {
-                Ok(_) => info!("created copy of v3 config file"),
+        if config_file_v3.exists() {
+            let v3_remove_result = fs::remove_file(config_file_v3);
+            match v3_remove_result {
+                Ok(_) => info!("Deleted v3 user config"),
+                Err(msg) => warn!("Failed to delete v3 user config, reason={}", msg),
+            }
+        }
+
+        if !config_file_latest.exists() && config_file_v4.exists() {
+            match fs::copy(config_file_v4, &config_file_latest) {
+                Ok(_) => info!("created copy of v4 config file"),
                 Err(e) => error!(
-                    "failed to create copy of v3 config file to use as base for v4, reason: {e}"
+                    "failed to create copy of v4 config file to use as base for v5, reason: {e}"
                 ),
             };
         }
 
-        let mut user_config = match std::fs::read_to_string(config_file) {
+        let mut user_config = match std::fs::read_to_string(config_file_latest) {
             Ok(json) => serde_json::from_str::<UserConfig>(&json).unwrap(),
             Err(_) => UserConfig {
                 id: Uuid::new_v4(),
                 verson: 1,
                 last_used_profile: None,
-
-                db_proxy_port_map: HashMap::new(),
-                service_proxy_port_map: HashMap::new(),
-                lambda_app_proxy_port_map: Some(HashMap::new()),
-                user_session_proxy_port_map: Some(HashMap::new()),
-
+                arn_to_proxy_port_map: Some(HashMap::new()),
                 dbeaver_path: None,
-                logs_dir: Some(UserConfig::logs_path()),
-                preferences: Some(HashMap::new()),
+                logs_dir: UserConfig::logs_path(),
+                preferences: HashMap::new(),
             },
         };
 
@@ -68,17 +75,9 @@ impl UserConfig {
             user_config.dbeaver_path =
                 UserConfig::recheck_dbeaver_path(user_config.dbeaver_path.clone());
         }
-        if user_config.logs_dir.is_none() {
-            user_config.logs_dir = Some(UserConfig::logs_path());
-        }
-        if user_config.preferences.is_none() {
-            user_config.preferences = Some(HashMap::new());
-        }
-        if user_config.lambda_app_proxy_port_map.is_none() {
-            user_config.lambda_app_proxy_port_map = Some(HashMap::new());
-        }
-        if user_config.user_session_proxy_port_map.is_none() {
-            user_config.user_session_proxy_port_map = Some(HashMap::new());
+
+        if user_config.arn_to_proxy_port_map.is_none() {
+            user_config.arn_to_proxy_port_map = Some(HashMap::new());
         }
 
         user_config
@@ -86,8 +85,11 @@ impl UserConfig {
     fn config_path_v3() -> PathBuf {
         wombat_dir().join("config.json")
     }
-    fn config_path() -> PathBuf {
+    fn config_path_v4() -> PathBuf {
         wombat_dir().join("config-v4.json")
+    }
+    fn config_path_latest() -> PathBuf {
+        wombat_dir().join("config-v5.json")
     }
 
     fn logs_path() -> PathBuf {
@@ -115,46 +117,35 @@ impl UserConfig {
         profile_name: &str,
         envs: Vec<Env>,
     ) -> Result<UserConfig, CommandError> {
-        let preferences = self.preferences.as_mut().unwrap_or_log();
+        let preferences = &mut self.preferences;
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
         preference.preffered_environments = envs;
         self.save();
         Ok(self.clone())
     }
 
-    fn get_port(
-        map: &mut HashMap<TrackedName, HashMap<Env, u16>>,
-        tracked_name: TrackedName,
-        env: Env,
-        from_port: u16,
-        range: u16,
-    ) -> (u16, bool) {
-        if let Some(mapping) = map.get(&tracked_name) {
-            if let Some(port) = mapping.get(&env) {
-                return (*port, false);
-            }
+    fn get_port(map: &mut HashMap<String, u16>, arn: &str, range: Range<u16>) -> (u16, bool) {
+        if let Some(port) = map.get(arn) {
+            return (*port, false);
         }
 
-        let used_ports: Vec<u16> = map.values().flat_map(|e| e.values()).copied().collect();
+        let used_ports: Vec<u16> = map.values().copied().collect();
 
-        let mut possible_port = rand::rng().random_range(from_port..from_port + range);
+        let mut possible_port = rand::rng().random_range(range.clone());
         while used_ports.contains(&possible_port) {
-            possible_port = rand::rng().random_range(from_port..from_port + range);
-        }
-        if !map.contains_key(&tracked_name) {
-            map.insert(tracked_name.clone(), HashMap::new());
-        }
-        if let Some(mapping) = map.get_mut(&tracked_name) {
-            mapping.insert(env, possible_port);
+            possible_port = rand::rng().random_range(range.clone());
         }
 
+        map.insert(arn.to_owned(), possible_port);
         (possible_port, true)
     }
 
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
-        let env = Env::from_any(db_arn);
-        let tracked_name = arn_to_name(db_arn);
-        let port = Self::get_port(&mut self.db_proxy_port_map, tracked_name, env, 52000, 100);
+        let port = Self::get_port(
+            self.arn_to_proxy_port_map.as_mut().unwrap_or_log(),
+            db_arn,
+            RDS_PORT_RANGE,
+        );
         if port.1 {
             self.save()
         }
@@ -162,14 +153,10 @@ impl UserConfig {
     }
 
     pub fn get_service_port(&mut self, ecs_arn: &str) -> u16 {
-        let env = Env::from_any(ecs_arn);
-        let tracked_name = arn_to_name(ecs_arn);
         let port = Self::get_port(
-            &mut self.service_proxy_port_map,
-            tracked_name,
-            env,
-            53000,
-            100,
+            self.arn_to_proxy_port_map.as_mut().unwrap_or_log(),
+            ecs_arn,
+            ECS_PORT_RANGE,
         );
         if port.1 {
             self.save()
@@ -177,13 +164,11 @@ impl UserConfig {
         port.0
     }
 
-    pub fn get_lambda_app_port(&mut self, app: &str, env: &Env) -> u16 {
+    pub fn get_lambda_app_port(&mut self, lambda_arn: &str) -> u16 {
         let port = Self::get_port(
-            self.lambda_app_proxy_port_map.as_mut().unwrap(),
-            app.to_owned(),
-            env.to_owned(),
-            54000,
-            100,
+            self.arn_to_proxy_port_map.as_mut().unwrap_or_log(),
+            lambda_arn,
+            LAMBDA_PORT_RANGE,
         );
         if port.1 {
             self.save()
@@ -191,25 +176,16 @@ impl UserConfig {
         port.0
     }
 
-    pub fn get_user_session_proxy_port(&mut self, address: &str) -> u16 {
-        let from_port = 55000;
-        let range = 100;
-        let map = self.user_session_proxy_port_map.as_mut().unwrap();
-        if let Some(port) = map.get(address) {
-            return *port;
+    pub fn get_user_session_proxy_port(&mut self, user_session_arn: &str) -> u16 {
+        let port = Self::get_port(
+            self.arn_to_proxy_port_map.as_mut().unwrap_or_log(),
+            user_session_arn,
+            COOKIE_SESSION_PORT_RANGE,
+        );
+        if port.1 {
+            self.save()
         }
-
-        let used_ports: Vec<u16> = map.values().copied().collect();
-
-        let mut possible_port = rand::rng().random_range(from_port..from_port + range);
-        while used_ports.contains(&possible_port) {
-            possible_port = rand::rng().random_range(from_port..from_port + range);
-        }
-
-        map.insert(address.to_owned(), possible_port);
-        self.save();
-
-        possible_port
+        port.0
     }
 
     pub fn set_dbeaver_path(&mut self, dbeaver_path: &str) -> Result<UserConfig, CommandError> {
@@ -230,7 +206,7 @@ impl UserConfig {
                 format!("Invalid path! {msg}"),
             )),
             Ok(()) => {
-                self.logs_dir = Some(PathBuf::from(logs_dir_path.to_owned()));
+                self.logs_dir = PathBuf::from(logs_dir_path.to_owned());
                 self.save();
                 Ok(self.clone())
             }
@@ -240,7 +216,7 @@ impl UserConfig {
     pub fn use_profile(&mut self, profile: &str, envs: Vec<Env>, tracked_names: HashSet<String>) {
         info!("Using profile: {profile}, envs={envs:?}, tracked_names={tracked_names:?}");
         self.last_used_profile = Some(profile.to_owned());
-        let preferences = self.preferences.as_mut().unwrap_or_log();
+        let preferences = &mut self.preferences;
         if !preferences.contains_key(profile) {
             preferences.insert(
                 profile.to_owned(),
@@ -259,7 +235,7 @@ impl UserConfig {
         tracked_name: TrackedName,
     ) -> Result<UserConfig, CommandError> {
         info!("Favorite {} ", &tracked_name);
-        let preferences = self.preferences.as_mut().unwrap_or_log();
+        let preferences = &mut self.preferences;
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
         if !preference.tracked_names.remove(&tracked_name) {
             info!("Favorite Add {} ", &tracked_name);
@@ -270,9 +246,9 @@ impl UserConfig {
     }
 
     fn save(&self) {
-        info!("Storing to: {:?}", UserConfig::config_path());
+        info!("Storing to: {:?}", UserConfig::config_path_latest());
         std::fs::write(
-            UserConfig::config_path(),
+            UserConfig::config_path_latest(),
             serde_json::to_string_pretty(self).expect("Failed to serialize user config"),
         )
         .expect("Failed to save user config");
