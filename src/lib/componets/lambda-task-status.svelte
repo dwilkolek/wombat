@@ -2,6 +2,7 @@
 	import { TaskStatus, type Task } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import type { AwsEnv } from '$lib/types';
+	import { lambdaAppArn } from '$lib/utils';
 	import { open } from '@tauri-apps/plugin-shell';
 
 	interface Props {
@@ -11,7 +12,7 @@
 	}
 
 	let { task, app, env }: Props = $props();
-	let port = $derived($userStore.lambda_app_proxy_port_map?.[app]?.[env] ?? '?');
+	let port = $derived($userStore.arn_to_proxy_port_map[lambdaAppArn(app, env)] ?? '?');
 </script>
 
 {#if task}
@@ -32,7 +33,7 @@
 				{task.port}</button
 			>
 		{:else}
-			<span class="text-sm text-amber-300/[.6] animate-pulse">{port}</span>
+			<span class="text-sm text-amber-300/60 animate-pulse">{port}</span>
 		{/if}
 	</div>
 {:else}

@@ -18,7 +18,7 @@ const featureMap: { [key: string]: string } = {
 	'rds-prod-actions': 'rdsProdActions',
 	'lambda-prod-actions': 'lambdaProdActions',
 	'tasks-page': 'tasksPage',
-	'user-session-proxy': 'userSessionProxy',
+	'cookie-session-proxy': 'cookieSessionProxy',
 	'rds-prod-conn-write': 'rdsProdConnWrite',
 	'rds-conn-write': 'rdsConnWrite'
 };
@@ -41,7 +41,7 @@ const createFeatureStore = () => {
 		rdsProdActions: false,
 		lambdaProdActions: false,
 		tasksPage: false,
-		userSessionProxy: false,
+		cookieSessionProxy: false,
 		rdsProdConnWrite: false,
 		rdsConnWrite: false
 	};

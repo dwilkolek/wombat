@@ -1,53 +1,55 @@
 <script lang="ts">
 	import { ENVIRONMENTS } from '$lib/stores/env-store';
-	import { startUserSessionProxyDisabledReason } from '$lib/stores/reasons';
+	import { startCookieSessionProxyDisabledReason } from '$lib/stores/reasons';
 	import { taskStore } from '$lib/stores/task-store';
 	import { userStore } from '$lib/stores/user-store';
 	import { AwsEnv } from '$lib/types';
+	import { cookieSessionProxyArn } from '$lib/utils';
 	import { invoke } from '@tauri-apps/api/core';
 
 	let app = $state('');
 
 	let env = $state(ENVIRONMENTS.at(0) ?? AwsEnv.DEV);
-	function buildArn(address: string) {
-		return `cookieSessionProxy::${address}::${env.toLowerCase()}`;
-	}
+
 	let address = $derived(
 		`https://${app}${env == AwsEnv.PROD ? '' : '.' + env.toLowerCase()}.services.technipfmc.com`
 	);
-	let reason = $derived(startUserSessionProxyDisabledReason(address));
+	let reason = $derived(startCookieSessionProxyDisabledReason(address));
 </script>
 
 <form
 	class="flex flex-row gap-2 mb-2"
 	onsubmit={async (e) => {
 		e.preventDefault();
-		await taskStore.startTask({ name: address, arn: buildArn(address) }, async () => {
-			console.log({
-				address,
-				env,
-				headers: [
-					{
-						name: 'Origin',
-						encodeBase64: false,
-						value: address + '/'
-					},
-					{
-						name: 'Referer',
-						encodeBase64: false,
-						value: address
+		await taskStore.startTask(
+			{ name: address, arn: cookieSessionProxyArn(address, env) },
+			async () => {
+				console.log({
+					address,
+					env,
+					headers: [
+						{
+							name: 'Origin',
+							encodeBase64: false,
+							value: address + '/'
+						},
+						{
+							name: 'Referer',
+							encodeBase64: false,
+							value: address
+						}
+					]
+				});
+				return invoke('start_cookie_session_proxy', {
+					address,
+					env,
+					headers: {
+						['Origin']: address + '/',
+						['Referer']: address
 					}
-				]
-			});
-			return invoke('start_user_session_proxy', {
-				address,
-				env,
-				headers: {
-					['Origin']: address + '/',
-					['Referer']: address
-				}
-			});
-		});
+				});
+			}
+		);
 		app = '';
 	}}
 >

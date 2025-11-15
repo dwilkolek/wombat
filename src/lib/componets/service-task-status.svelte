@@ -10,7 +10,7 @@
 	}
 
 	let { task, service }: Props = $props();
-	let port = $derived($userStore.service_proxy_port_map?.[service.name]?.[service.env] ?? '?');
+	let port = $derived($userStore.arn_to_proxy_port_map?.[service.arn] ?? '?');
 </script>
 
 {#if task && task.status !== TaskStatus.FAILED}
@@ -31,7 +31,7 @@
 				{task.port}</button
 			>
 		{:else}
-			<span class="text-sm text-amber-300/[.6] animate-pulse">{port}</span>
+			<span class="text-sm text-amber-300/60 animate-pulse">{port}</span>
 		{/if}
 	</div>
 {:else}
