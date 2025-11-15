@@ -1,6 +1,10 @@
 name: 'pr_check'
 on: [pull_request]
 
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   test-tauri:
     strategy:
