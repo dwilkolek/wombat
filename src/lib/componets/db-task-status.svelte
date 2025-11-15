@@ -57,7 +57,7 @@
 			</div>
 		</div>
 	{:else}
-		<span class="text-sm text-amber-300/[.6] animate-pulse">{port}</span>
+		<span class="text-sm text-amber-300/60 animate-pulse">{port}</span>
 	{/if}
 {:else}
 	<span class="text-sm text-gray-600">{port}</span>
@@ -69,7 +69,7 @@
 			class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
 			onclick={() => dialog?.close()}>✕</button
 		>
-		<h3 class="text-lg font-bold">Open Dbeaver console</h3>
+		<h3 class="text-lg font-bold">Open Dbeaver console to {db.identifier}</h3>
 		<p class="py-4">
 			All connections are opened with <span class="font-mono text-warning">autoCommit=false</span>.
 			<br />

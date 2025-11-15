@@ -107,7 +107,7 @@
 			<h1 class="text-5xl font-medium">Hello!</h1>
 			<p class="py-6">Wombat is friendly app that aims to make your life less miserable 😎</p>
 		</div>
-		<div class="card flex-shrink-0 w-full shadow-2xl bg-base-100">
+		<div class="card shrink-0 w-full shadow-2xl bg-base-100">
 			<div class="card-body">
 				<form
 					onsubmit={async (e) => {

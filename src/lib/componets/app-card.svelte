@@ -31,7 +31,7 @@
 
 {#if displayConfig.favorite == null || isFavourite === displayConfig.favorite}
 	<div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
-		<div class="flex gap-2 flex-col justify-around">
+		<div class="flex gap-2 flex-col justify-between">
 			<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
 				<button
 					class="text-xs"
@@ -49,11 +49,6 @@
 					</a>
 				</span>
 			</div>
-			<!-- <div class="flex gap-2">
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
-				  </svg>
-			</div> -->
 			{#if $details}
 				<div class="place-content-end text-xs text-slate-500 font-italic">
 					<div class="flex gap-2">
@@ -113,28 +108,24 @@
 
 										<div class="flex flex-row items-center gap-1 px-1">
 											<ServiceCell {service} />
-											<div class="flex gap-2 justify-between items-center grow">
-												<div
-													class="flex flex-col tooltip tooltip-left"
-													data-tip={`Deployed ${
-														service.version.length < 18
-															? service.version
-															: service.version.substring(0, 15) + '...'
-													} at: ${
-														service.task_registered_at
-															? format(service.task_registered_at, 'yyyy-MM-dd HH:mm:ss')
-															: ''
-													}`}
-												>
-													{service.version.length < 18
+											<DeployOrRestartServiceBtn {service} />
+											<RemoveNonPlatformTaskDefinitionsBtn {service} />
+											<div
+												class="flex flex-col tooltip tooltip-left text-sm truncate max-w-3/5 min-w-5"
+												data-tip={`Deployed ${
+													service.version.length < 18
 														? service.version
-														: service.version.substring(0, 15) + '...'}
-												</div>
-												<DeployOrRestartServiceBtn {service} />
-												<RemoveNonPlatformTaskDefinitionsBtn {service} />
-												<AppCardHr {task} />
-												<ServiceTaskStatus {task} {service} />
+														: service.version.substring(0, 15) + '...'
+												} at: ${
+													service.task_registered_at
+														? format(service.task_registered_at, 'yyyy-MM-dd HH:mm:ss')
+														: ''
+												}`}
+											>
+												{service.version}
 											</div>
+											<AppCardHr {task} />
+											<ServiceTaskStatus {task} {service} />
 										</div>
 									{/each}
 									{#each value.services.filter((service) => service.error) as service (service.arn)}
@@ -147,11 +138,11 @@
 										{@const task = $taskStore.find((task) => task.arn == db.arn)}
 										<div class="flex flex-row items-center gap-1 px-1">
 											<DatabaseCell database={db} />
-											<div class="flex gap-2 justify-between items-center grow">
-												<span class="truncate">{db.engine_version}</span>
-												<AppCardHr {task} />
-												<DbTaskStatus {task} {db} />
-											</div>
+											<span class="truncate text-sm shrink max-w-3/5 min-w-5">
+												{db.identifier} | {db.engine_version}
+											</span>
+											<AppCardHr {task} />
+											<DbTaskStatus {task} {db} />
 										</div>
 									{/each}
 								{/if}
