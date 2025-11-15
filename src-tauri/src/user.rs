@@ -1,19 +1,20 @@
+use crate::shared::{CommandError, Env, TrackedName};
 use log::{error, info, warn};
+use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::ops::Range;
 use std::path::PathBuf;
 use tracing_unwrap::OptionExt;
-
-use crate::shared::{CommandError, Env, TrackedName};
-use std::ops::Range;
 use uuid::Uuid;
 
 const RDS_PORT_RANGE: Range<u16> = 52000..52100;
 const ECS_PORT_RANGE: Range<u16> = 53000..53100;
 const LAMBDA_PORT_RANGE: Range<u16> = 54000..54100;
 const COOKIE_SESSION_PORT_RANGE: Range<u16> = 55000..55100;
+const FREE_PORT_RANGE: Range<u16> = 58000..59000;
 
 pub fn wombat_dir() -> PathBuf {
     home::home_dir().unwrap_or_log().as_path().join(".wombat")
@@ -129,15 +130,25 @@ impl UserConfig {
             return (*port, false);
         }
 
-        let used_ports: Vec<u16> = map.values().copied().collect();
+        let mut rng = rand::rng();
+        let range_dist = range.end - range.start;
+        let rotate_count = rng.random_range(0..range_dist);
 
-        let mut possible_port = rand::rng().random_range(range.clone());
-        while used_ports.contains(&possible_port) {
-            possible_port = rand::rng().random_range(range.clone());
+        let used_ports: HashSet<u16> = map.values().copied().collect();
+        let next_assignable_port = range
+            .into_iter()
+            .cycle()
+            .skip(rotate_count.into())
+            .take(range_dist.into())
+            .find(|r| !used_ports.contains(r));
+
+        match next_assignable_port {
+            Some(port) => {
+                map.insert(arn.to_owned(), port);
+                (port, true)
+            }
+            None => (rng.random_range(FREE_PORT_RANGE), false),
         }
-
-        map.insert(arn.to_owned(), possible_port);
-        (possible_port, true)
     }
 
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
