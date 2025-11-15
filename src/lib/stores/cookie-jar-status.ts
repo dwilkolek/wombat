@@ -18,9 +18,9 @@ const createCookieJarStatus = () => {
 			invoke<CookieJarStatus>('cookie_jar_status').then((res) => {
 				state.set(res);
 				if (browserExtensionConnected) {
-					scheduleNext(10000);
+					timeout = scheduleNext(10000);
 				} else {
-					scheduleNext(1000);
+					timeout = scheduleNext(1000);
 				}
 			});
 		}, time);

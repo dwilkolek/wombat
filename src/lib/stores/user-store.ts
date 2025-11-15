@@ -11,9 +11,7 @@ const createUserStore = () => {
 		known_profiles: [],
 		last_used_profile: undefined,
 		logs_dir: '',
-		db_proxy_port_map: {},
-		service_proxy_port_map: {},
-		lambda_app_proxy_port_map: {},
+		arn_to_proxy_port_map: {},
 		preferences: {}
 	});
 	execute<UserConfig>('user_config').then((config) => {
@@ -48,8 +46,8 @@ const createUserStore = () => {
 		set(prepareConfig(config));
 	};
 
-	const savePrefferedEnvs = async (envs: AwsEnv[]) => {
-		const config = await execute<UserConfig>('save_preffered_envs', {
+	const savePreferredEnvs = async (envs: AwsEnv[]) => {
+		const config = await execute<UserConfig>('save_preferred_envs', {
 			envs
 		});
 
@@ -62,7 +60,7 @@ const createUserStore = () => {
 		setDbeaverPath,
 		setLogsDir,
 		favoriteTrackedName,
-		savePrefferedEnvs
+		savePreferredEnvs
 	};
 };
 const prepareConfig = (config: UserConfig) => {
@@ -76,7 +74,7 @@ export const userStore = createUserStore();
 export const activeProfilePreferences = derived([userStore], (stores) => {
 	return (
 		stores[0].preferences[stores[0].last_used_profile ?? ''] ?? {
-			preffered_environments: [],
+			preferred_environments: [],
 			tracked_names: []
 		}
 	);

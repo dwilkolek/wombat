@@ -1,5 +1,5 @@
 <script lang="ts">
-	import UserSessionProxyBtn from '$lib/componets/user-session-proxy-btn.svelte';
+	import CookieSessionProxyBtn from '$lib/componets/cookie-session-proxy-btn.svelte';
 	import { TaskStatus, taskStore } from '$lib/stores/task-store';
 </script>
 
@@ -8,7 +8,7 @@
 	<meta name="description" content="Wombat" />
 </svelte:head>
 <div class="p-2 px-4">
-	<UserSessionProxyBtn />
+	<CookieSessionProxyBtn />
 </div>
 <div class="bg-base-100 flex flex-row justify-between px-2 sticky top-[68px] z-40">
 	<div class="overflow-x-auto w-full">

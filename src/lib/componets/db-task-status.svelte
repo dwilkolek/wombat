@@ -10,7 +10,7 @@
 	}
 
 	let { task, db }: Props = $props();
-	let port = $derived(task?.port ?? $userStore.db_proxy_port_map?.[db.name]?.[db.env] ?? '?');
+	let port = $derived(task?.port ?? $userStore.arn_to_proxy_port_map?.[db.arn] ?? '?');
 
 	let rdsAllowWrites = $derived(
 		db.env === AwsEnv.PROD

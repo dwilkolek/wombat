@@ -200,8 +200,8 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
     if arn.starts_with("arn:aws:rds") {
         return rds_arn_to_name(arn);
     }
-    if arn.starts_with("lambdaApp::") {
-        return arn.split("::").skip(1).take(1).collect();
+    if arn.starts_with("wombat::lambdaApp::") {
+        return arn.split("::").skip(2).take(1).collect();
     }
     format!("unknown!#{arn}")
 }
