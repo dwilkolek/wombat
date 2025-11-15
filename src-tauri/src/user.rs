@@ -28,7 +28,7 @@ pub struct WombatAwsProfilePreferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserConfig {
     pub id: Uuid,
-    verson: i8,
+    version: i8,
     last_used_profile: Option<String>,
     arn_to_proxy_port_map: Option<HashMap<String, u16>>,
     pub dbeaver_path: Option<String>,
@@ -58,8 +58,9 @@ impl UserConfig {
             };
 
             if let Ok(content) = std::fs::read_to_string(&config_file_latest) {
-                let updated_content =
-                    content.replace("\"preffered_environments\"", "\"preferred_environments\"");
+                let updated_content = content
+                    .replace("\"preffered_environments\"", "\"preferred_environments\"")
+                    .replace("\"verson\"", "\"version\"");
                 match std::fs::write(&config_file_latest, updated_content) {
                     Ok(_) => info!("updated v5 contents"),
                     Err(e) => warn!("failed to update v5 contents, reason: {e}"),
@@ -71,7 +72,7 @@ impl UserConfig {
             Ok(json) => serde_json::from_str::<UserConfig>(&json).unwrap(),
             Err(_) => UserConfig {
                 id: Uuid::new_v4(),
-                verson: 1,
+                version: 1,
                 last_used_profile: None,
                 arn_to_proxy_port_map: Some(HashMap::new()),
                 dbeaver_path: None,
