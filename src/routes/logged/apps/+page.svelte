@@ -5,15 +5,15 @@
 	import AppCard from '$lib/componets/app-card.svelte';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 
-	let selectedClusters = $activeProfilePreferences.preffered_environments;
+	let selectedClusters = $derived($activeProfilePreferences.preferred_environments);
 
 	let columnToggleHandler = $derived((env: AwsEnv, e: { currentTarget: { checked: boolean } }) => {
 		if (!e.currentTarget.checked) {
-			userStore.savePrefferedEnvs([
+			userStore.savePreferredEnvs([
 				...selectedClusters.filter((selectedEnv) => env != selectedEnv)
 			]);
 		} else {
-			userStore.savePrefferedEnvs([...selectedClusters, env]);
+			userStore.savePreferredEnvs([...selectedClusters, env]);
 		}
 	});
 

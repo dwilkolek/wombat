@@ -32,7 +32,7 @@
 				<div class="font-medium text-xs flex items-row gap-1 items-center">
 					{#if $cookieJar.cookieHealth[enabled_env] == 'Ok'}
 						<div
-							class="bg-lime-400 h-2 w-2rounded tooltip tooltip-top"
+							class="bg-lime-400 h-2 w-2 rounded tooltip tooltip-top"
 							data-tip="Cookie is fresh, <5min"
 						></div>
 					{/if}

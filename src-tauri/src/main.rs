@@ -296,14 +296,14 @@ async fn set_logs_dir_path(
 }
 
 #[tauri::command]
-async fn save_preffered_envs(
+async fn save_preferred_envs(
     envs: Vec<shared::Env>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<UserConfig, CommandError> {
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
-    user_config.save_preffered_envs(&aws_config_provider.active_wombat_profile.name, envs)
+    user_config.save_preferred_envs(&aws_config_provider.active_wombat_profile.name, envs)
 }
 
 #[tauri::command]
@@ -1187,7 +1187,7 @@ async fn start_cookie_session_proxy(
         .insert(cookie_session_proxy.clone(), handle);
 
     info!(
-        "Started cookie session proxy with id={cookie_session_proxy} with cookie forom env={env} to {}",
+        "Started cookie session proxy with id={cookie_session_proxy} with cookie from env={env} to {}",
         &address
     );
 
@@ -1664,7 +1664,7 @@ async fn main() {
             reload_aws_config,
             set_dbeaver_path,
             set_logs_dir_path,
-            save_preffered_envs,
+            save_preferred_envs,
             login,
             logout,
             clusters,

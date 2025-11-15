@@ -1,6 +1,5 @@
 use crate::shared::{CommandError, Env, TrackedName};
 use log::{error, info, warn};
-use rand::seq::SliceRandom;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -14,7 +13,7 @@ const RDS_PORT_RANGE: Range<u16> = 52000..52100;
 const ECS_PORT_RANGE: Range<u16> = 53000..53100;
 const LAMBDA_PORT_RANGE: Range<u16> = 54000..54100;
 const COOKIE_SESSION_PORT_RANGE: Range<u16> = 55000..55100;
-const FREE_PORT_RANGE: Range<u16> = 58000..59000;
+const FALLBACK_PORT_RANGE: Range<u16> = 58000..59000;
 
 pub fn wombat_dir() -> PathBuf {
     home::home_dir().unwrap_or_log().as_path().join(".wombat")
@@ -23,7 +22,7 @@ pub fn wombat_dir() -> PathBuf {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WombatAwsProfilePreferences {
     pub tracked_names: HashSet<TrackedName>,
-    pub preffered_environments: Vec<Env>,
+    pub preferred_environments: Vec<Env>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -57,9 +56,18 @@ impl UserConfig {
                     "failed to create copy of v4 config file to use as base for v5, reason: {e}"
                 ),
             };
+
+            if let Ok(content) = std::fs::read_to_string(&config_file_latest) {
+                let updated_content =
+                    content.replace("\"preffered_environments\"", "\"preferred_environments\"");
+                match std::fs::write(&config_file_latest, updated_content) {
+                    Ok(_) => info!("updated v5 contents"),
+                    Err(e) => warn!("failed to update v5 contents, reason: {e}"),
+                }
+            };
         }
 
-        let mut user_config = match std::fs::read_to_string(config_file_latest) {
+        let mut user_config = match std::fs::read_to_string(&config_file_latest) {
             Ok(json) => serde_json::from_str::<UserConfig>(&json).unwrap(),
             Err(_) => UserConfig {
                 id: Uuid::new_v4(),
@@ -113,14 +121,14 @@ impl UserConfig {
         None
     }
 
-    pub fn save_preffered_envs(
+    pub fn save_preferred_envs(
         &mut self,
         profile_name: &str,
         envs: Vec<Env>,
     ) -> Result<UserConfig, CommandError> {
         let preferences = &mut self.preferences;
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
-        preference.preffered_environments = envs;
+        preference.preferred_environments = envs;
         self.save();
         Ok(self.clone())
     }
@@ -142,13 +150,16 @@ impl UserConfig {
             .take(range_dist.into())
             .find(|r| !used_ports.contains(r));
 
-        match next_assignable_port {
-            Some(port) => {
-                map.insert(arn.to_owned(), port);
-                (port, true)
-            }
-            None => (rng.random_range(FREE_PORT_RANGE), false),
-        }
+        let assigned_port = match next_assignable_port {
+            Some(port) => port,
+            None => FALLBACK_PORT_RANGE
+                .into_iter()
+                .find(|p| !used_ports.contains(p))
+                .expect("No available ports left!"),
+        };
+
+        map.insert(arn.to_owned(), assigned_port);
+        (assigned_port, true)
     }
 
     pub fn get_db_port(&mut self, db_arn: &str) -> u16 {
@@ -233,7 +244,7 @@ impl UserConfig {
                 profile.to_owned(),
                 WombatAwsProfilePreferences {
                     tracked_names,
-                    preffered_environments: envs,
+                    preferred_environments: envs,
                 },
             );
         }

@@ -59,7 +59,7 @@ export type Cluster = {
 };
 type EnvPortMap = { [key: string]: number };
 export type WombatProfilePreferences = {
-	preffered_environments: AwsEnv[];
+	preferred_environments: AwsEnv[];
 	tracked_names: string[];
 };
 export type UserConfig = {
