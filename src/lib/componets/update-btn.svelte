@@ -5,30 +5,32 @@
 
 	let btnState: UpdateButtonState = $state(UpdateButtonState.CHECK_DONE);
 	let contentSize = $state(0);
-	let dowloadedSize = $state(0);
+	let downloadedSize = $state(0);
 	let installProgress = $state(0);
 	let errorMessage = $state('');
 </script>
 
 <div class="flex items-center fixed bottom-0 right-0 p-2 rounded-tl-md text-xs">
 	{#await check()}
-		<span>Checking for udpates</span>
+		<span>Checking for updates</span>
 	{:then update}
-		{#if update != null}
+		{#if update == null}
+			<span>🎉 You're up to date, thanks!</span>
+		{:else}
 			<button
 				class="btn btn-primary btn-sm"
 				disabled={btnState != UpdateButtonState.CHECK_DONE}
 				onclick={async () => {
 					try {
-						btnState = UpdateButtonState.DOWLOADING;
+						btnState = UpdateButtonState.DOWNLOADING;
 						await update.downloadAndInstall((e) => {
 							if (e.event == 'Started') {
 								contentSize = e.data.contentLength ?? 0;
 							} else if (e.event == 'Progress') {
-								dowloadedSize += e.data.chunkLength ?? 0;
+								downloadedSize += e.data.chunkLength ?? 0;
 							}
-							installProgress = Math.round((dowloadedSize / contentSize) * 100);
-							if (contentSize == dowloadedSize) {
+							installProgress = Math.round((downloadedSize / contentSize) * 100);
+							if (contentSize == downloadedSize) {
 								btnState = UpdateButtonState.INSTALLING;
 							}
 						});
@@ -62,7 +64,7 @@
 						/>
 					</svg>
 					Update to {update.version}
-				{:else if btnState == UpdateButtonState.DOWLOADING}
+				{:else if btnState == UpdateButtonState.DOWNLOADING}
 					<span class="loading loading-spinner"></span> Downloading {installProgress}%
 				{:else if btnState == UpdateButtonState.INSTALLING}
 					<span class="loading loading-spinner"></span> Installing...
@@ -72,8 +74,6 @@
 					{errorMessage}
 				{/if}
 			</button>
-		{:else}
-			<span>🎉 You're up to date, thanks!</span>
 		{/if}
 	{/await}
 </div>
