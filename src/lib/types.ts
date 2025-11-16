@@ -180,7 +180,7 @@ export type Timerange =
 
 export enum UpdateButtonState {
 	CHECK_DONE,
-	DOWLOADING,
+	DOWNLOADING,
 	INSTALLING,
 	INSTALLED,
 	FAILED
