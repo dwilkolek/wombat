@@ -37,6 +37,17 @@ export default ts.config(
 		}
 	},
 	{
+		files: ['src/**/*.ts', 'src/**/*.js'],
+		languageOptions: {
+			parserOptions: {
+				projectService: true
+			}
+		},
+		rules: {
+			'@typescript-eslint/no-deprecated': 'error'
+		}
+	},
+	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		// See more details at: https://typescript-eslint.io/packages/parser/
 		languageOptions: {
@@ -57,6 +68,9 @@ export default ts.config(
 				// explicitly specifying it ensures better compatibility and functionality.
 				svelteConfig
 			}
+		},
+		rules: {
+			'@typescript-eslint/no-deprecated': 'error'
 		}
 	},
 	{

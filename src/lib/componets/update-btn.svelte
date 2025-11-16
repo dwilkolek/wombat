@@ -14,7 +14,7 @@
 	{#await check()}
 		<span>Checking for udpates</span>
 	{:then update}
-		{#if update?.available}
+		{#if update != null}
 			<button
 				class="btn btn-primary btn-sm"
 				disabled={btnState != UpdateButtonState.CHECK_DONE}
