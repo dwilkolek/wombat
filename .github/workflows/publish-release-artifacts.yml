@@ -59,7 +59,3 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: ${{ matrix.args }}
-      - name: Create tag
-        run: |
-          git tag $NEW_TAG
-          git push origin $NEW_TAG
