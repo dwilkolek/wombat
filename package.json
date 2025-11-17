@@ -1,6 +1,6 @@
 {
 	"name": "wombat",
-	"version": "4.12.1",
+	"version": "4.2.12",
 	"engines": {
 		"node": ">=22.0.0"
 	},
