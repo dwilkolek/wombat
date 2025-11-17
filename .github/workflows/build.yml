@@ -1,0 +1,58 @@
+name: Build
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: read
+
+jobs:
+  test-tauri:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          #   args: '--verbose --target aarch64-apple-darwin'
+          #   platform-name: 'Macos-M1'
+          # - platform: 'macos-latest' # for Intel based macs.
+          #   args: '--verbose --target x86_64-apple-darwin'
+          #   platform-name: 'Macos-Intel'
+          - platform: 'macos-latest' # for Univrsal based macs.
+            args: '--verbose --target universal-apple-darwin'
+            platform-name: 'Macos-Universal'
+          - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
+            args: '--verbose'
+            platform-name: 'Linux'
+          - platform: 'windows-latest'
+            args: '--verbose'
+            platform-name: 'Windows'
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Set git to use LF
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+      - uses: './.github/actions/prepare-build-env'
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+      - name: Archive executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{matrix.platform-name}}-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle
+            src-tauri/target/release/**/Wombat*
+            src-tauri/target/universal-apple-darwin/**/release/**/Wombat*
