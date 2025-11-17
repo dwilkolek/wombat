@@ -18,13 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # - platform: 'macos-latest' # for Arm based macs (M1 and above).
-          #   args: '--verbose --target aarch64-apple-darwin'
-          #   platform-name: 'Macos-M1'
-          # - platform: 'macos-latest' # for Intel based macs.
-          #   args: '--verbose --target x86_64-apple-darwin'
-          #   platform-name: 'Macos-Intel'
-          - platform: 'macos-latest' # for Univrsal based macs.
+          # - platform: 'macos-latest' # for Univrsal based macs.
+          #   args: '--verbose --target universal-apple-darwin'
+          #   platform-name: 'Macos-Universal'
+          - platform: 'macos-latest'
             args: '--verbose --target aarch64-apple-darwin'
             platform-name: 'Macos-aarch64'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.

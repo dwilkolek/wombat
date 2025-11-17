@@ -13,6 +13,11 @@ runs:
       with:
         node-version: 22
         cache: 'pnpm'
+    # - name: install Rust (macos universal)
+    #   uses: dtolnay/rust-toolchain@nightly
+    #   if: matrix.platform == 'macos-universal'
+    #   with:
+    #     targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
     - name: install Rust
       uses: dtolnay/rust-toolchain@nightly
       with:
