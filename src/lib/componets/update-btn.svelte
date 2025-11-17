@@ -10,7 +10,10 @@
 	let errorMessage = $state('');
 </script>
 
-<div class="flex items-center fixed bottom-0 right-0 p-2 rounded-tl-md text-xs">
+<div class="flex fixed bottom-0 items-center gap-2 right-0 p-2 rounded-tl-md text-xs">
+	{#if btnState == UpdateButtonState.FAILED}
+		<span class="text-error">❗️Failed to update. Reason: {errorMessage}</span>
+	{/if}
 	{#await check()}
 		<span>Checking for updates</span>
 	{:then update}
@@ -19,7 +22,8 @@
 		{:else}
 			<button
 				class="btn btn-primary btn-sm"
-				disabled={btnState != UpdateButtonState.CHECK_DONE}
+				disabled={btnState !== UpdateButtonState.CHECK_DONE &&
+					btnState !== UpdateButtonState.FAILED}
 				onclick={async () => {
 					try {
 						btnState = UpdateButtonState.DOWNLOADING;
@@ -38,12 +42,12 @@
 						btnState = UpdateButtonState.INSTALLED;
 						setTimeout(relaunch, 1500);
 					} catch (e) {
-						errorMessage = JSON.stringify(e);
+						errorMessage = e instanceof Error ? e.message : String(e);
 						btnState = UpdateButtonState.FAILED;
 					}
 				}}
 			>
-				{#if btnState == UpdateButtonState.CHECK_DONE}
+				{#if btnState === UpdateButtonState.CHECK_DONE}
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						fill="none"
@@ -71,9 +75,11 @@
 				{:else if btnState == UpdateButtonState.INSTALLED}
 					<span class="loading loading-spinner"></span> Restarting...
 				{:else if btnState == UpdateButtonState.FAILED}
-					{errorMessage}
+					Retry update to {update.version}
 				{/if}
 			</button>
 		{/if}
+	{:catch}
+		<span class="text-warning">⚠️ Failed to fetch information about available update</span>
 	{/await}
 </div>
