@@ -51,6 +51,7 @@ jobs:
           WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
       - name: Get version
         id: version
+        shell: bash
         run: |
           NEW_VERSION="$(node read-version.js)"
           echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_OUTPUT"
