@@ -5,6 +5,10 @@ on:
     branches:
       - release/**
 
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+
 permissions:
   contents: write
   pull-requests: write
@@ -49,20 +53,20 @@ jobs:
           WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
           WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
           WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
-      - name: Get version
-        id: version
-        shell: bash
+      - name: Extract version tag from branch name
+        id: get_version_tag
         run: |
-          NEW_VERSION="$(node read-version.js)"
-          echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          TAG_NAME=$(echo "${{ github.ref_name }}" | sed 's|release/||')
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        shell: bash
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
         with:
-          tagName: '${{steps.vars.outputs.NEW_VERSION}}' # the action automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: '${{steps.vars.outputs.NEW_VERSION}}'
+          tagName: '${{ github.ref_name }}' # the action automatically replaces \_\_VERSION\_\_ with the app version
+          releaseName: '${{ steps.get_version_tag.outputs.tag }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
