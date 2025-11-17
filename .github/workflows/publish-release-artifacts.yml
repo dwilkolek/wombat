@@ -40,7 +40,15 @@ jobs:
           git config --global core.eol lf
       - uses: actions/checkout@v4
       - uses: './.github/actions/prepare-build-env'
-      - uses: './.github/actions/inject-configs'
+      - uses: bluwy/substitute-string-action@v3
+        with:
+          _input-file: 'src-tauri/src/main.rs'
+          _output-file: 'src-tauri/src/main.rs'
+          _format-key: '%%key%%'
+          PROFILE: 'release'
+          WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
+          WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
+          WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
       - name: Get version
         id: version
         run: |
