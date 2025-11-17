@@ -65,7 +65,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
         with:
-          tagName: '${{ github.ref_name }}' # the action automatically replaces \_\_VERSION\_\_ with the app version
+          tagName: '${{ steps.get_version_tag.outputs.tag }}' # the action automatically replaces \_\_VERSION\_\_ with the app version
           releaseName: '${{ steps.get_version_tag.outputs.tag }}'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
