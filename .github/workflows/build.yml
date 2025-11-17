@@ -25,8 +25,8 @@ jobs:
           #   args: '--verbose --target x86_64-apple-darwin'
           #   platform-name: 'Macos-Intel'
           - platform: 'macos-latest' # for Univrsal based macs.
-            args: '--verbose --target universal-apple-darwin'
-            platform-name: 'Macos-Universal'
+            args: '--verbose --target aarch64-apple-darwin'
+            platform-name: 'Macos-aarch64'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
             args: '--verbose'
             platform-name: 'Linux'
@@ -48,11 +48,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: ${{ matrix.args }}
-      - name: Archive executable
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{matrix.platform-name}}-${{ matrix.platform }}-${{ github.sha }}
-          path: |
-            src-tauri/target/release/bundle
-            src-tauri/target/release/**/Wombat*
-            src-tauri/target/universal-apple-darwin/**/release/**/Wombat*
