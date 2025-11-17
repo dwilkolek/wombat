@@ -50,11 +50,3 @@ jobs:
           git checkout -b release/$NEW_TAG
           git commit -a -m"Release v$NEW_VER"
           git push -u origin release/$NEW_TAG
-      - name: Create Draft Release
-        run: |
-          gh release create $NEW_TAG \
-            --draft \
-            --title "Release $NEW_TAG" \
-            --notes "See the assets to download this version and install."
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
