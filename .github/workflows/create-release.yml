@@ -3,6 +3,10 @@ name: 'Create release'
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: 'Ref'
+        required: true
+        default: 'main'
       version:
         description: 'Version'
         required: true
@@ -28,6 +32,7 @@ jobs:
           private-key: ${{ secrets.PRIVATE_KEY }}
       - uses: actions/checkout@v4
         with:
+          ref: ${{ inputs.ref }}
           token: ${{ steps.app-token.outputs.token }}
       - uses: './.github/actions/prepare-build-env'
       - name: create release ${{ inputs.version }}
