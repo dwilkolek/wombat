@@ -10,7 +10,10 @@
 	let errorMessage = $state('');
 </script>
 
-<div class="flex items-center fixed bottom-0 right-0 p-2 rounded-tl-md text-xs">
+<div class="flex fixed bottom-0 items-center gap-2 right-0 p-2 rounded-tl-md text-xs">
+	{#if btnState === UpdateButtonState.FAILED}
+		<span class="text-error">❗️Failed to update. Reason: {errorMessage}</span>
+	{/if}
 	{#await check()}
 		<span>Checking for updates</span>
 	{:then update}
@@ -19,18 +22,20 @@
 		{:else}
 			<button
 				class="btn btn-primary btn-sm"
-				disabled={btnState != UpdateButtonState.CHECK_DONE}
+				disabled={btnState !== UpdateButtonState.CHECK_DONE &&
+					btnState !== UpdateButtonState.FAILED}
 				onclick={async () => {
+					errorMessage = '';
 					try {
 						btnState = UpdateButtonState.DOWNLOADING;
 						await update.downloadAndInstall((e) => {
-							if (e.event == 'Started') {
+							if (e.event === 'Started') {
 								contentSize = e.data.contentLength ?? 0;
-							} else if (e.event == 'Progress') {
+							} else if (e.event === 'Progress') {
 								downloadedSize += e.data.chunkLength ?? 0;
 							}
 							installProgress = Math.round((downloadedSize / contentSize) * 100);
-							if (contentSize == downloadedSize) {
+							if (contentSize === downloadedSize) {
 								btnState = UpdateButtonState.INSTALLING;
 							}
 						});
@@ -38,12 +43,13 @@
 						btnState = UpdateButtonState.INSTALLED;
 						setTimeout(relaunch, 1500);
 					} catch (e) {
-						errorMessage = JSON.stringify(e);
+						errorMessage =
+							e instanceof Error ? e.message : typeof e === 'string' ? e : 'Unknown error occurred';
 						btnState = UpdateButtonState.FAILED;
 					}
 				}}
 			>
-				{#if btnState == UpdateButtonState.CHECK_DONE}
+				{#if btnState === UpdateButtonState.CHECK_DONE}
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						fill="none"
@@ -64,16 +70,18 @@
 						/>
 					</svg>
 					Update to {update.version}
-				{:else if btnState == UpdateButtonState.DOWNLOADING}
+				{:else if btnState === UpdateButtonState.DOWNLOADING}
 					<span class="loading loading-spinner"></span> Downloading {installProgress}%
-				{:else if btnState == UpdateButtonState.INSTALLING}
+				{:else if btnState === UpdateButtonState.INSTALLING}
 					<span class="loading loading-spinner"></span> Installing...
-				{:else if btnState == UpdateButtonState.INSTALLED}
+				{:else if btnState === UpdateButtonState.INSTALLED}
 					<span class="loading loading-spinner"></span> Restarting...
-				{:else if btnState == UpdateButtonState.FAILED}
-					{errorMessage}
+				{:else if btnState === UpdateButtonState.FAILED}
+					Retry update to {update.version}
 				{/if}
 			</button>
 		{/if}
+	{:catch}
+		<span class="text-warning">⚠️ Failed to fetch information about available update</span>
 	{/await}
 </div>
