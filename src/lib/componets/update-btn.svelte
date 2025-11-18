@@ -25,6 +25,7 @@
 				disabled={btnState !== UpdateButtonState.CHECK_DONE &&
 					btnState !== UpdateButtonState.FAILED}
 				onclick={async () => {
+					errorMessage = '';
 					try {
 						btnState = UpdateButtonState.DOWNLOADING;
 						await update.downloadAndInstall((e) => {
@@ -42,7 +43,8 @@
 						btnState = UpdateButtonState.INSTALLED;
 						setTimeout(relaunch, 1500);
 					} catch (e) {
-						errorMessage = e instanceof Error ? e.message : String(e);
+						errorMessage =
+							e instanceof Error ? e.message : typeof e === 'string' ? e : 'Unknown error occurred';
 						btnState = UpdateButtonState.FAILED;
 					}
 				}}
