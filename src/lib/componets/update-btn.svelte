@@ -11,7 +11,7 @@
 </script>
 
 <div class="flex fixed bottom-0 items-center gap-2 right-0 p-2 rounded-tl-md text-xs">
-	{#if btnState == UpdateButtonState.FAILED}
+	{#if btnState === UpdateButtonState.FAILED}
 		<span class="text-error">❗️Failed to update. Reason: {errorMessage}</span>
 	{/if}
 	{#await check()}
@@ -28,13 +28,13 @@
 					try {
 						btnState = UpdateButtonState.DOWNLOADING;
 						await update.downloadAndInstall((e) => {
-							if (e.event == 'Started') {
+							if (e.event === 'Started') {
 								contentSize = e.data.contentLength ?? 0;
-							} else if (e.event == 'Progress') {
+							} else if (e.event === 'Progress') {
 								downloadedSize += e.data.chunkLength ?? 0;
 							}
 							installProgress = Math.round((downloadedSize / contentSize) * 100);
-							if (contentSize == downloadedSize) {
+							if (contentSize === downloadedSize) {
 								btnState = UpdateButtonState.INSTALLING;
 							}
 						});
@@ -68,13 +68,13 @@
 						/>
 					</svg>
 					Update to {update.version}
-				{:else if btnState == UpdateButtonState.DOWNLOADING}
+				{:else if btnState === UpdateButtonState.DOWNLOADING}
 					<span class="loading loading-spinner"></span> Downloading {installProgress}%
-				{:else if btnState == UpdateButtonState.INSTALLING}
+				{:else if btnState === UpdateButtonState.INSTALLING}
 					<span class="loading loading-spinner"></span> Installing...
-				{:else if btnState == UpdateButtonState.INSTALLED}
+				{:else if btnState === UpdateButtonState.INSTALLED}
 					<span class="loading loading-spinner"></span> Restarting...
-				{:else if btnState == UpdateButtonState.FAILED}
+				{:else if btnState === UpdateButtonState.FAILED}
 					Retry update to {update.version}
 				{/if}
 			</button>
