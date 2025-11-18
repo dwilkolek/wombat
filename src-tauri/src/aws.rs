@@ -91,12 +91,12 @@ impl std::cmp::Ord for RdsInstance {
 #[derive(Debug, Deserialize, Serialize)]
 #[allow(non_snake_case)]
 pub struct DbSecretDTO {
-    dbInstanceIdentifier: String,
-    pub dbname: String,
-    engine: String,
-    host: String,
+    dbInstanceIdentifier: Option<String>,
+    pub dbname: Option<String>,
+    engine: Option<String>,
+    host: Option<String>,
     pub password: String,
-    port: u16,
+    port: Option<u16>,
     pub username: String,
 }
 
@@ -751,7 +751,7 @@ pub async fn db_secret(
                 arn: secret
                     .arn
                     .ok_or_else(|| CommandError::new("db_secret", "Secret ARN is missing"))?,
-                dbname: secret_value.dbname,
+                dbname: secret_value.dbname.unwrap_or(rds.name.clone()),
                 password: secret_value.password,
                 username: secret_value.username,
                 auto_rotated: rotation_enabled,
