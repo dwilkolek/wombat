@@ -15,6 +15,7 @@ use chrono::prelude::*;
 use log::{error, info, warn};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{collections::HashMap, error::Error, sync::Arc};
 use tokio::{process::Command, sync::RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
@@ -58,8 +59,21 @@ pub struct RdsInstance {
     pub env: Env,
     pub appname_tag: String,
     pub cdk_stack_id: Option<String>,
+    pub cdk_stack_name: Option<String>,
+    pub cdk_logical_id: Option<String>,
     pub master_username: Option<String>,
+    pub source_db_identifier: Option<String>,
 }
+
+impl RdsInstance {
+    fn source_db_eligible(&self) -> bool {
+        self.cdk_stack_id.is_some()
+            && self.cdk_stack_name.is_some()
+            && self.cdk_logical_id.is_some()
+            && self.source_db_identifier.is_none()
+    }
+}
+
 impl std::cmp::Eq for RdsInstance {}
 impl std::cmp::PartialEq for RdsInstance {
     fn eq(&self, other: &Self) -> bool {
@@ -304,6 +318,14 @@ impl AwsConfigProvider {
             .cloned()
             .expect("Failed to get sso_profile");
         self.for_sso(&sso_profile).await
+    }
+
+    pub fn get_infra_profiles(&self) -> Vec<InfraProfile> {
+        self.active_wombat_profile
+            .sso_profiles
+            .iter()
+            .flat_map(|(_, sso_profile)| sso_profile.infra_profiles.clone())
+            .collect()
     }
 
     async fn get_or_create_app_config(
@@ -696,6 +718,7 @@ pub async fn db_secret(
                 .send()
                 .await;
 
+            info!("{rds:?}");
             // Check if the secret has the matching CloudFormation stack tag
             let secret_cdk_stack_id = secret_details
                 .as_ref()
@@ -848,14 +871,18 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
         marker = resp.marker().map(|m| m.to_owned());
         let rdses = resp.db_instances();
         there_is_more = rdses.len() == 100 && marker.is_some();
+
         rdses.iter().for_each(|rds| {
             if rds.db_name().is_some() {
+                let rds_identifier = rds.db_instance_identifier().unwrap_or_default().to_owned();
                 let db_instance_arn = rds.db_instance_arn().unwrap_or_log().to_owned();
                 let name = rds.db_name().unwrap_or("postgres").to_owned();
                 let tags = rds.tag_list();
                 let mut appname_tag = String::from("");
                 let mut environment_tag = String::from("");
                 let mut cdk_stack_id = None;
+                let mut cdk_stack_name = None;
+                let mut cdk_logical_id = None;
                 let endpoint = rds
                     .endpoint()
                     .map(|e| Endpoint {
@@ -881,9 +908,16 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     if t.key().unwrap_or_log() == "aws:cloudformation:stack-id" {
                         cdk_stack_id = t.value().map(|t| t.to_owned())
                     }
+
+                    if t.key().unwrap_or_log() == "aws:cloudformation:stack-name" {
+                        cdk_stack_name = t.value().map(|t| t.to_owned())
+                    }
+
+                    if t.key().unwrap_or_log() == "aws:cloudformation:logical-id" {
+                        cdk_logical_id = t.value().map(|t| t.to_owned())
+                    }
                 }
 
-                let rds_identifier = rds.db_instance_identifier().unwrap_or_default().to_owned();
                 let subnet_name = rds
                     .db_subnet_group()
                     .and_then(|s| s.db_subnet_group_name())
@@ -902,14 +936,49 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     subnet_name,
                     env: env.clone(),
                     cdk_stack_id,
+                    cdk_stack_name,
+                    cdk_logical_id,
+                    source_db_identifier: None,
                     master_username: rds.master_username().map(|u| u.to_owned()),
                 };
                 databases.push(db)
             }
         });
     }
+
     databases.sort_by(|a, b| a.name.cmp(&b.name));
     databases
+}
+
+pub async fn fill_source_rds(config: &aws_config::SdkConfig, rds: &mut RdsInstance) {
+    if !rds.source_db_eligible() {
+        return;
+    }
+    let cdk_client = aws_sdk_cloudformation::Client::new(config);
+    info!("Trying to fill source rds for: {} ", &rds.identifier);
+    let cdk_res = cdk_client
+        .get_template()
+        .stack_name(rds.cdk_stack_name.as_ref().unwrap())
+        .send()
+        .await;
+    let maybe_json = cdk_res.map(|r| r.template_body).unwrap_or(None);
+    if let Some(json) = maybe_json {
+        let root = serde_json::from_str(&json).unwrap_or(Value::Null);
+        if let Some(Value::Object(resources)) = root.get("Resources") {
+            if let Some(Value::Object(rds_stack_info)) =
+                resources.get(&rds.cdk_logical_id.as_ref().unwrap().clone())
+            {
+                if let Some(Value::Object(properties)) = rds_stack_info.get("Properties") {
+                    if let Some(Value::String(source_db)) =
+                        properties.get("SourceDBInstanceIdentifier")
+                    {
+                        info!("For db {} source is: {source_db} ", &rds.identifier);
+                        rds.source_db_identifier = Some(source_db.to_owned())
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {

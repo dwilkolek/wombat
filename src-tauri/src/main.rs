@@ -354,6 +354,8 @@ async fn credentials(
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+
+    rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
 ) -> Result<DbSecret, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(CommandError::new("credentials", msg));
@@ -366,7 +368,20 @@ async fn credentials(
         .expect_or_log("Config doesn't exist");
 
     let secret;
-    let found_db_secret = aws::db_secret(&aws_config, &db).await;
+    let mut found_db_secret = aws::db_secret(&aws_config, &db).await;
+
+    if found_db_secret.is_err() && db.source_db_identifier.is_some() {
+        let source_db_identifier = db.source_db_identifier.as_ref().unwrap();
+        let rds_resolver_instance = rds_resolver_instance.0.read().await;
+        let databases = rds_resolver_instance.read_databases().await;
+        if let Some(source_db) = databases
+            .iter()
+            .find(|source_db| source_db.identifier == *source_db_identifier)
+        {
+            found_db_secret = aws::db_secret(&aws_config, source_db).await;
+        }
+    }
+
     match found_db_secret {
         Ok(found_secret) => {
             secret = Ok(found_secret);
