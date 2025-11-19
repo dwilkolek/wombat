@@ -132,21 +132,6 @@ impl RdsResolver {
             let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching rds from aws using profile {profile}");
             let databases = aws::databases(&config).await;
-
-            // let infras = aws_config_resolver.get_infra_profiles();
-            // for rds in databases.iter_mut() {
-            //     if let Some(infra_profile) = infras
-            //         .iter()
-            //         .find(|inf| inf.app == rds.appname_tag && inf.env == rds.env)
-            //     {
-            //         if let Some((_, infra_config)) =
-            //             aws_config_resolver.for_infra(infra_profile).await
-            //         {
-            //             aws::fill_source_rds(&infra_config, rds).await;
-            //         }
-            //     }
-            // }
-
             for db in databases {
                 unique_databases_map.insert(db.arn.clone(), db);
             }
