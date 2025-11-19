@@ -120,7 +120,6 @@ export type RdsInstance = {
 	cdk_stack_name?: string | null;
 	cdk_logical_id?: string | null;
 	master_username?: string | null;
-	source_db_identifier?: string | null;
 };
 
 export type DatabaseCredentials = {

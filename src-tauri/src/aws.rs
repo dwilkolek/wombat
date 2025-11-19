@@ -62,7 +62,6 @@ pub struct RdsInstance {
     pub cdk_stack_name: Option<String>,
     pub cdk_logical_id: Option<String>,
     pub master_username: Option<String>,
-    pub source_db_identifier: Option<String>,
 }
 
 impl RdsInstance {
@@ -70,7 +69,6 @@ impl RdsInstance {
         self.cdk_stack_id.is_some()
             && self.cdk_stack_name.is_some()
             && self.cdk_logical_id.is_some()
-            && self.source_db_identifier.is_none()
     }
 }
 
@@ -318,14 +316,6 @@ impl AwsConfigProvider {
             .cloned()
             .expect("Failed to get sso_profile");
         self.for_sso(&sso_profile).await
-    }
-
-    pub fn get_infra_profiles(&self) -> Vec<InfraProfile> {
-        self.active_wombat_profile
-            .sso_profiles
-            .iter()
-            .flat_map(|(_, sso_profile)| sso_profile.infra_profiles.clone())
-            .collect()
     }
 
     async fn get_or_create_app_config(
@@ -681,10 +671,7 @@ pub async fn bastions(config: &aws_config::SdkConfig) -> Vec<Bastion> {
         .collect::<Vec<Bastion>>()
 }
 
-pub async fn db_secret(
-    config: &aws_config::SdkConfig,
-    rds: &RdsInstance,
-) -> Result<DbSecret, CommandError> {
+pub async fn db_secret(config: &aws_config::SdkConfig, rds: &RdsInstance) -> Option<DbSecret> {
     let secret_client = secretsmanager::Client::new(config);
     for secret in get_possible_secret_names_for_prefix(format!("{}-{}", rds.appname_tag, rds.env)) {
         info!("Looking for db credentials by name: {secret}");
@@ -700,10 +687,7 @@ pub async fn db_secret(
                 .map(|s| s.to_string())
                 .unwrap_or(err.to_string());
             warn!("failed to fetch secret, reason: {error_str}");
-            return Err(CommandError::new(
-                "db_secret",
-                format!("Fetch error: {error_str}"),
-            ));
+            return None;
         }
         let secret_arn = secret_arn.expect("Failed to fetch!");
 
@@ -718,7 +702,6 @@ pub async fn db_secret(
                 .send()
                 .await;
 
-            info!("{rds:?}");
             // Check if the secret has the matching CloudFormation stack tag
             let secret_cdk_stack_id = secret_details
                 .as_ref()
@@ -763,17 +746,15 @@ pub async fn db_secret(
                     .map(|s| s.to_string())
                     .unwrap_or(err.to_string());
                 warn!("failed to get secret value, reason: {error_str}");
-                return Err(CommandError::new("db_secret", "Access denied"));
+                return None;
             }
             let secret = secret.unwrap_or_log();
             let secret_str = secret.secret_string().expect("There should be a secret");
             let secret_value =
                 serde_json::from_str::<DbSecretDTO>(secret_str).expect("Deserialzied DbSecret");
 
-            return Ok(DbSecret {
-                arn: secret
-                    .arn
-                    .ok_or_else(|| CommandError::new("db_secret", "Secret ARN is missing"))?,
+            return Some(DbSecret {
+                arn: secret.arn.expect("Secret ARN is missing"),
                 dbname: secret_value.dbname.unwrap_or(rds.name.clone()),
                 password: secret_value.password,
                 username: secret_value.username,
@@ -801,10 +782,14 @@ pub async fn db_secret(
                     .and_then(|t| t.to_millis().ok())
                     .and_then(DateTime::from_timestamp_millis)
                     .unwrap_or_else(y2000);
-                return Ok(DbSecret {
-                    arn: param.arn.as_ref().map(|s| s.to_owned()).ok_or_else(|| {
-                        CommandError::new("db_secret", "Secret Param ARN is missing")
-                    })?,
+                let arn = param
+                    .arn
+                    .as_ref()
+                    .map(|s| s.to_owned())
+                    .ok_or_else(|| CommandError::new("db_secret", "Secret Param ARN is missing"))
+                    .expect("Secret param is missing ARN");
+                return Some(DbSecret {
+                    arn,
                     dbname: rds.name.clone(),
                     password: param.value().unwrap_or_log().to_owned(),
                     username: rds
@@ -819,7 +804,8 @@ pub async fn db_secret(
         }
     }
 
-    Err(CommandError::new("db_secret", "No secret found"))
+    info!("No secret found");
+    None
 }
 
 fn get_possible_secret_names_for_prefix(prefix: String) -> Vec<String> {
@@ -938,7 +924,6 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
                     cdk_stack_id,
                     cdk_stack_name,
                     cdk_logical_id,
-                    source_db_identifier: None,
                     master_username: rds.master_username().map(|u| u.to_owned()),
                 };
                 databases.push(db)
@@ -950,35 +935,35 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
     databases
 }
 
-pub async fn fill_source_rds(config: &aws_config::SdkConfig, rds: &mut RdsInstance) {
-    if !rds.source_db_eligible() {
-        return;
-    }
-    let cdk_client = aws_sdk_cloudformation::Client::new(config);
-    info!("Trying to fill source rds for: {} ", &rds.identifier);
-    let cdk_res = cdk_client
-        .get_template()
-        .stack_name(rds.cdk_stack_name.as_ref().unwrap())
-        .send()
-        .await;
-    let maybe_json = cdk_res.map(|r| r.template_body).unwrap_or(None);
-    if let Some(json) = maybe_json {
-        let root = serde_json::from_str(&json).unwrap_or(Value::Null);
-        if let Some(Value::Object(resources)) = root.get("Resources") {
-            if let Some(Value::Object(rds_stack_info)) =
-                resources.get(&rds.cdk_logical_id.as_ref().unwrap().clone())
-            {
-                if let Some(Value::Object(properties)) = rds_stack_info.get("Properties") {
-                    if let Some(Value::String(source_db)) =
-                        properties.get("SourceDBInstanceIdentifier")
-                    {
-                        info!("For db {} source is: {source_db} ", &rds.identifier);
-                        rds.source_db_identifier = Some(source_db.to_owned())
+pub async fn find_source_rds(config: &aws_config::SdkConfig, rds: &RdsInstance) -> Option<String> {
+    if rds.source_db_eligible() {
+        let cdk_client = aws_sdk_cloudformation::Client::new(config);
+        info!("Trying to fill source rds for: {} ", &rds.identifier);
+        let cdk_res = cdk_client
+            .get_template()
+            .stack_name(rds.cdk_stack_name.as_ref().unwrap())
+            .send()
+            .await;
+        let maybe_json = cdk_res.map(|r| r.template_body).unwrap_or(None);
+        if let Some(json) = maybe_json {
+            let root = serde_json::from_str(&json).unwrap_or(Value::Null);
+            if let Some(Value::Object(resources)) = root.get("Resources") {
+                if let Some(Value::Object(rds_stack_info)) =
+                    resources.get(&rds.cdk_logical_id.as_ref().unwrap().clone())
+                {
+                    if let Some(Value::Object(properties)) = rds_stack_info.get("Properties") {
+                        if let Some(Value::String(source_db)) =
+                            properties.get("SourceDBInstanceIdentifier")
+                        {
+                            info!("For db {} source is: {source_db} ", &rds.identifier);
+                            return Some(source_db.to_owned());
+                        }
                     }
                 }
             }
         }
     }
+    None
 }
 
 pub async fn clusters(config: &aws_config::SdkConfig) -> Vec<Cluster> {

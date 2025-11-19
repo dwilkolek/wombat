@@ -354,7 +354,6 @@ async fn credentials(
     db: aws::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
 ) -> Result<DbSecret, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
@@ -368,32 +367,27 @@ async fn credentials(
         .expect_or_log("Config doesn't exist");
 
     let secret;
-    let mut found_db_secret = aws::db_secret(&aws_config, &db).await;
-
-    if found_db_secret.is_err() && db.source_db_identifier.is_some() {
-        let source_db_identifier = db.source_db_identifier.as_ref().unwrap();
-        let rds_resolver_instance = rds_resolver_instance.0.read().await;
-        let databases = rds_resolver_instance.read_databases().await;
-        if let Some(source_db) = databases
-            .iter()
-            .find(|source_db| source_db.identifier == *source_db_identifier)
-        {
-            found_db_secret = aws::db_secret(&aws_config, source_db).await;
-        }
-    }
+    let found_db_secret =
+        find_secret_with_fallback(&aws_config, &db, rds_resolver_instance.0.clone()).await;
 
     match found_db_secret {
-        Ok(found_secret) => {
+        Some(found_secret) => {
             secret = Ok(found_secret);
         }
-        Err(err) => {
+        None => {
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = aws::db_secret(&override_aws_config, &db).await;
+                secret = find_secret_with_fallback(
+                    &override_aws_config,
+                    &db,
+                    rds_resolver_instance.0.clone(),
+                )
+                .await
+                .ok_or(CommandError::new("credentials", "Secret not found"));
             } else {
-                secret = Err(err)
+                secret = Err(CommandError::new("credentials", "Secret not found"))
             }
         }
     }
@@ -1417,6 +1411,7 @@ async fn open_dbeaver(
     app_state: tauri::State<'_, AppContextState>,
     read_only: bool,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
+    rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
 ) -> Result<(), CommandError> {
     fn db_beaver_con_parma(
         db_name: &str,
@@ -1474,17 +1469,23 @@ async fn open_dbeaver(
     let secret;
     let found_db_secret = aws::db_secret(&aws_config, &db).await;
     match found_db_secret {
-        Ok(found_secret) => {
+        Some(found_secret) => {
             secret = Ok(found_secret);
         }
-        Err(_) => {
+        None => {
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
                 warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = aws::db_secret(&override_aws_config, &db).await;
+                secret = Box::pin(find_secret_with_fallback(
+                    &override_aws_config,
+                    &db,
+                    rds_resolver_instance.0.clone(),
+                ))
+                .await
+                .ok_or(CommandError::new("credentials", "Secret not found"));
             } else {
-                return Err(CommandError::new("db_secret", "No secret found"));
+                secret = Err(CommandError::new("credentials", "Secret not found"))
             }
         }
     }
@@ -1511,6 +1512,34 @@ async fn open_dbeaver(
         .output()
         .expect("failed to execute process");
     Ok(())
+}
+
+async fn find_secret_with_fallback(
+    config: &aws_config::SdkConfig,
+    rds: &RdsInstance,
+    rds_resolver: Arc<RwLock<RdsResolver>>,
+) -> Option<DbSecret> {
+    let found_secret = aws::db_secret(config, rds).await;
+    if let Some(secret) = found_secret {
+        return Some(secret);
+    }
+
+    let source_db = aws::find_source_rds(config, rds).await;
+    let databases;
+    {
+        let resolver = rds_resolver.read().await;
+        databases = resolver.read_databases().await;
+    }
+    if let Some(source_db_identifier) = source_db {
+        if let Some(source_rds) = databases
+            .iter()
+            .find(|d| d.identifier == source_db_identifier)
+        {
+            return Box::pin(find_secret_with_fallback(config, source_rds, rds_resolver)).await;
+        }
+    }
+
+    return None;
 }
 
 #[cfg(debug_assertions)]

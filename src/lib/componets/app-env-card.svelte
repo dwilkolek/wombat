@@ -55,7 +55,6 @@
 									<span>Cloudformation stack id: {db.cdk_stack_id}</span>
 									<span>Cloudformation stack name: {db.cdk_stack_name}</span>
 									<span>Cloudformation logical id: {db.cdk_logical_id}</span>
-									<span>Source db: {db.source_db_identifier}</span>
 									<span>AppName tag: {db.appname_tag}</span>
 									<span>Master username: {db.master_username}</span>
 								</div>
