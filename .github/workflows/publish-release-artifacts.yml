@@ -47,6 +47,15 @@ jobs:
           TAG_NAME=$(echo "${{ github.ref_name }}" | sed 's|release/||')
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
         shell: bash
+      - uses: bluwy/substitute-string-action@v3
+        with:
+          _input-file: 'src-tauri/src/main.rs'
+          _output-file: 'src-tauri/src/main.rs'
+          _format-key: '%%key%%'
+          PROFILE: 'release'
+          WOMBAT_API_URL: ${{ secrets.WOMBAT_API_URL }}
+          WOMBAT_API_USER: ${{ secrets.WOMBAT_API_USER }}
+          WOMBAT_API_PASSWORD: ${{ secrets.WOMBAT_API_PASSWORD }}
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
