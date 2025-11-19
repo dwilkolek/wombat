@@ -1542,22 +1542,33 @@ async fn find_secret_with_fallback(
     return None;
 }
 
+#[cfg(debug_assertions)]
 fn app_config() -> AppConfig {
-    #[cfg(debug_assertions)]
     let _ = dotenv();
-
-    let logger = if cfg!(debug_assertions) {
-        "console".to_string()
-    } else {
-        "file".to_string()
-    };
-
-    let message = "Application configuration incomplete.";
     AppConfig {
-        wombat_api_url: env::var("WOMBAT_API_URL").expect(message),
-        wombat_api_user: env::var("WOMBAT_API_USER").expect(message),
-        wombat_api_password: env::var("WOMBAT_API_PASSWORD").expect(message),
-        logger,
+        wombat_api_url: env::var("WOMBAT_API_URL").unwrap_or_else(|_| {
+            warn!("Using default token since WOMBAT_API_URL was not set");
+            "%%WOMBAT_API_URL%%".to_string()
+        }),
+        wombat_api_user: env::var("WOMBAT_API_USER").unwrap_or_else(|_| {
+            warn!("Using default token since WOMBAT_API_USER was not set");
+            "%%WOMBAT_API_USER%%".to_string()
+        }),
+        wombat_api_password: env::var("WOMBAT_API_PASSWORD").unwrap_or_else(|_| {
+            warn!("Using default token since WOMBAT_API_PASSWORD was not set");
+            "%%WOMBAT_API_PASSWORD%%".to_string()
+        }),
+        logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
+    }
+}
+
+#[cfg(not(debug_assertions))]
+fn app_config() -> AppConfig {
+    AppConfig {
+        logger: "file".to_owned(),
+        wombat_api_url: "%%WOMBAT_API_URL%%".to_string(),
+        wombat_api_user: "%%WOMBAT_API_USER%%".to_string(),
+        wombat_api_password: "%%WOMBAT_API_PASSWORD%%".to_string(),
     }
 }
 
