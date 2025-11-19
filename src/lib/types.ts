@@ -117,6 +117,8 @@ export type RdsInstance = {
 	environment_tag: string;
 	appname_tag: string;
 	cdk_stack_id?: string | null;
+	cdk_stack_name?: string | null;
+	cdk_logical_id?: string | null;
 	master_username?: string | null;
 };
 
