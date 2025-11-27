@@ -1,6 +1,6 @@
 <script lang="ts">
-	import AppEnvCard from '$lib/componets/app-env-card.svelte';
-	import StarIcon from '$lib/componets/star-icon.svelte';
+	import AppEnvCard from '$lib/components/app-env-card.svelte';
+	import StarIcon from '$lib/components/star-icon.svelte';
 	import { serviceDetailStore } from '$lib/stores/service-details-store';
 	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
 	import type { AppPage } from './+page';

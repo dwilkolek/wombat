@@ -9,9 +9,9 @@
 	import { envImportance } from '$lib/stores/env-store';
 	import { BrowserExtensionState, type WombatAwsProfile } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
-	import UpdateBtn from '$lib/componets/update-btn.svelte';
-	import FeatureBtn from '$lib/componets/feature-btn.svelte';
-	import BrowserExtensionDot from '$lib/componets/browser-extension-dot.svelte';
+	import UpdateBtn from '$lib/components/update-btn.svelte';
+	import FeatureBtn from '$lib/components/feature-btn.svelte';
+	import BrowserExtensionDot from '$lib/components/browser-extension-dot.svelte';
 
 	const { wombatAwsProfiles } = availableProfilesStore;
 	let { login } = userStore;
