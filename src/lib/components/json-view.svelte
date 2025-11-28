@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toPng } from 'html-to-image';
-	import JsonView from '$lib/componets/json-view.svelte';
+	import JsonView from '$lib/components/json-view.svelte';
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import { readable, type Readable } from 'svelte/store';
 	import { format } from 'date-fns';

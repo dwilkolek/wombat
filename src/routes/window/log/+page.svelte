@@ -1,5 +1,5 @@
 <script lang="ts">
-	import JsonView from '$lib/componets/json-view.svelte';
+	import JsonView from '$lib/components/json-view.svelte';
 	import { page } from '$app/stores';
 	import { invoke } from '@tauri-apps/api/core';
 	import { readable } from 'svelte/store';

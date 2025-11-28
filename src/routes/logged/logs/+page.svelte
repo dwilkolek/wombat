@@ -5,11 +5,11 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { beforeNavigate } from '$app/navigation';
 	import { logStore, type LogData } from '$lib/stores/log-store';
-	import ServiceMultiselect from '$lib/componets/service-multiselect.svelte';
+	import ServiceMultiselect from '$lib/components/service-multiselect.svelte';
 	import { userStore } from '$lib/stores/user-store';
-	import JsonView from '$lib/componets/json-view.svelte';
+	import JsonView from '$lib/components/json-view.svelte';
 	import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-	import TimerangeSelect from '$lib/componets/timerange-select.svelte';
+	import TimerangeSelect from '$lib/components/timerange-select.svelte';
 	import { logFiltersStore } from '$lib/stores/log-filters-store';
 
 	let activeCluser = clusterStore.activeCluser;

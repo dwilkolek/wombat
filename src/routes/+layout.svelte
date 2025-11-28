@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../styles.css';
-	import ErrorBox from '$lib/componets/error-box.svelte';
+	import ErrorBox from '$lib/components/error-box.svelte';
 	import { loading } from '$lib/stores/error-store';
 	import { invoke } from '@tauri-apps/api/core';
 	interface Props {
