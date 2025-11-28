@@ -22,13 +22,13 @@ jobs:
           #   args: '--verbose --target universal-apple-darwin'
           #   platform-name: 'Macos-Universal'
           - platform: 'macos-latest'
-            args: '--verbose --debug --target aarch64-apple-darwin'
+            args: '--debug --target aarch64-apple-darwin'
             platform-name: 'Macos aarch64'
           - platform: 'ubuntu-latest' # for Tauri v1 you could replace this with ubuntu-20.04.
-            args: '--verbose --debug'
+            args: '--debug'
             platform-name: 'Linux'
           - platform: 'windows-latest'
-            args: '--verbose --debug'
+            args: '--debug'
             platform-name: 'Windows'
     runs-on: ${{ matrix.platform }}
     steps:
