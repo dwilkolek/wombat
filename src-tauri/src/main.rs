@@ -1314,15 +1314,14 @@ async fn codeartifact_login(
     app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
 ) -> Result<(), CommandError> {
-    let app_ctx = app_state.0.lock().await;
-    if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
-        return Err(CommandError::new("codeartifact_login", msg));
+    let profile = match get_authorized(&app_handle, &app_state.0).await {
+        Err(msg) => return Err(CommandError::new("codeartifact_login", msg)),
+        Ok(user) => user.profile,
     };
-    let profile = app_ctx.active_profile.as_ref().unwrap_or_log().clone();
 
     if dependency_check::is_program_in_path(dependency_check::CODEARTIFACT_LOGIN) {
         let original_profile_in_env = std::env::var("AWS_PROFILE");
-        std::env::set_var("AWS_PROFILE", profile.name);
+        std::env::set_var("AWS_PROFILE", profile);
         let exec_result = Command::new(dependency_check::CODEARTIFACT_LOGIN).output();
         println!("Execution results: {exec_result:?}");
 
@@ -1539,7 +1538,7 @@ async fn find_secret_with_fallback(
         }
     }
 
-    return None;
+    None
 }
 
 #[cfg(debug_assertions)]
