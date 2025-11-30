@@ -361,10 +361,22 @@ async fn credentials(
     };
 
     let aws_config_provider = aws_config_provider.0.read().await;
-    let (_, aws_config) = aws_config_provider
+    let app_config = aws_config_provider
         .app_config(&db.appname_tag, &db.env)
-        .await
-        .expect_or_log("Config doesn't exist");
+        .await;
+
+    let aws_config = match app_config {
+        Some((_, aws_config)) => aws_config,
+        None => {
+            return Err(CommandError::new(
+                "credentials",
+                format!(
+                    "Missing AWS profile config for app: {}, env: {}",
+                    db.appname_tag, db.env
+                ),
+            ))
+        }
+    };
 
     let secret;
     let found_db_secret =
