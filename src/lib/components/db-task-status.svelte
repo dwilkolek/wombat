@@ -78,7 +78,36 @@
 		</p>
 		<div class="modal-action">
 			<button
-				class="btn btn-info"
+				class="btn btn-secondary"
+				disabled={!$userStore.dbeaver_path}
+				onclick={() => {
+					dialog?.close();
+				}}
+			>
+				Close
+			</button>
+			<button
+				class="btn btn-secondary"
+				data-umami-event="dbeaver_open_write"
+				data-umami-event-uid={$userStore.id}
+				disabled={!$userStore.dbeaver_path}
+				onclick={() => {
+					execute(
+						'open_dbeaver',
+						{
+							db,
+							port: port,
+							readOnly: false
+						},
+						false
+					);
+					dialog?.close();
+				}}
+			>
+				Write mode
+			</button>
+			<button
+				class="btn btn-primary"
 				data-umami-event="dbeaver_open_read"
 				data-umami-event-uid={$userStore.id}
 				disabled={!$userStore.dbeaver_path}
@@ -97,26 +126,6 @@
 				}}
 			>
 				Read only mode
-			</button>
-			<button
-				class="btn btn-warning"
-				data-umami-event="dbeaver_open_write"
-				data-umami-event-uid={$userStore.id}
-				disabled={!$userStore.dbeaver_path}
-				onclick={() => {
-					execute(
-						'open_dbeaver',
-						{
-							db,
-							port: port,
-							readOnly: false
-						},
-						false
-					);
-					dialog?.close();
-				}}
-			>
-				Write mode
 			</button>
 		</div>
 	</div>

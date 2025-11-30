@@ -7,7 +7,7 @@
 		type SsoProfile,
 		type EcsService
 	} from '$lib/types';
-	import { ask, message } from '@tauri-apps/plugin-dialog';
+	import { message } from '@tauri-apps/plugin-dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import CustomHeaderForm from './custom-header-form.svelte';
@@ -95,20 +95,6 @@
 		proxyAuthConfig: ProxyAuthConfig | undefined,
 		customHeadersList: CustomHeader[]
 	) => {
-		if (service?.env == AwsEnv.PROD) {
-			let response = await ask(
-				'Understand the risks before connecting to production service.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
-				{
-					title: 'Access to PRODUCTION service.',
-					okLabel: 'Proceed',
-					cancelLabel: 'Abort',
-					kind: 'warning'
-				}
-			);
-			if (!response) {
-				return;
-			}
-		}
 		const headers: { [key: string]: string } = {};
 		customHeadersList.forEach((header) => {
 			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
@@ -196,6 +182,27 @@
 				</div>
 			</div>
 			<div class="flex flex-col gap-1">
+				{#if service?.env === AwsEnv.PROD}
+					<div role="alert" class="alert alert-warning mb-2">
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-6 w-6 shrink-0 stroke-current"
+							fill="none"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+							/>
+						</svg>
+						<span
+							>Understand the risks before connecting to production service. Unauthorized or
+							unintended changes can have severe consequences. Proceed with care.</span
+						>
+					</div>
+				{/if}
 				<span>Profile:</span>
 				<div class="flex gap-4 items-end">
 					<div class="w-32">

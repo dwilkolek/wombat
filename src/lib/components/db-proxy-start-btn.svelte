@@ -4,7 +4,6 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { AwsEnv, type RdsInstance } from '$lib/types';
 	import { invoke } from '@tauri-apps/api/core';
-	import { ask } from '@tauri-apps/plugin-dialog';
 
 	interface Props {
 		database: RdsInstance;
@@ -12,23 +11,10 @@
 
 	let { database }: Props = $props();
 
+	let dialog: HTMLDialogElement | undefined = $state();
 	let disabledReason = startRdsProxyDisabledReason(database);
 
 	const startDbProxy = async () => {
-		if (database?.env == AwsEnv.PROD) {
-			let response = await ask(
-				'Understand the risks before connecting to production database.\nUnauthorized or unintended changes can have severe consequences.\nProceed with care.',
-				{
-					title: 'Access to PRODUCTION database.',
-					okLabel: 'Proceed',
-					cancelLabel: 'Abort',
-					kind: 'warning'
-				}
-			);
-			if (!response) {
-				return;
-			}
-		}
 		taskStore.startTask(database, async () => {
 			return invoke('start_db_proxy', { db: database });
 		});
@@ -40,11 +26,17 @@
 	data-tip={$disabledReason ?? `Start proxy ${database.identifier}`}
 >
 	<button
-		data-umami-event="rds_proxy_start"
-		data-umami-event-uid={$userStore.id}
+		data-umami-event={database?.env == AwsEnv.PROD ? undefined : 'rds_proxy_start'}
+		data-umami-event-uid={database?.env == AwsEnv.PROD ? undefined : $userStore.id}
 		disabled={!!$disabledReason}
 		class={`flex flex-row gap-1 ${$disabledReason ? 'opacity-30' : 'cursor-pointer'}`}
-		onclick={startDbProxy}
+		onclick={() => {
+			if (database?.env == AwsEnv.PROD) {
+				dialog?.show();
+			} else {
+				startDbProxy();
+			}
+		}}
 		aria-label={$disabledReason ?? 'Start proxy'}
 	>
 		<div class="w-5 h-5 relative">
@@ -76,3 +68,53 @@
 		</div>
 	</button>
 </div>
+
+<dialog bind:this={dialog} class="modal">
+	<div class="modal-box">
+		<button
+			class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
+			onclick={() => dialog?.close()}>✕</button
+		>
+		<h3 class="text-lg font-bold">Connecting to Production database</h3>
+		<div role="alert" class="alert alert-warning mb-2 mt-2">
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-6 w-6 shrink-0 stroke-current"
+				fill="none"
+				viewBox="0 0 24 24"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+				/>
+			</svg>
+			<span
+				>Understand the risks before connecting to production database. Unauthorized or unintended
+				changes can have severe consequences. Proceed with care.</span
+			>
+		</div>
+		<div class="modal-action">
+			<button
+				class="btn btn-secondary"
+				onclick={() => {
+					dialog?.close();
+				}}
+			>
+				Abort
+			</button>
+			<button
+				class="btn btn-primary"
+				data-umami-event="rds_proxy_start"
+				data-umami-event-uid={$userStore.id}
+				onclick={async () => {
+					startDbProxy();
+					dialog?.close();
+				}}
+			>
+				Connect
+			</button>
+		</div>
+	</div>
+</dialog>

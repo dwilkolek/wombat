@@ -13,6 +13,7 @@
 	<button
 		data-umami-event="rds_proxy_stop"
 		data-umami-event-uid={$userStore.id}
+		class="cursor-pointer"
 		onclick={async () => {
 			console.log('stopping ', database_arn);
 			await execute('stop_job', { arn: database_arn });
