@@ -63,7 +63,7 @@
 	<span class="text-sm text-gray-600">{port}</span>
 {/if}
 
-<dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
+<dialog bind:this={dialog} class="modal">
 	<div class="modal-box">
 		<button
 			class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"

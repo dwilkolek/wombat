@@ -156,7 +156,7 @@
 	</div>
 {/if}
 
-<dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
+<dialog bind:this={dialog} class="modal">
 	<div class="modal-box w-11/12 max-w-[960px]">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
