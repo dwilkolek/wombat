@@ -20,7 +20,8 @@ const featureMap: { [key: string]: string } = {
 	'tasks-page': 'tasksPage',
 	'cookie-session-proxy': 'cookieSessionProxy',
 	'rds-prod-conn-write': 'rdsProdConnWrite',
-	'rds-conn-write': 'rdsConnWrite'
+	'rds-conn-write': 'rdsConnWrite',
+	debug: 'debug'
 };
 
 const createFeatureStore = () => {
@@ -43,7 +44,8 @@ const createFeatureStore = () => {
 		tasksPage: false,
 		cookieSessionProxy: false,
 		rdsProdConnWrite: false,
-		rdsConnWrite: false
+		rdsConnWrite: false,
+		debug: false
 	};
 	const features = writable(defaultFs);
 
@@ -62,7 +64,6 @@ const createFeatureStore = () => {
 					return { ...acc, [featureMap[v] ?? v]: true };
 				}, {})
 			};
-			console.log(newFs);
 			return newFs;
 		});
 	}

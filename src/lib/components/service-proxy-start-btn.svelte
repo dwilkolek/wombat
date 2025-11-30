@@ -127,7 +127,7 @@
 	};
 </script>
 
-<div class="tooltip tooltip-left h-[20px]" data-tip={$disabledReason ?? 'Start proxy'}>
+<div class="tooltip tooltip-left h-5" data-tip={$disabledReason ?? 'Start proxy'}>
 	<button
 		disabled={!!$disabledReason}
 		class={`flex flex-row gap-1 items-center ${$disabledReason ? 'opacity-30' : 'cursor-pointer'}`}
@@ -162,7 +162,7 @@
 		</div>
 	</button>
 </div>
-<dialog bind:this={dialog} onclose={() => console.log('closed')} class="modal">
+<dialog bind:this={dialog} class="modal">
 	<div class="modal-box w-11/12 max-w-[960px]">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
