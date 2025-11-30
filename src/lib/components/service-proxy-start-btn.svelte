@@ -198,8 +198,8 @@
 							/>
 						</svg>
 						<span
-							>Understand the risks before connecting to production service. Unauthorized or
-							unintended changes can have severe consequences. Proceed with care.</span
+							>You are about to connect to a production service. Unauthorized or unintended changes
+							can cause serious issues. <br /> <b>Proceed with caution.</b></span
 						>
 					</div>
 				{/if}
