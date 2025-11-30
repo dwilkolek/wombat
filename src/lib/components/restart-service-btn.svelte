@@ -27,7 +27,7 @@
 			data-umami-event="ecs_task_restart_start"
 			data-umami-event-uid={$userStore.id}
 			disabled={!!$disabledReason}
-			class={$disabledReason ? 'opacity-30' : ''}
+			class={$disabledReason ? 'opacity-30' : 'cursor-pointer'}
 			onclick={(e) => {
 				e.preventDefault();
 				invoke('deploy_ecs_service', {

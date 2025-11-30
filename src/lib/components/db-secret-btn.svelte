@@ -65,7 +65,15 @@
 				</p>
 				<div class="modal-action">
 					<button
-						class="btn btn-info"
+						class="btn btn-secondary"
+						onclick={() => {
+							dialog?.close();
+						}}
+					>
+						Abort
+					</button>
+					<button
+						class="btn btn-primary"
 						data-umami-event="rds_credentials_get"
 						data-umami-event-uid={$userStore.id}
 						onclick={async () => {
@@ -90,14 +98,6 @@
 					>
 						Get me that secret!
 					</button>
-					<button
-						class="btn btn-warning"
-						onclick={() => {
-							dialog?.close();
-						}}
-					>
-						Abort
-					</button>
 				</div>
 			{/if}
 			{#if dialogState.state === 'loading'}
@@ -106,7 +106,7 @@
 				</p>
 				<div class="modal-action">
 					<button
-						class="btn btn-warning"
+						class="btn btn-primary"
 						onclick={() => {
 							dialog?.close();
 						}}
@@ -144,7 +144,7 @@
 				</div>
 				<div class="modal-action">
 					<button
-						class="btn btn-warning"
+						class="btn btn-secondary"
 						data-umami-event="rds_credentials_copy"
 						data-umami-event-uid={$userStore.id}
 						onclick={() => {
@@ -154,7 +154,7 @@
 						Copy password
 					</button>
 					<button
-						class="btn btn-info"
+						class="btn btn-primary"
 						onclick={() => {
 							dialog?.close();
 						}}
@@ -175,7 +175,7 @@
 
 				<div class="modal-action">
 					<button
-						class="btn btn-info"
+						class="btn btn-primary"
 						onclick={() => {
 							dialog?.close();
 						}}
