@@ -25,13 +25,13 @@ jobs:
           #   args: '--verbose --target universal-apple-darwin'
           #   platform-name: 'Macos-Universal'
           - platform: 'macos-latest'
-            args: '--debug --target aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin'
             platform-name: 'Macos-latest'
           - platform: 'ubuntu-latest'
-            args: '--debug'
+            args: ''
             platform-name: 'Linux'
           - platform: 'windows-latest'
-            args: '--debug'
+            args: ''
             platform-name: 'Windows'
     runs-on: ${{ matrix.platform }}
     steps:
