@@ -10,7 +10,14 @@
 		"active": true,
 		"category": "DeveloperTool",
 		"copyright": "2023 Damian Wilkołek",
-		"targets": ["deb", "appimage", "nsis", "msi", "app", "dmg"],
+		"targets": [
+			"deb",
+			"appimage",
+			"nsis",
+			"msi",
+			"app",
+			"dmg"
+		],
 		"externalBin": [],
 		"icon": [
 			"icons/32x32.png",
@@ -41,7 +48,7 @@
 		"createUpdaterArtifacts": true
 	},
 	"productName": "Wombat",
-	"version": "4.12.1",
+	"version": "5.0.1",
 	"identifier": "eu.wilkolek.wombat",
 	"plugins": {
 		"updater": {
