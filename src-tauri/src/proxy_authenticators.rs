@@ -1,6 +1,6 @@
 use crate::proxy::ProxyInterceptor;
 use crate::shared::Env;
-use crate::{aws, shared::CookieJar, wombat_api};
+use crate::{aws, shared::CookieJar, shared::ProxyAuthConfig};
 use async_trait::async_trait;
 use headers::authorization::Credentials;
 use headers::Authorization;
@@ -46,7 +46,7 @@ pub struct JepsenAutheticator {
 impl JepsenAutheticator {
     pub fn from_proxy_auth_config(
         aws_config: &aws_config::SdkConfig,
-        jepsen_config: wombat_api::ProxyAuthConfig,
+        jepsen_config: ProxyAuthConfig,
     ) -> Self {
         JepsenAutheticator {
             aws_config: aws_config.clone(),
@@ -116,7 +116,7 @@ pub struct BasicAuthenticator {
 impl BasicAuthenticator {
     pub async fn from_proxy_auth_config(
         aws_config: &aws_config::SdkConfig,
-        basic_config: wombat_api::ProxyAuthConfig,
+        basic_config: ProxyAuthConfig,
     ) -> Self {
         BasicAuthenticator {
             user: basic_config.basic_user.unwrap(),

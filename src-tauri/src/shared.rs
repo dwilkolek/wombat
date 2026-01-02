@@ -9,11 +9,11 @@ pub type TrackedName = String;
 
 pub struct BrowserExtension {
     pub version: Option<String>,
-    pub reported_version: Option<String>,
     pub last_health_check: DateTime<Utc>,
     pub expected_version: String,
     pub last_supported_version: String,
 }
+
 impl BrowserExtension {
     pub fn to_status(&self) -> BrowserExtensionStatus {
         let version = self.version.clone().unwrap_or("0.0.0".to_owned());
@@ -204,4 +204,34 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
         return arn.split("::").skip(2).take(1).collect();
     }
     format!("unknown!#{arn}")
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogFilter {
+    id: i64,
+    filter: String,
+    services: Vec<String>,
+    label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyAuthConfig {
+    pub id: i64,
+    pub from_app: String,
+    pub to_app: String,
+    pub env: String,
+
+    pub auth_type: String,
+    pub api_path: String,
+
+    pub jepsen_auth_api: Option<String>,
+    pub jepsen_api_name: Option<String>,
+    pub jepsen_client_id: Option<String>,
+
+    pub basic_user: Option<String>,
+
+    pub secret_name: String,
+
+    pub require_sso_profile: bool,
 }

@@ -1,11 +1,10 @@
 use std::{collections::HashSet, env, fs, process::Command};
 
-use crate::{aws, wombat_api::WombatApi};
+use crate::aws;
 
 pub const CODEARTIFACT_LOGIN: &str = "codeartifact-login";
 pub const AWS_CLI: &str = "aws-cli";
 pub const SESSION_MANAGER_PLUGIN: &str = "session-manager-plugin";
-pub const WOMBAT_API: &str = "wombat-backend-api";
 
 #[derive(Clone, serde::Serialize)]
 pub struct Dependency {
@@ -15,11 +14,7 @@ pub struct Dependency {
     version_or_error: String,
 }
 
-pub async fn check_dependencies(
-    wombat_api: &mut WombatApi,
-    aws_config_provider: &aws::AwsConfigProvider,
-    required_feature: &str,
-) -> Vec<Dependency> {
+pub async fn check_dependencies(aws_config_provider: &aws::AwsConfigProvider) -> Vec<Dependency> {
     let mut dependecies = Vec::new();
     log::info!("checking dependencies");
     if let Ok(cmd) = Command::new("aws").arg("--version").output() {
@@ -107,23 +102,6 @@ pub async fn check_dependencies(
         version_or_error: format!(
             "wombat: {wombat_profiles}, sso: {sso_profile}, infra: {infra_profiles}"
         ),
-    });
-
-    log::info!("wombat done");
-    let wombat_api_state = wombat_api.status(required_feature).await;
-    dependecies.push(match wombat_api_state {
-        Ok(v) => Dependency {
-            name: WOMBAT_API.to_string(),
-            ok: true,
-            required: true,
-            version_or_error: v,
-        },
-        Err(v) => Dependency {
-            name: WOMBAT_API.to_string(),
-            ok: false,
-            required: true,
-            version_or_error: v,
-        },
     });
 
     let is_codeartifact_login_in_path = is_program_in_path(CODEARTIFACT_LOGIN);

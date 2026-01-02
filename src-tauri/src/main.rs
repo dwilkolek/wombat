@@ -25,6 +25,8 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 
+use crate::requirements::{DEFAULT_FEATURES, ENV_FEATURES, ENV_LOGGER, ENV_PREFIX};
+
 mod aws;
 mod cache_db;
 mod cluster_resolver;
@@ -37,7 +39,6 @@ mod requirements;
 mod rest_api;
 mod shared;
 mod user;
-mod wombat_api;
 
 #[derive(Clone, serde::Serialize)]
 struct TaskKilled {
@@ -48,7 +49,7 @@ struct TaskKilled {
 #[serde(rename_all = "camelCase")]
 struct NewTaskParams {
     port: u16,
-    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
+    proxy_auth_config: Option<shared::ProxyAuthConfig>,
 }
 
 #[derive(Clone, serde::Serialize)]
@@ -174,16 +175,16 @@ async fn login(
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
     cluster_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+    // wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, CommandError> {
     let environments: Vec<Env>;
     let tracked_names: HashSet<String>;
     {
         let mut aws_config_provider = aws_config_provider.0.write().await;
 
-        let mut wombat_api = wombat_api_instance.0.lock().await;
-        let is_enabled = wombat_api.is_feature_enabled("dev-way").await;
+        // let mut wombat_api = wombat_api_instance.0.lock().await;
+        // TODO: fix this
+        let is_enabled = false; //wombat_api.is_feature_enabled("dev-way").await;
         aws_config_provider.login(profile.to_owned(), is_enabled);
 
         environments = aws_config_provider.configured_envs();
@@ -233,15 +234,16 @@ async fn login(
     }
 
     let _ = app_handle.emit("message", "Syncing global state...");
-    let mut api = wombat_api_instance.0.lock().await;
-    let api_status = api.status(requirements::REQUIRED_FEATURE).await;
-    if let Err(status) = api_status {
-        return Err(CommandError::new(
-            "login",
-            format!("Wombat backend API is not ok. Reason: {status}"),
-        ));
-    }
-    api.report_versions(None).await;
+    // TODO: validate this shit
+    // let mut api = wombat_api_instance.0.lock().await;
+    // let api_status = api.status(requirements::REQUIRED_FEATURE).await;
+    // if let Err(status) = api_status {
+    //     return Err(CommandError::new(
+    //         "login",
+    //         format!("Wombat backend API is not ok. Reason: {status}"),
+    //     ));
+    // }
+    // api.report_versions(None).await;
 
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
     let cluster_resolver_instance = Arc::clone(&cluster_resolver_instance.0);
@@ -1037,7 +1039,7 @@ async fn start_service_proxy(
     infra_profile: Option<InfraProfile>,
     sso_profile: Option<SsoProfile>,
     headers: HashMap<String, String>,
-    proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
+    proxy_auth_config: Option<shared::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
@@ -1269,54 +1271,66 @@ async fn start_lambda_app_proxy(
 }
 
 #[tauri::command]
-async fn log_filters(
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<Vec<wombat_api::LogFilter>, CommandError> {
-    let mut wombat_api = wombat_api_instance.0.lock().await;
-    let filters = wombat_api.log_filters().await;
-    Ok(filters)
+async fn log_filters(// wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+) -> Result<Vec<shared::LogFilter>, CommandError> {
+    // let mut wombat_api = wombat_api_instance.0.lock().await;
+    // let filters = wombat_api.log_filters().await;
+    // Ok(filters)
+    // TODO: provide log filters from env
+
+    Ok(Vec::new())
 }
 
 #[tauri::command]
-async fn proxy_auth_configs(
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
-) -> Result<Vec<wombat_api::ProxyAuthConfig>, CommandError> {
-    let mut wombat_api = wombat_api_instance.0.lock().await;
-    let configs = wombat_api.get_proxy_auth_configs().await;
+async fn proxy_auth_configs(// wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+) -> Result<Vec<shared::ProxyAuthConfig>, CommandError> {
+    // let mut wombat_api = wombat_api_instance.0.lock().await;
+    // let configs = wombat_api.get_proxy_auth_configs().await;
+    // Ok(configs)
+    // TODO: provide proxy auth configs
 
-    Ok(configs)
+    Ok(Vec::new())
 }
 
 #[tauri::command]
 async fn is_feature_enabled(
     feature: &str,
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+    // wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<bool, CommandError> {
-    let mut wombat_api = wombat_api_instance.0.lock().await;
-    let is_enabled = wombat_api.is_feature_enabled(feature).await;
-
-    Ok(is_enabled)
+    Ok(env::var(ENV_FEATURES)
+        .unwrap_or(DEFAULT_FEATURES.to_owned())
+        .split(",")
+        .any(|f| f == feature))
 }
 
 #[tauri::command]
-async fn all_features_enabled(
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+async fn all_features_enabled(// wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<Vec<String>, CommandError> {
-    let mut wombat_api = wombat_api_instance.0.lock().await;
-    Ok(wombat_api.all_features_enabled().await)
+    let env_variables_loading_result = dotenv();
+    info!(
+        "Loading env variables: {}",
+        env_variables_loading_result.is_ok()
+    );
+    info!("features: {:?}", env::var("FEATURES"));
+    // let mut wombat_api = wombat_api_instance.0.lock().await;
+    Ok(env::var(ENV_FEATURES)
+        .unwrap_or(DEFAULT_FEATURES.to_owned())
+        .split(",")
+        .map(|f| f.to_owned())
+        .collect())
 }
 
 #[tauri::command]
 async fn check_dependencies(
-    wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+    // wombat_api_instance: tauri::State<'_, WombatApiInstance>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<dependency_check::Dependency>, ()> {
-    let mut wombat_api = wombat_api_instance.0.lock().await;
+    // let mut wombat_api = wombat_api_instance.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     Ok(dependency_check::check_dependencies(
-        &mut wombat_api,
+        // &mut wombat_api,
         &aws_config_provider,
-        requirements::REQUIRED_FEATURE,
+        // requirements::REQUIRED_FEATURE,
     )
     .await)
 }
@@ -1553,44 +1567,6 @@ async fn find_secret_with_fallback(
     None
 }
 
-#[cfg(debug_assertions)]
-fn app_config() -> AppConfig {
-    let _ = dotenv();
-    AppConfig {
-        wombat_api_url: env::var("WOMBAT_API_URL").unwrap_or_else(|_| {
-            warn!("Using default token since WOMBAT_API_URL was not set");
-            "%%WOMBAT_API_URL%%".to_string()
-        }),
-        wombat_api_user: env::var("WOMBAT_API_USER").unwrap_or_else(|_| {
-            warn!("Using default token since WOMBAT_API_USER was not set");
-            "%%WOMBAT_API_USER%%".to_string()
-        }),
-        wombat_api_password: env::var("WOMBAT_API_PASSWORD").unwrap_or_else(|_| {
-            warn!("Using default token since WOMBAT_API_PASSWORD was not set");
-            "%%WOMBAT_API_PASSWORD%%".to_string()
-        }),
-        logger: env::var("LOGGER").unwrap_or_else(|_| "console".to_string()),
-    }
-}
-
-#[cfg(not(debug_assertions))]
-fn app_config() -> AppConfig {
-    AppConfig {
-        logger: "file".to_owned(),
-        wombat_api_url: "%%WOMBAT_API_URL%%".to_string(),
-        wombat_api_user: "%%WOMBAT_API_USER%%".to_string(),
-        wombat_api_password: "%%WOMBAT_API_PASSWORD%%".to_string(),
-    }
-}
-
-#[derive(Debug)]
-struct AppConfig {
-    logger: String,
-    wombat_api_url: String,
-    wombat_api_user: String,
-    wombat_api_password: String,
-}
-
 fn initialize_cache_db_pool(profile: &str) -> Pool<SqliteConnectionManager> {
     if let Ok(paths) = user::wombat_dir().read_dir() {
         for path in paths.flatten() {
@@ -1614,8 +1590,13 @@ fn initialize_cache_db_pool(profile: &str) -> Pool<SqliteConnectionManager> {
 
 #[tokio::main]
 async fn main() {
+    let env_variables_loading_result = dotenv();
+    info!(
+        "Loading env variables: {}",
+        env_variables_loading_result.is_ok()
+    );
+
     fix_path_env::fix().unwrap_or_log();
-    let app_config = app_config();
     let user = UserConfig::default();
     let cookie_jar = Arc::new(Mutex::new(CookieJar {
         cookies: Vec::new(),
@@ -1623,35 +1604,20 @@ async fn main() {
     let browser_ext = Arc::new(Mutex::new(BrowserExtension {
         last_health_check: Utc::now() - chrono::Duration::days(100),
         version: None,
-        reported_version: None,
         last_supported_version: requirements::LAST_SUPPORTED_BROWSER_EXTENSION.to_owned(),
         expected_version: requirements::EXPECTED_BROWSER_EXTENSION.to_owned(),
     }));
-    let wombat_api = wombat_api::WombatApi::new(
-        app_config.wombat_api_url.clone(),
-        app_config.wombat_api_user.clone(),
-        app_config.wombat_api_password.clone(),
-        user.id,
-    );
 
-    let wombat_api = Arc::new(Mutex::new(wombat_api));
-    let wombat_api_ref_clone = wombat_api.clone();
-    tokio::task::spawn(async move {
-        let mut wombat_api_ref_clone = wombat_api_ref_clone.lock().await;
-        wombat_api_ref_clone.auth().await;
-    });
-    rest_api::serve(
-        cookie_jar.clone(),
-        browser_ext.clone(),
-        Arc::new(Mutex::new(wombat_api::WombatApi::new(
-            app_config.wombat_api_url.clone(),
-            app_config.wombat_api_user.clone(),
-            app_config.wombat_api_password.clone(),
-            user.id,
-        ))),
-    );
+    rest_api::serve(cookie_jar.clone(), browser_ext.clone());
 
-    let _guard = match app_config.logger.as_str() {
+    for (key, value) in env::vars() {
+        if key.starts_with(ENV_PREFIX) {
+            println!("Env config: {}: {}", key, value);
+        }
+    }
+
+    let logger = env::var(ENV_LOGGER).unwrap_or("file".to_owned());
+    let _guard = match logger.as_str() {
         "console" => {
             tracing_subscriber::fmt().init();
             None
@@ -1666,7 +1632,7 @@ async fn main() {
             Some(guard)
         }
         _ => {
-            panic!("Unknown logger: {}", &app_config.logger);
+            panic!("Unknown logger: {}", &logger);
         }
     };
 
@@ -1709,7 +1675,7 @@ async fn main() {
         .manage(EcsResolverInstance(Arc::new(RwLock::new(
             EcsResolver::new(cache_db_pool.clone(), aws_config_provider.clone()),
         ))))
-        .manage(WombatApiInstance(wombat_api))
+        // .manage(WombatApiInstance(wombat_api))
         .manage(KVStoreInstance(Arc::new(Mutex::new(KVStore {
             store: HashMap::new(),
         }))))
@@ -1781,7 +1747,7 @@ struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
 
-struct WombatApiInstance(Arc<Mutex<wombat_api::WombatApi>>);
+// struct WombatApiInstance(Arc<Mutex<wombat_api::WombatApi>>);
 struct BrowserExtensionInstance(Arc<Mutex<BrowserExtension>>);
 struct CookieJarInstance(Arc<Mutex<CookieJar>>);
 struct KVStoreInstance(Arc<Mutex<KVStore>>);

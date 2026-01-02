@@ -1,5 +1,4 @@
 use crate::shared::{BrowserExtension, Cookie, CookieJar, Env};
-use crate::wombat_api::WombatApi;
 use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use warp::reply::Reply;
@@ -58,19 +57,11 @@ struct HealthBody {
 async fn health(
     body: HealthBody,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
-    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) -> Result<warp::reply::Response, warp::Rejection> {
     let version = body.version;
     let mut browser_ext = browser_ext.lock().await;
     browser_ext.last_health_check = chrono::Utc::now();
-    let new_version = Some(version.clone());
     browser_ext.version = Some(version.clone());
-    if browser_ext.reported_version != new_version {
-        let mut wombat_api = wombat_api.lock().await;
-        if wombat_api.report_versions(new_version.clone()).await {
-            browser_ext.reported_version = Some(version.clone());
-        }
-    }
     Ok(
         warp::reply::with_status(env!("CARGO_PKG_VERSION").to_owned(), StatusCode::OK)
             .into_response(),
@@ -106,19 +97,9 @@ fn with_browser_extension(
     warp::any().map(move || browser_ext.clone())
 }
 
-fn with_wombat_api(
-    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
-) -> impl Filter<
-    Extract = (std::sync::Arc<tokio::sync::Mutex<WombatApi>>,),
-    Error = std::convert::Infallible,
-> + Clone {
-    warp::any().map(move || wombat_api.clone())
-}
-
 pub fn serve(
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
-    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
 ) {
     tokio::task::spawn(async move {
         let routes = warp::put()
@@ -134,7 +115,6 @@ pub fn serve(
                 .and(warp::path!("health"))
                 .and(warp::body::json())
                 .and(with_browser_extension(browser_ext.clone()))
-                .and(with_wombat_api(wombat_api.clone()))
                 .and_then(health))
             .or(warp::post()
                 .and(warp::path!("browser-extension-event"))
