@@ -238,7 +238,7 @@ fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) 
                 db.cdk_stack_name.clone(),
                 db.cdk_logical_id.clone(),
                 db.master_username.clone(),
-                i
+                i32::try_from(i).unwrap_or(0)
             ],
         ).unwrap();
     }

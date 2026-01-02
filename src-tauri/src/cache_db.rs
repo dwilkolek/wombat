@@ -1,6 +1,6 @@
 use rusqlite::{params, Connection};
 
-pub fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
+pub fn get_cache_version(conn: &Connection, cache: &str) -> i32 {
     conn.execute(
         "CREATE TABLE IF NOT EXISTS cache_versions(cache STRING PRIMARY KEY, version INTEGER)",
         [],
@@ -17,7 +17,7 @@ pub fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
     };
     let mut rows = stmt.query(params![cache]).unwrap();
     let version = if let Some(row) = rows.next().unwrap() {
-        row.get::<_, u64>(0).unwrap_or_default()
+        row.get::<_, i32>(0).unwrap_or_default()
     } else {
         0
     };
@@ -25,7 +25,7 @@ pub fn get_cache_version(conn: &Connection, cache: &str) -> u64 {
     version
 }
 
-pub fn set_cache_version(conn: &Connection, cache: &str, version: u64) {
+pub fn set_cache_version(conn: &Connection, cache: &str, version: i32) {
     log::info!("{cache} cache version set to {version}");
     if version == 1 {
         conn.execute(
