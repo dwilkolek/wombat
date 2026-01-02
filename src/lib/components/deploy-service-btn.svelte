@@ -12,7 +12,7 @@
 
 	let { service }: Props = $props();
 
-	let disabledReason = deployEcsServiceDisabledReason(service);
+	let disabledReason = $derived(deployEcsServiceDisabledReason(service));
 
 	let dialog: HTMLDialogElement | undefined = $state();
 	let imageTag = $state(service.version);
@@ -56,7 +56,7 @@
 {/if}
 
 <dialog bind:this={dialog} class="modal">
-	<div class="modal-box w-11/12 max-w-[960px]">
+	<div class="modal-box w-11/12 max-w-240">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
 				<div class="flex gap-2 items-center justify-between">

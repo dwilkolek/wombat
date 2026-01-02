@@ -12,7 +12,7 @@
 	let { database }: Props = $props();
 
 	let dialog: HTMLDialogElement | undefined = $state();
-	let disabledReason = startRdsProxyDisabledReason(database);
+	let disabledReason = $derived(startRdsProxyDisabledReason(database));
 
 	const startDbProxy = async () => {
 		taskStore.startTask(database, async () => {

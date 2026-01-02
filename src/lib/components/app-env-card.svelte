@@ -10,7 +10,7 @@
 
 	let { app, env }: Props = $props();
 
-	let details = serviceDetailStore(app);
+	let details = $derived(serviceDetailStore(app));
 	let envDetails = $derived($details?.envs?.get(env));
 </script>
 

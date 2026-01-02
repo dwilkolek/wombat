@@ -7,31 +7,33 @@
 	// export let size = '1.8em';
 	let selected = '#fcd703';
 	let notSelected = 'rgba(252, 215, 3, 0.5)';
-	let transition = isSelected ? notSelected : selected;
-	let color = $state(isSelected ? selected : notSelected);
+	let transitionColor = $derived(isSelected ? notSelected : selected);
+	let defaultColor = $derived(isSelected ? selected : notSelected);
+
+	let inTransition = $state(false);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	onmouseover={() => {
-		color = transition;
+		inTransition = true;
 	}}
 	onmouseout={() => {
-		color = isSelected ? selected : notSelected;
+		inTransition = false;
 	}}
 	onfocus={() => {
-		color = transition;
+		inTransition = true;
 	}}
 	onblur={() => {
-		color = isSelected ? selected : notSelected;
+		inTransition = false;
 	}}
 >
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
-		fill={color}
+		fill={inTransition ? transitionColor : defaultColor}
 		viewBox="0 0 24 24"
 		stroke-width="1.5"
-		stroke={color}
+		stroke={inTransition ? transitionColor : defaultColor}
 		class="w-6 h-6"
 	>
 		<path

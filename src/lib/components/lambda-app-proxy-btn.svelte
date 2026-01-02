@@ -16,8 +16,8 @@
 	}
 
 	let { app, env }: Props = $props();
-	const lambdaArn = lambdaAppArn(app, env);
-	let disabledReason = startLambdaProxyDisabledReason(lambdaArn, env);
+	const lambdaArn = $derived(lambdaAppArn(app, env));
+	let disabledReason = $derived(startLambdaProxyDisabledReason(lambdaArn, env));
 	let port = $derived(
 		$taskStore?.find((t) => {
 			return t.arn === lambdaArn;
@@ -157,7 +157,7 @@
 {/if}
 
 <dialog bind:this={dialog} class="modal">
-	<div class="modal-box w-11/12 max-w-[960px]">
+	<div class="modal-box w-11/12 max-w-240">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
 				<div class="flex gap-2 items-center justify-between">

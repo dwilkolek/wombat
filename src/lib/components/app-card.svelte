@@ -24,7 +24,7 @@
 
 	let { app, displayConfig }: Props = $props();
 
-	let details = serviceDetailStore(app);
+	let details = $derived(serviceDetailStore(app));
 
 	let isFavourite = $derived(!!$activeProfilePreferences.tracked_names.includes(app));
 </script>
