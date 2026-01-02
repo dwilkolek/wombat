@@ -5,4 +5,4 @@ pub static ENV_PREFIX: &str = "WOMBAT_";
 pub static ENV_FEATURES: &str = "WOMBAT_FEATURES";
 pub static ENV_LOGGER: &str = "WOMBAT_LOGGER";
 
-pub static DEFAULT_FEATURES: &str = "start-lambda-proxy,get-rds-secret,lambda-apps,ecs-prod-actions,rds-prod-actions,restart-ecs-service,start-ecs-proxy,start-rds-proxy,rds-conn-write,wombat-5.0.0";
+pub static DEFAULT_FEATURES: &str = "restartEcsService,startEcsProxy,startRdsProxy,startLambdaProxy,getRdsSecret,lambdaApps,ecsProdActions,rdsProdActions,lambdaProdActions,rdsProdConnWrite,rdsConnWrite,proxyCustomHeaders";

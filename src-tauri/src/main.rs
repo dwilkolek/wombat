@@ -25,17 +25,17 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 
-use crate::requirements::{DEFAULT_FEATURES, ENV_FEATURES, ENV_LOGGER, ENV_PREFIX};
+use crate::constants::{DEFAULT_FEATURES, ENV_FEATURES, ENV_LOGGER, ENV_PREFIX};
 
 mod aws;
 mod cache_db;
 mod cluster_resolver;
+mod constants;
 mod dependency_check;
 mod ecs_resolver;
 mod proxy;
 mod proxy_authenticators;
 mod rds_resolver;
-mod requirements;
 mod rest_api;
 mod shared;
 mod user;
@@ -380,33 +380,13 @@ async fn credentials(
         }
     };
 
-    let secret;
     let found_db_secret =
         find_secret_with_fallback(&aws_config, &db, rds_resolver_instance.0.clone()).await;
 
     match found_db_secret {
-        Some(found_secret) => {
-            secret = Ok(found_secret);
-        }
-        None => {
-            if aws_config_provider.dev_way {
-                let (override_aws_profile, override_aws_config) =
-                    aws_config_provider.sso_config(&db.env).await;
-                warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = find_secret_with_fallback(
-                    &override_aws_config,
-                    &db,
-                    rds_resolver_instance.0.clone(),
-                )
-                .await
-                .ok_or(CommandError::new("credentials", "Secret not found"));
-            } else {
-                secret = Err(CommandError::new("credentials", "Secret not found"))
-            }
-        }
+        Some(found_secret) => Ok(found_secret),
+        None => Err(CommandError::new("credentials", "Secret not found")),
     }
-
-    secret
 }
 
 #[tauri::command]
@@ -1058,7 +1038,7 @@ async fn start_service_proxy(
     }
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
-        .with_dev_way_check(&infra_profile, &sso_profile)
+        .for_infra(&infra_profile)
         .await
         .expect("Missing sdk_config to start service proxy");
 
@@ -1082,7 +1062,7 @@ async fn start_service_proxy(
 
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
         let (source_app_profile, source_app_config) = aws_config_provider
-            .with_dev_way_check(&infra_profile, &sso_profile)
+            .for_infra(&infra_profile)
             .await
             .expect("Missing sdk_config to setup auth interceptor");
         match proxy_auth_config.auth_type.as_str() {
@@ -1311,7 +1291,7 @@ async fn all_features_enabled(// wombat_api_instance: tauri::State<'_, WombatApi
         "Loading env variables: {}",
         env_variables_loading_result.is_ok()
     );
-    info!("features: {:?}", env::var("FEATURES"));
+    info!("features: {:?}", env::var(ENV_FEATURES));
     // let mut wombat_api = wombat_api_instance.0.lock().await;
     Ok(env::var(ENV_FEATURES)
         .unwrap_or(DEFAULT_FEATURES.to_owned())
@@ -1604,8 +1584,8 @@ async fn main() {
     let browser_ext = Arc::new(Mutex::new(BrowserExtension {
         last_health_check: Utc::now() - chrono::Duration::days(100),
         version: None,
-        last_supported_version: requirements::LAST_SUPPORTED_BROWSER_EXTENSION.to_owned(),
-        expected_version: requirements::EXPECTED_BROWSER_EXTENSION.to_owned(),
+        last_supported_version: constants::LAST_SUPPORTED_BROWSER_EXTENSION.to_owned(),
+        expected_version: constants::EXPECTED_BROWSER_EXTENSION.to_owned(),
     }));
 
     rest_api::serve(cookie_jar.clone(), browser_ext.clone());

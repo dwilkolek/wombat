@@ -2,68 +2,48 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { writable } from 'svelte/store';
 
-const featureMap: { [key: string]: string } = {
-	'dev-way': 'devWay',
-	'restart-ecs-service': 'restartEcsService',
-	'deploy-ecs-service': 'deployEcsService',
-	'deploy-ecs-with-tags': 'deployEcsWithTags',
-	'remove-ecs-task-definitions': 'removeEcsTaskDefinitions',
-	'start-ecs-proxy': 'startEcsProxy',
-	'start-rds-proxy': 'startRdsProxy',
-	'start-lambda-proxy': 'startLambdaProxy',
-	'get-rds-secret': 'getRdsSecret',
-	'proxy-custom-headers': 'proxyCustomHeaders',
-	'lambda-apps': 'lambdaApps',
-	'ecs-prod-actions': 'ecsProdActions',
-	'rds-prod-actions': 'rdsProdActions',
-	'lambda-prod-actions': 'lambdaProdActions',
-	'tasks-page': 'tasksPage',
-	'cookie-session-proxy': 'cookieSessionProxy',
-	'rds-prod-conn-write': 'rdsProdConnWrite',
-	'rds-conn-write': 'rdsConnWrite',
-	debug: 'debug'
-};
-
 const createFeatureStore = () => {
 	const defaultFs = {
 		loading: true,
+
+		//TODO: consider and delete
 		devWay: false,
-		restartEcsService: false,
 		deployEcsService: false,
 		deployEcsWithTags: false,
 		removeEcsTaskDefinitions: false,
+		tasksPage: false,
+		proxyCustomHeaders: false,
+		cookieSessionProxy: false,
+
+		restartEcsService: false,
 		startEcsProxy: false,
 		startRdsProxy: false,
 		startLambdaProxy: false,
 		getRdsSecret: false,
-		proxyCustomHeaders: false,
 		lambdaApps: false,
 		ecsProdActions: false,
 		rdsProdActions: false,
 		lambdaProdActions: false,
-		tasksPage: false,
-		cookieSessionProxy: false,
 		rdsProdConnWrite: false,
 		rdsConnWrite: false,
 		debug: false
 	};
 	const features = writable(defaultFs);
-
+	const isValidFeature = (v: string): v is keyof typeof defaultFs => {
+		return defaultFs[v as keyof typeof defaultFs] != undefined;
+	};
 	async function refreshFeatures() {
 		features.set(defaultFs);
 		const fs = await invoke<string[]>('all_features_enabled');
 		features.update((prev) => {
-			const newFs = {
-				...prev,
-				loading: false,
-				...fs.reduce((acc, v) => {
-					if (!featureMap[v]) {
-						console.warn(`Unknown feature: ${v}`);
-						return acc;
-					}
-					return { ...acc, [featureMap[v] ?? v]: true };
-				}, {})
-			};
+			const newFs = fs.reduce((acc, v) => {
+				if (!isValidFeature(v)) {
+					console.warn(`Unknown feature: ${v}`);
+					return acc;
+				}
+				return { ...acc, [v]: true };
+			}, prev);
+			newFs.loading = false;
 			return newFs;
 		});
 	}

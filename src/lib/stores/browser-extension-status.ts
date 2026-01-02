@@ -12,7 +12,6 @@ const createExtensionStatus = () => {
 	});
 	const scheduleNext = (time: number) =>
 		setTimeout(() => {
-			console.log('checking browser status');
 			clearTimeout(timeout);
 			invoke<BrowserExtensionStatus>('browser_extension_health').then(async (res) => {
 				state.set(res);
