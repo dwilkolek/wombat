@@ -19,7 +19,7 @@
 		| { state: 'success'; credentials: DatabaseCredentials }
 		| { state: 'error'; error: string } = $state({ state: 'present' });
 
-	let disabledReason = getRdsSecretDisabledReason(database);
+	let disabledReason = $derived(getRdsSecretDisabledReason(database));
 	let dialog: HTMLDialogElement | undefined = $state();
 </script>
 

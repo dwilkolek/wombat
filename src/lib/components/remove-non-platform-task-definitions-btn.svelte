@@ -10,7 +10,7 @@
 
 	let { service }: Props = $props();
 
-	let disabledReason = removeEcsTaskDefinitionsReason(service);
+	let disabledReason = $derived(removeEcsTaskDefinitionsReason(service));
 
 	let cleanupStarted = $state(false);
 </script>

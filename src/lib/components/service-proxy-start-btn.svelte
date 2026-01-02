@@ -35,8 +35,10 @@
 	);
 	let useSSOProfile = $state(false);
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined = $state();
-	const baseAddress = `https://${service.name}${service.env.toLowerCase() == 'prod' ? '' : '.' + service.env.toLowerCase()}.services.technipfmc.com`;
-	let customHeaders: CustomHeader[] = $state([
+	const baseAddress = $derived(
+		`https://${service.name}${service.env.toLowerCase() == 'prod' ? '' : '.' + service.env.toLowerCase()}.services.technipfmc.com`
+	);
+	let defaultHeaders = $derived([
 		{
 			name: 'Host',
 			encodeBase64: false,
@@ -53,13 +55,14 @@
 		// 	value: baseAddress
 		// }
 	]);
+	let customHeaders: CustomHeader[] = $state([]);
 
 	let matchingInfraProfiles = $derived(
 		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
 			[]
 	);
 
-	let disabledReason = startEcsProxyDisabledReason(service);
+	let disabledReason = $derived(startEcsProxyDisabledReason(service));
 
 	let proxyAuthConfigsForThisService = $derived(
 		$proxyAuthConfigsStore.filter(
@@ -93,9 +96,13 @@
 		infraProfile: InfraProfile | undefined,
 		ssoProfile: SsoProfile | undefined,
 		proxyAuthConfig: ProxyAuthConfig | undefined,
-		customHeadersList: CustomHeader[]
+		customHeadersList: CustomHeader[],
+		defaultHeaderList: CustomHeader[]
 	) => {
 		const headers: { [key: string]: string } = {};
+		defaultHeaderList.forEach((header) => {
+			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
+		});
 		customHeadersList.forEach((header) => {
 			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
 		});
@@ -149,7 +156,7 @@
 	</button>
 </div>
 <dialog bind:this={dialog} class="modal">
-	<div class="modal-box w-11/12 max-w-[960px]">
+	<div class="modal-box w-11/12 max-w-240">
 		<div class="flex flex-col gap-4">
 			<div class="flex flex-col gap-2">
 				<div class="flex gap-2 items-center justify-between">
@@ -344,19 +351,28 @@
 					>
 				</div>
 				<div class="flex gap-1 flex-col">
-					{#each getFromList(customHeaders) as header (header)}
+					{#each getFromList(defaultHeaders) as header (header)}
 						<CustomHeaderForm
 							added={true}
 							bind:name={header.name}
 							bind:value={header.value}
 							bind:encodeBase64={header.encodeBase64}
-							disabled={!$featuresStore.proxyCustomHeaders}
-							onRemove={(name) => {
-								customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
-							}}
+							disabled={true}
 						/>
 					{/each}
 					{#if $featuresStore.proxyCustomHeaders}
+						{#each getFromList(customHeaders) as header (header)}
+							<CustomHeaderForm
+								added={true}
+								bind:name={header.name}
+								bind:value={header.value}
+								bind:encodeBase64={header.encodeBase64}
+								disabled={!$featuresStore.proxyCustomHeaders}
+								onRemove={(name) => {
+									customHeaders = [...customHeaders].filter((ch) => ch.name !== name);
+								}}
+							/>
+						{/each}
 						<hr class="h-px my-1 bg-gray-200 border-0 dark:bg-gray-700" />
 						<CustomHeaderForm
 							added={false}
@@ -387,7 +403,8 @@
 							useSSOProfile ? undefined : selectedInfraProfile,
 							useSSOProfile ? selectedSsoProxy : undefined,
 							selectedAuthInterceptor,
-							customHeaders
+							customHeaders,
+							defaultHeaders
 						);
 					}}
 				>

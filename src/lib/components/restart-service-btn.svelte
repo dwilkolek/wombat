@@ -11,7 +11,7 @@
 
 	let { service }: Props = $props();
 
-	let disabledReason = restartEcsDisabledReason(service);
+	let disabledReason = $derived(restartEcsDisabledReason(service));
 </script>
 
 {#if $disabledReason?.deployment != null}
