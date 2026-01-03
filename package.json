@@ -4,6 +4,8 @@
 	"engines": {
 		"node": ">=22.0.0"
 	},
+	"license": "Apache-2.0",
+	"author": "Damian Wilkołek <dwilkolek@protonmail.com>",
 	"scripts": {
 		"start": "tauri dev",
 		"dev": "vite dev",
