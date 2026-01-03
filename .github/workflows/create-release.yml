@@ -12,6 +12,10 @@ on:
         required: true
         default: '0.0.0'
 
+concurrency:
+  group: releasing
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -50,3 +54,10 @@ jobs:
           git checkout -b release/$NEW_TAG
           git commit -a -m"Release v$NEW_VER"
           git push -u origin release/$NEW_TAG
+      - name: publish release to main
+        if: ${{ inputs.ref == 'main' }}
+        env:
+          NEW_VER: ${{ inputs.version }}
+        run: |
+          NEW_TAG="v$NEW_VER"
+          git push origin release/$NEW_TAG:main
