@@ -252,7 +252,6 @@ impl InfraProfile {
 }
 
 pub struct AwsConfigProvider {
-    pub dev_way: bool,
     profile_set: ProfileSet,
     pub wombat_profiles: Vec<WombatAwsProfile>,
     pub active_wombat_profile: WombatAwsProfile,
@@ -263,7 +262,6 @@ impl AwsConfigProvider {
         let profiles = profile_set().await.unwrap_or_log();
         let wombat_profiles = Self::load_aws_profile_configuration(&profiles);
         Self {
-            dev_way: false,
             profile_set: profiles,
             active_wombat_profile: WombatAwsProfile {
                 name: "default".to_owned(),
@@ -289,8 +287,7 @@ impl AwsConfigProvider {
         }
     }
 
-    pub fn login(&mut self, profile_name: String, dev_way: bool) {
-        self.dev_way = dev_way;
+    pub fn login(&mut self, profile_name: String) {
         self.active_wombat_profile = self
             .wombat_profiles
             .iter()
@@ -352,44 +349,12 @@ impl AwsConfigProvider {
         Some(self.use_aws_config(&infra_profile.profile_name).await)
     }
 
-    pub async fn with_dev_way_check(
-        &self,
-        infra_profile: &Option<InfraProfile>,
-        sso_profile: &Option<SsoProfile>,
-    ) -> Option<(String, aws_config::SdkConfig)> {
-        info!(
-            "selecting profile with dev_way check. infra={infra_profile:?}, sso={infra_profile:?}"
-        );
-        if let Some(infra_profile) = infra_profile {
-            let infra_config = self.for_infra(infra_profile).await;
-            if infra_config.is_some() {
-                info!("returing infra sdk_config");
-                return infra_config;
-            }
-        }
-        if self.dev_way {
-            if let Some(sso_profile) = sso_profile {
-                info!("using dev_way, returing sso sdk_config");
-                return Some(self.for_sso(sso_profile).await);
-            }
-        }
-
-        warn!("selecting profile with dev_way check resulted in None");
-        None
-    }
-
     pub async fn app_config(
         &self,
         app: &str,
         env: &Env,
     ) -> Option<(String, aws_config::SdkConfig)> {
-        let app_config = self.get_or_create_app_config(app, env).await;
-        if self.dev_way {
-            let user_config = Some(self.sso_config(env).await);
-            app_config.or(user_config)
-        } else {
-            app_config
-        }
+        self.get_or_create_app_config(app, env).await
     }
 
     pub async fn app_config_with_fallback(

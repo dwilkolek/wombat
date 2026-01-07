@@ -7,7 +7,6 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { emit } from '@tauri-apps/api/event';
 	import { version } from '$app/environment';
-	import FeatureBtn from '$lib/components/feature-btn.svelte';
 	import CodeartifactLoginBtn from '$lib/components/codeartifact-login-btn.svelte';
 	import BrowserExtensionDot from '$lib/components/browser-extension-dot.svelte';
 	import { featuresStore } from '$lib/stores/feature-store';
@@ -78,7 +77,6 @@
 			<BrowserExtensionDot />
 		</div>
 
-		<FeatureBtn />
 		<CodeartifactLoginBtn />
 
 		<button

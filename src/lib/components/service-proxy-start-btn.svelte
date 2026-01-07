@@ -1,12 +1,6 @@
 <script lang="ts">
 	import { proxyAuthConfigsStore } from '$lib/stores/proxy-auth-configs-store';
-	import {
-		AwsEnv,
-		type ProxyAuthConfig,
-		type InfraProfile,
-		type SsoProfile,
-		type EcsService
-	} from '$lib/types';
+	import { AwsEnv, type ProxyAuthConfig, type InfraProfile, type EcsService } from '$lib/types';
 	import { message } from '@tauri-apps/plugin-dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
@@ -29,11 +23,7 @@
 			(infraProfile) => infraProfile.env == service.env && infraProfile.app == service.name
 		) ?? $wombatProfileStore.infraProfiles.at(0)
 	);
-	let selectedSsoProxy = $state(
-		$wombatProfileStore.ssoProfiles.find((ssoProfile) => ssoProfile.env == service.env) ??
-			$wombatProfileStore.ssoProfiles.at(0)
-	);
-	let useSSOProfile = $state(false);
+
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined = $state();
 	const baseAddress = $derived(
 		`https://${service.name}${service.env.toLowerCase() == 'prod' ? '' : '.' + service.env.toLowerCase()}.services.technipfmc.com`
@@ -82,19 +72,12 @@
 		);
 	};
 
-	let filterForSsoProfile = $derived((configs: ProxyAuthConfig[]) => {
-		return configs;
-	});
-
 	let configsForProfile = $derived(
-		useSSOProfile
-			? filterForSsoProfile(proxyAuthConfigsForThisService)
-			: filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile)
+		filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile)
 	);
 
 	const startProxy = async (
-		infraProfile: InfraProfile | undefined,
-		ssoProfile: SsoProfile | undefined,
+		infraProfile: InfraProfile,
 		proxyAuthConfig: ProxyAuthConfig | undefined,
 		customHeadersList: CustomHeader[],
 		defaultHeaderList: CustomHeader[]
@@ -112,7 +95,6 @@
 				service,
 				proxyAuthConfig,
 				infraProfile,
-				ssoProfile,
 				headers
 			});
 		});
@@ -212,45 +194,20 @@
 				{/if}
 				<span>Profile:</span>
 				<div class="flex gap-4 items-end">
-					<div class="w-32">
+					<div class="grow">
 						<!-- svelte-ignore a11y_autofocus -->
-						<select autofocus class="select w-full select-sm" bind:value={useSSOProfile}>
-							<option value={false}> Infra </option>
-							<option value={true}> SSO </option>
+						<select autofocus class="select w-full select-sm" bind:value={selectedInfraProfile}>
+							{#each matchingInfraProfiles as infraProfile (infraProfile.profile_name)}
+								{@const interceptorCount = filterForInfraProfile(
+									proxyAuthConfigsForThisService,
+									infraProfile
+								).length}
+								<option value={infraProfile}>
+									{infraProfile.profile_name} - {interceptorCount} interceptor(s)
+								</option>
+							{/each}
 						</select>
 					</div>
-					{#if useSSOProfile}
-						<div class="grow">
-							<!-- svelte-ignore a11y_autofocus -->
-							<select autofocus class="select w-full select-sm" bind:value={selectedSsoProxy}>
-								{#each $wombatProfileStore.ssoProfiles as ssoProfile (ssoProfile.profile_name)}
-									{#if ssoProfile.env == service.env}{@const interceptorCount = filterForSsoProfile(
-											proxyAuthConfigsForThisService
-										).length}
-										<option value={ssoProfile}>
-											{ssoProfile.profile_name} - {interceptorCount} interceptor(s)
-										</option>
-									{/if}
-								{/each}
-							</select>
-						</div>
-					{/if}
-					{#if !useSSOProfile}
-						<div class="grow">
-							<!-- svelte-ignore a11y_autofocus -->
-							<select autofocus class="select w-full select-sm" bind:value={selectedInfraProfile}>
-								{#each matchingInfraProfiles as infraProfile (infraProfile.profile_name)}
-									{@const interceptorCount = filterForInfraProfile(
-										proxyAuthConfigsForThisService,
-										infraProfile
-									).length}
-									<option value={infraProfile}>
-										{infraProfile.profile_name} - {interceptorCount} interceptor(s)
-									</option>
-								{/each}
-							</select>
-						</div>
-					{/if}
 				</div>
 			</div>
 			<div class="flex flex-col gap-1">
@@ -393,15 +350,14 @@
 
 			<div class="flex flex-row justify-end gap-2 mt-2">
 				<button
-					disabled={!selectedInfraProfile && !selectedSsoProxy}
+					disabled={!selectedInfraProfile}
 					class="btn btn-active btn-accent btn-sm"
 					data-umami-event="ecs_proxy_start"
 					data-umami-event-uid={$userStore.id}
 					onclick={(e) => {
 						e.preventDefault();
 						startProxy(
-							useSSOProfile ? undefined : selectedInfraProfile,
-							useSSOProfile ? selectedSsoProxy : undefined,
+							selectedInfraProfile!,
 							selectedAuthInterceptor,
 							customHeaders,
 							defaultHeaders

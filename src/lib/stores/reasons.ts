@@ -9,13 +9,13 @@ const PROD_ACTIONS_DISABLED_REASON = 'Not available';
 
 export function startEcsProxyDisabledReason(service: EcsService) {
 	return derived([featuresStore, taskStore, wombatProfileStore], (stores) => {
-		const { devWay, startEcsProxy, ecsProdActions } = stores[0];
+		const { startEcsProxy, ecsProdActions } = stores[0];
 		if (stores[1].some((t) => t.arn == service.arn && t.status == TaskStatus.STARTING)) {
 			return 'Starting...';
 		}
 		const matchingInfraProfiles =
 			stores[2].infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ?? [];
-		if (matchingInfraProfiles.length === 0 && !devWay) {
+		if (matchingInfraProfiles.length === 0) {
 			return `Missing infra profile: ${service.name}`;
 		}
 		if (!startEcsProxy) {
@@ -29,7 +29,7 @@ export function startEcsProxyDisabledReason(service: EcsService) {
 
 export function startRdsProxyDisabledReason(rds: RdsInstance) {
 	return derived([featuresStore, wombatProfileStore, taskStore], (stores) => {
-		const { devWay, startRdsProxy, rdsProdActions } = stores[0];
+		const { startRdsProxy, rdsProdActions } = stores[0];
 		if (stores[2].some((t) => t.arn == rds.arn && t.status == TaskStatus.STARTING)) {
 			return 'Starting...';
 		}
@@ -39,10 +39,7 @@ export function startRdsProxyDisabledReason(rds: RdsInstance) {
 		if (!startRdsProxy) {
 			return 'RDS Proxies disabled';
 		}
-		if (
-			!stores[1].infraProfiles.some(({ app, env }) => app == rds.appname_tag && env == rds.env) &&
-			!devWay
-		) {
+		if (!stores[1].infraProfiles.some(({ app, env }) => app == rds.appname_tag && env == rds.env)) {
 			return `Missing infra profile: ${rds.appname_tag}`;
 		}
 		if (AwsEnv.PROD === rds.env && !rdsProdActions) {

@@ -10,7 +10,6 @@
 	import { BrowserExtensionState, type WombatAwsProfile } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	import UpdateBtn from '$lib/components/update-btn.svelte';
-	import FeatureBtn from '$lib/components/feature-btn.svelte';
 	import BrowserExtensionDot from '$lib/components/browser-extension-dot.svelte';
 
 	const { wombatAwsProfiles } = availableProfilesStore;
@@ -247,7 +246,6 @@
 				</a>
 			</div>
 			<div class="flex gap-1 items-center">
-				<FeatureBtn hideProfileName={true} />
 				<span class="text-sm">User Id: {userId}</span>
 			</div>
 		</div>

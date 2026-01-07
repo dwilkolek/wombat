@@ -1,6 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance, SsoProfile};
+use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance};
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
@@ -183,9 +183,7 @@ async fn login(
         let mut aws_config_provider = aws_config_provider.0.write().await;
 
         // let mut wombat_api = wombat_api_instance.0.lock().await;
-        // TODO: fix this
-        let is_enabled = false; //wombat_api.is_feature_enabled("dev-way").await;
-        aws_config_provider.login(profile.to_owned(), is_enabled);
+        aws_config_provider.login(profile.to_owned());
 
         environments = aws_config_provider.configured_envs();
         tracked_names = aws_config_provider
@@ -1016,8 +1014,7 @@ async fn start_db_proxy(
 async fn start_service_proxy(
     app_handle: AppHandle,
     service: aws::EcsService,
-    infra_profile: Option<InfraProfile>,
-    sso_profile: Option<SsoProfile>,
+    infra_profile: InfraProfile,
     headers: HashMap<String, String>,
     proxy_auth_config: Option<shared::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1416,7 +1413,6 @@ async fn open_dbeaver(
     app_state: tauri::State<'_, AppContextState>,
     read_only: bool,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-    rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
 ) -> Result<(), CommandError> {
     fn db_beaver_con_parma(
         db_name: &str,
@@ -1471,36 +1467,14 @@ async fn open_dbeaver(
         .await
         .expect("Missing sdk_config to get secreto for dbBeaver");
 
-    let secret;
-    let found_db_secret = aws::db_secret(&aws_config, &db).await;
-    match found_db_secret {
-        Some(found_secret) => {
-            secret = Ok(found_secret);
-        }
-        None => {
-            if aws_config_provider.dev_way {
-                let (override_aws_profile, override_aws_config) =
-                    aws_config_provider.sso_config(&db.env).await;
-                warn!("Falling back to user profile: {}", &override_aws_profile);
-                secret = Box::pin(find_secret_with_fallback(
-                    &override_aws_config,
-                    &db,
-                    rds_resolver_instance.0.clone(),
-                ))
-                .await
-                .ok_or(CommandError::new("credentials", "Secret not found"));
-            } else {
-                secret = Err(CommandError::new("credentials", "Secret not found"))
-            }
-        }
-    }
+    let secret = aws::db_secret(&aws_config, &db).await;
 
     let db_secret = match secret {
-        Ok(secret) => secret,
-        Err(error) => {
-            error!("failed to get rds secret, reason={}", &error.message);
-            return Err(error);
+        None => {
+            error!("failed to get rds secret, reason=Secret not found");
+            return Err(CommandError::new("credentials", "Secret not found"));
         }
+        Some(secret) => secret,
     };
 
     Command::new(dbeaver_path)

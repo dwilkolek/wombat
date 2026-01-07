@@ -7,7 +7,6 @@ const createFeatureStore = () => {
 		loading: true,
 
 		//TODO: consider and delete
-		devWay: false,
 		deployEcsService: false,
 		deployEcsWithTags: false,
 		removeEcsTaskDefinitions: false,
