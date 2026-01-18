@@ -27,7 +27,11 @@
 	}
 
 	function getFullPropPath(key: string) {
-		return propPrefix ? propPrefix + '.' + key : key;
+		let safeKey = key;
+		if (key.includes('.')) {
+			safeKey = `['${key}']`;
+		}
+		return propPrefix ? propPrefix + '.' + safeKey : safeKey;
 	}
 
 	function regeneratePng(): Promise<string> {
