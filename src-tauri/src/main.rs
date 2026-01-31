@@ -1248,25 +1248,37 @@ async fn start_lambda_app_proxy(
 }
 
 #[tauri::command]
-async fn log_filters(// wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+async fn log_filters(
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<shared::LogFilter>, CommandError> {
-    // let mut wombat_api = wombat_api_instance.0.lock().await;
-    // let filters = wombat_api.log_filters().await;
-    // Ok(filters)
-    // TODO: provide log filters from env
-
-    Ok(Vec::new())
+    let user_config = user_config.0.lock().await;
+    Ok(user_config.log_filters.clone())
 }
 
 #[tauri::command]
-async fn proxy_auth_configs(// wombat_api_instance: tauri::State<'_, WombatApiInstance>,
+async fn proxy_auth_configs(
+    user_config: tauri::State<'_, UserConfigState>,
 ) -> Result<Vec<shared::ProxyAuthConfig>, CommandError> {
-    // let mut wombat_api = wombat_api_instance.0.lock().await;
-    // let configs = wombat_api.get_proxy_auth_configs().await;
-    // Ok(configs)
-    // TODO: provide proxy auth configs
+    let user_config = user_config.0.lock().await;
+    Ok(user_config.proxy_auth_configs.clone())
+}
 
-    Ok(Vec::new())
+#[tauri::command]
+async fn save_log_filters(
+    filters: Vec<shared::LogFilter>,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<UserConfig, CommandError> {
+    let mut user_config = user_config.0.lock().await;
+    user_config.save_log_filters(filters)
+}
+
+#[tauri::command]
+async fn save_proxy_auth_configs(
+    configs: Vec<shared::ProxyAuthConfig>,
+    user_config: tauri::State<'_, UserConfigState>,
+) -> Result<UserConfig, CommandError> {
+    let mut user_config = user_config.0.lock().await;
+    user_config.save_proxy_auth_configs(configs)
 }
 
 #[tauri::command]
@@ -1676,7 +1688,9 @@ async fn main() {
             is_debug,
             kv_put,
             kv_get,
-            kv_delete
+            kv_delete,
+            save_log_filters,
+            save_proxy_auth_configs
         ])
         .build(tauri::generate_context!())
         .expect("Error while running tauri application");

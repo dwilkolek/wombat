@@ -1,4 +1,4 @@
-use crate::shared::{CommandError, Env, TrackedName};
+use crate::shared::{CommandError, Env, LogFilter, ProxyAuthConfig, TrackedName};
 use log::{error, info, warn};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -34,6 +34,10 @@ pub struct UserConfig {
     pub dbeaver_path: Option<String>,
     pub logs_dir: PathBuf,
     pub preferences: HashMap<String, WombatAwsProfilePreferences>,
+    #[serde(default = "default_log_filters")]
+    pub log_filters: Vec<LogFilter>,
+    #[serde(default = "default_proxy_auth_configs")]
+    pub proxy_auth_configs: Vec<ProxyAuthConfig>,
 }
 
 impl UserConfig {
@@ -78,6 +82,8 @@ impl UserConfig {
                 dbeaver_path: None,
                 logs_dir: UserConfig::logs_path(),
                 preferences: HashMap::new(),
+                log_filters: default_log_filters(),
+                proxy_auth_configs: default_proxy_auth_configs(),
             },
         };
 
@@ -268,6 +274,24 @@ impl UserConfig {
         Ok(self.clone())
     }
 
+    pub fn save_log_filters(
+        &mut self,
+        filters: Vec<LogFilter>,
+    ) -> Result<UserConfig, CommandError> {
+        self.log_filters = filters;
+        self.save();
+        Ok(self.clone())
+    }
+
+    pub fn save_proxy_auth_configs(
+        &mut self,
+        configs: Vec<ProxyAuthConfig>,
+    ) -> Result<UserConfig, CommandError> {
+        self.proxy_auth_configs = configs;
+        self.save();
+        Ok(self.clone())
+    }
+
     fn save(&self) {
         info!("Storing to: {:?}", UserConfig::config_path_latest());
         std::fs::write(
@@ -276,4 +300,176 @@ impl UserConfig {
         )
         .expect("Failed to save user config");
     }
+}
+
+fn default_log_filters() -> Vec<LogFilter> {
+    serde_json::from_str(
+        r#"
+    [
+		{
+            "id": 1,
+			"filter": "{ $.mdc.['dd.traceId'] = \"TRACE_ID\" }",
+			"label": "By Trace"
+		},
+		{
+            "id": 2,
+			"filter": "{ $.level = \"ERROR\" }",
+			"label": "By Error"
+		},
+		{
+            "id": 3,
+			"filter": "{ $.message = \"PATTERN *\" }",
+			"label": "By Message"
+		},
+		{
+            "id": 4,
+			"filter": "[time, thread, app, level =ERROR, ...]",
+			"label": "By Error (comma separated log)"
+		}
+	]
+    "#,
+    )
+    .unwrap_or_else(|e| {
+        error!("Failed to parse default log filters: {}", e);
+        Vec::new()
+    })
+}
+
+fn default_proxy_auth_configs() -> Vec<ProxyAuthConfig> {
+    serde_json::from_str(
+        r#"
+[
+    {
+        "id": 1,
+        "fromApp": "rome",
+        "toApp": "crush",
+        "env": "DEV",
+        "authType": "jepsen",
+        "apiPath": "/api",
+        "jepsenAuthApi": "https://api-login.dev.services.technipfmc.com/accesstoken",
+        "jepsenApiName": "crush",
+        "jepsenClientId": "rome",
+        "basicUser": null,
+        "secretName": "/config/rome_dev/jepsen-client-secret",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 2,
+        "fromApp": "rome",
+        "toApp": "crush",
+        "env": "DEMO",
+        "authType": "jepsen",
+        "apiPath": "/api",
+        "jepsenAuthApi": "https://api-login.demo.services.technipfmc.com/accesstoken",
+        "jepsenApiName": "crush",
+        "jepsenClientId": "rome",
+        "basicUser": null,
+        "secretName": "/config/rome_demo/jepsen-client-secret",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 3,
+        "fromApp": "rome",
+        "toApp": "crush",
+        "env": "PROD",
+        "authType": "jepsen",
+        "apiPath": "/api",
+        "jepsenAuthApi": "https://api-login.services.technipfmc.com/accesstoken",
+        "jepsenApiName": "crush",
+        "jepsenClientId": "rome",
+        "basicUser": null,
+        "secretName": "/config/rome_prod/jepsen-client-secret",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 4,
+        "fromApp": "nemo",
+        "toApp": "crush",
+        "env": "DEV",
+        "authType": "jepsen",
+        "apiPath": "/api",
+        "jepsenAuthApi": "https://api-login.dev.services.technipfmc.com/accesstoken",
+        "jepsenApiName": "crush",
+        "jepsenClientId": "nemo",
+        "basicUser": null,
+        "secretName": "/config/nemo_dev/jepsen-client-secret",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 5,
+        "fromApp": "nemo",
+        "toApp": "crush",
+        "env": "DEMO",
+        "authType": "jepsen",
+        "apiPath": "/api",
+        "jepsenAuthApi": "https://api-login.demo.services.technipfmc.com/accesstoken",
+        "jepsenApiName": "crush",
+        "jepsenClientId": "nemo",
+        "basicUser": null,
+        "secretName": "/config/nemo_demo/jepsen-client-secret",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 6,
+        "fromApp": "nemo",
+        "toApp": "crush",
+        "env": "PROD",
+        "authType": "jepsen",
+        "apiPath": "/api",
+        "jepsenAuthApi": "https://api-login.services.technipfmc.com/accesstoken",
+        "jepsenApiName": "crush",
+        "jepsenClientId": "nemo",
+        "basicUser": null,
+        "secretName": "/config/nemo_prod/jepsen-client-secret",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 7,
+        "fromApp": "*",
+        "toApp": "ad-service",
+        "env": "DEV",
+        "authType": "basic",
+        "apiPath": "/",
+        "jepsenAuthApi": null,
+        "jepsenApiName": null,
+        "jepsenClientId": null,
+        "basicUser": "dsi-service-user",
+        "secretName": "/config/application_dev/basic-auth-password",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 8,
+        "fromApp": "*",
+        "toApp": "ad-service",
+        "env": "DEMO",
+        "authType": "basic",
+        "apiPath": "/",
+        "jepsenAuthApi": null,
+        "jepsenApiName": null,
+        "jepsenClientId": null,
+        "basicUser": "dsi-service-user",
+        "secretName": "/config/application_demo/basic-auth-password",
+        "requireSsoProfile": false
+    },
+    {
+        "id": 9,
+        "fromApp": "*",
+        "toApp": "ad-service",
+        "env": "PROD",
+        "authType": "basic",
+        "apiPath": "/",
+        "jepsenAuthApi": null,
+        "jepsenApiName": null,
+        "jepsenClientId": null,
+        "basicUser": "ldapuser",
+        "secretName": "/config/application_prod/ad-service-password",
+        "requireSsoProfile": false
+    }
+]
+    "#,
+    )
+    .unwrap_or_else(|e| {
+        error!("Failed to parse default proxy auth configs: {}", e);
+        Vec::new()
+    })
 }

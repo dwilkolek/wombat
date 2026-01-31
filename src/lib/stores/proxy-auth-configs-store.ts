@@ -15,6 +15,13 @@ const createProxyAuthConfigsStore = () => {
 			configsStore.set(configs);
 		});
 	});
-	return { ...configsStore };
+	return {
+		...configsStore,
+		save: (configs: ProxyAuthConfig[]) => {
+			invoke<void>('save_proxy_auth_configs', { configs }).then(() => {
+				configsStore.set(configs);
+			});
+		}
+	};
 };
 export const proxyAuthConfigsStore = createProxyAuthConfigsStore();

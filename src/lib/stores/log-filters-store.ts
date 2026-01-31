@@ -26,9 +26,22 @@ listen('cache-refreshed', () => {
 	refresh();
 });
 
+const save = (filters: LogFilter[]) => {
+	loading.set(true);
+	invoke<void>('save_log_filters', { filters })
+		.then(() => {
+			logFilters.set(filters);
+		})
+		.finally(() => {
+			loading.set(false);
+		});
+};
+
 export const logFiltersStore = derived([logFilters, loading], ([filters, isLoading]) => {
 	return {
 		filters,
-		isLoading
+		isLoading,
+		refresh,
+		save
 	};
 });

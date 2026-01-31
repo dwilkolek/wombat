@@ -208,10 +208,11 @@ pub fn arn_to_name(arn: &str) -> TrackedName {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogFilter {
-    id: i64,
-    filter: String,
-    services: Vec<String>,
-    label: String,
+    pub id: i64,
+    pub filter: String,
+    #[serde(default)]
+    pub services: Vec<String>,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

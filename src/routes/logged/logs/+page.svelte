@@ -175,7 +175,9 @@
 								.find((ls) => ls.at(0) === '!')
 								?.substring(1)
 								?.split(',') ?? []}
+						{@const isGlobal = filter.services.length === 0}
 						{@const matches =
+							isGlobal ||
 							enabledFor.some((ls) => $selectedServices.some((ecs) => ecs.name === ls)) ||
 							$selectedServices.some(
 								(ecs) => disabledFor.length > 0 && !disabledFor.includes(ecs.name)
