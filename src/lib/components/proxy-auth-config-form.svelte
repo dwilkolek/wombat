@@ -46,11 +46,11 @@
 	}
 </script>
 
-<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-2">
 	{#each configs as config, i}
 		<div class="collapse collapse-arrow bg-base-100 shadow-sm border border-base-300">
 			<input type="checkbox" />
-			<div class="collapse-title flex justify-between items-center pr-12">
+			<div class="collapse-title flex justify-between text-xs items-center p-1 pr-12">
 				<div class="font-bold">
 					#{config.id}
 					{config.fromApp} &rarr; {config.toApp} ({config.env})

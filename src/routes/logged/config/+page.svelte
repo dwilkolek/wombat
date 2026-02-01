@@ -85,32 +85,11 @@
 					<pre class="pl-1">~/.wombat/logs</pre>
 				</div>
 			</div>
+			<button
+				class="btn btn-primary"
+				data-umami-event="config_update"
+				data-umami-event-uid={$userStore.id}>Save!</button
+			>
 		</div>
-
-		<button
-			class="btn btn-primary"
-			data-umami-event="config_update"
-			data-umami-event-uid={$userStore.id}>Save!</button
-		>
 	</form>
-
-	<div class="divider"></div>
-
-	<h3 class="text-xl font-bold mb-4">Advanced Configuration</h3>
-
-	<div class="collapse collapse-arrow bg-base-200 mb-4">
-		<input type="checkbox" />
-		<div class="collapse-title text-xl font-medium">Log Filters</div>
-		<div class="collapse-content">
-			<LogFilterForm />
-		</div>
-	</div>
-
-	<div class="collapse collapse-arrow bg-base-200">
-		<input type="checkbox" />
-		<div class="collapse-title text-xl font-medium">Proxy Auth Configs</div>
-		<div class="collapse-content">
-			<ProxyAuthConfigForm />
-		</div>
-	</div>
 </div>

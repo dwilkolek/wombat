@@ -34,6 +34,8 @@ const config = {
 				'/logged/config',
 				'/logged/lambda-apps',
 				'/logged/logs',
+				'/logged/log-filters',
+				'/logged/proxy-auths',
 				'/logged/apps/[app]',
 				'/window/log',
 				'/logged/tasks'

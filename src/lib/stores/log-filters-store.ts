@@ -9,16 +9,14 @@ const loading = writable(false);
 const refresh = () => {
 	loading.set(true);
 	console.log('refreshing');
-	setTimeout(() => {
-		invoke<LogFilter[]>('log_filters')
-			.then(logFilters.set)
-			.catch(() => {
-				logFilters.set([]);
-			})
-			.finally(() => {
-				loading.set(false);
-			});
-	}, 3000);
+	invoke<LogFilter[]>('log_filters')
+		.then(logFilters.set)
+		.catch(() => {
+			logFilters.set([]);
+		})
+		.finally(() => {
+			loading.set(false);
+		});
 };
 refresh();
 

@@ -61,6 +61,18 @@
 				</li>
 			{/if}
 			<li>
+				<a
+					class={$page.url.pathname === '/logged/log-filters' ? 'active' : ''}
+					href="/logged/log-filters">Log filters</a
+				>
+			</li>
+			<li>
+				<a
+					class={$page.url.pathname === '/logged/proxy-auths' ? 'active' : ''}
+					href="/logged/proxy-auths">Proxy auths</a
+				>
+			</li>
+			<li>
 				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a
 				>

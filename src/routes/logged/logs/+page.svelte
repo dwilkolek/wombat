@@ -60,7 +60,6 @@
 <div class="px-2">
 	<div class="flex flex-col gap-2">
 		<div class="flex h-full gap-4">
-			Ping me for custom search filter templates.
 			<div class="flex flex-wrap gap-2">
 				<button
 					class="btn btn-accent btn-xs"
