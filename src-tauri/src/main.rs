@@ -1444,17 +1444,10 @@ async fn open_dbeaver(
             secret.last_changed.format("%Y-%m-%d %H:%M:%S")
         );
 
-        if secret.auto_rotated {
-            format!(
-                "driver=postgresql|id={id}|name={name}|prop.readOnly={read_only}|autoCommit=false|openConsole=true|folder=wombat|url=jdbc:postgresql://{host}:{port}/{}?user={}&password={}",
-                 secret.dbname, secret.username, encode(&secret.password)
-                )
-        } else {
-            format!(
-                "driver=postgresql|id={id}|name={name}|prop.readOnly={read_only}|autoCommit=false|openConsole=true|folder=wombat|savePassword=true|create=true|save=true|host={host}|port={port}|database={}|user={}|password={}",
-                secret.dbname, secret.username, &secret.password
-                )
-        }
+        format!(
+            "driver=postgresql|id={id}|name={name}|prop.readOnly={read_only}|autoCommit=false|openConsole=true|folder=wombat|url=jdbc:postgresql://{host}:{port}/{}?user={}&password={}",
+            encode(&secret.dbname), encode(&secret.username), encode(&secret.password)
+        )
     }
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(CommandError::new("open_dbeaver", msg));
