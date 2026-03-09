@@ -21,6 +21,42 @@
 	let selectedLog = logStore.selectedLog;
 	let storeState = logStore.storeState;
 
+	let createFilter = (prop: string, value: unknown) => {
+		if (prop === 'timestamp') {
+			let dateValue: Date | null = null;
+			switch (typeof value) {
+				case 'number':
+					dateValue = new Date(value);
+					break;
+				case 'string':
+					dateValue = `${value}`.at(-1) === 'Z' ? new Date(value) : new Date(`${value}Z`);
+					break;
+			}
+			if (dateValue == null) {
+				console.warn('invalid date value', value);
+				return;
+			}
+			logStore.timerange.set({
+				type: 'absolute',
+				from: sub(dateValue, { minutes: 1 }),
+				to: add(dateValue, { minutes: 1 })
+			});
+			return;
+		}
+		if (typeof value !== 'string') {
+			console.warn('invalid value type', value);
+			return;
+		}
+		logStore.filterString.update((s) => {
+			if (s.length > 1 && s[0] == '[') {
+				return s;
+			}
+			const oldFilters = s.trim() == '' ? '' : s.substring(1, s.length - 2).trim() + ' &&';
+			const escapedValue = value.replaceAll('"', '\\"');
+			return `{ ${oldFilters} $.${prop} = "${escapedValue}" }`;
+		});
+	};
+
 	beforeNavigate(async () => {
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
@@ -508,27 +544,7 @@
 			<div class="h-[40vh] flex flex-col gap-2">
 				<div class="text-sm overflow-auto h-[40vh]">
 					<div bind:this={jsonViewNode}>
-						<JsonView
-							log={selectedLog}
-							createFilter={(prop, value) => {
-								if (prop === 'timestamp') {
-									logStore.timerange.set({
-										type: 'absolute',
-										from: sub(new Date((value + 'Z') as string), { minutes: 1 }),
-										to: add(new Date((value + 'Z') as string), { minutes: 1 })
-									});
-									return;
-								}
-								logStore.filterString.update((s) => {
-									if (s.length > 1 && s[0] == '[') {
-										return s;
-									}
-									const oldFilters =
-										s.trim() == '' ? '' : s.substring(1, s.length - 2).trim() + ' &&';
-									return `{ ${oldFilters} $.${prop} = "${value}" }`;
-								});
-							}}
-						></JsonView>
+						<JsonView log={selectedLog} {createFilter}></JsonView>
 					</div>
 				</div>
 			</div>
