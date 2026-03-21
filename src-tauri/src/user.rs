@@ -1,6 +1,6 @@
 use crate::shared::{CommandError, Env, TrackedName};
 use log::{error, info, warn};
-use rand::Rng;
+use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
