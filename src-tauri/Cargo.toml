@@ -40,7 +40,7 @@ aws-sdk-secretsmanager = "1.101.0"
 aws-sdk-cloudformation = "1.108.0"
 tokio = { version = "1.52.1", features = ["full"] }
 home = "0.5.12"
-warp-reverse-proxy = { git = "https://github.com/dwilkolek/warp-reverse-proxy.git", rev = "d0e58cc" }
+warp-reverse-proxy = { git = "https://github.com/dwilkolek/warp-reverse-proxy.git", rev = "00e9c8f" }
 warp = "0.4.2"
 urlencoding = "2.1.3"
 chrono = { version = "0.4.44", features = ["serde"] }
