@@ -6550,8 +6550,12 @@ dependencies = [
 [[package]]
 name = "warp-reverse-proxy"
 version = "1.0.0"
-source = "git+https://github.com/dwilkolek/warp-reverse-proxy.git?rev=d0e58cc#d0e58cc5d4202f81524d1531cb534c088737fcab"
+source = "git+https://github.com/dwilkolek/warp-reverse-proxy.git?rev=00e9c8f#00e9c8f0285eb82e32ade4a530f98606c2128db2"
 dependencies = [
+ "futures-util",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
  "once_cell",
  "reqwest",
  "thiserror 2.0.18",
