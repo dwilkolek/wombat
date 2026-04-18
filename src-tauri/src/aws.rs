@@ -1361,7 +1361,6 @@ async fn register_task_definition(
         .set_proxy_configuration(task_definition.proxy_configuration.clone())
         .set_container_definitions(contrainer_definitions)
         .set_placement_constraints(task_definition.placement_constraints.clone())
-        .set_inference_accelerators(task_definition.inference_accelerators.clone())
         .set_requires_compatibilities(task_definition.requires_compatibilities.clone())
         .send()
         .await;
