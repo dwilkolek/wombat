@@ -2,7 +2,7 @@ cargo-features = ["profile-rustflags"]
 
 [package]
 name = "wombat"
-version = "5.0.5"
+version = "5.0.6"
 description = "Wombat - in combat"
 authors = ["Damian Wilkołek <dwilkolek@protonmail.com>"]
 license = "Apache-2.0"
