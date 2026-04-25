@@ -28,8 +28,8 @@ pub struct WombatAwsProfilePreferences {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UserConfig {
     pub id: Uuid,
-    version: i8,
-    last_used_profile: Option<String>,
+    pub version: i8,
+    pub last_used_profile: Option<String>,
     arn_to_proxy_port_map: Option<HashMap<String, u16>>,
     pub dbeaver_path: Option<String>,
     pub logs_dir: PathBuf,
@@ -91,6 +91,63 @@ impl UserConfig {
         }
 
         user_config
+    }
+
+    pub fn migrate(&mut self, wombat_profiles: &[crate::aws::WombatAwsProfile]) {
+        if self.version >= 3 {
+            return;
+        }
+        info!("Migrating user config from v{} to v3", self.version);
+
+        let mut new_preferences = HashMap::new();
+        for (old_profile_name, prefs) in self.preferences.drain() {
+            // Find which account this old profile belonged to
+            let account_id = wombat_profiles.iter().find_map(|acc| {
+                if acc.sso_profiles.values().any(|list| {
+                    list.iter().any(|sso| {
+                        sso.profile_name == old_profile_name
+                            || sso.profile_name.starts_with(&format!("{}-", old_profile_name))
+                    })
+                }) {
+                    Some(acc.id.clone())
+                } else {
+                    None
+                }
+            });
+
+            if let Some(id) = account_id {
+                info!("Mapping preferences for {} to account {}", old_profile_name, id);
+                new_preferences.insert(id, prefs);
+            } else {
+                warn!(
+                    "Could not find account for old profile {}, preferences might be lost",
+                    old_profile_name
+                );
+                new_preferences.insert(old_profile_name, prefs);
+            }
+        }
+        self.preferences = new_preferences;
+
+        if let Some(old_last_profile) = &self.last_used_profile {
+            let account_id = wombat_profiles.iter().find_map(|acc| {
+                if acc.sso_profiles.values().any(|list| {
+                    list.iter().any(|sso| {
+                        sso.profile_name == *old_last_profile
+                            || sso.profile_name.starts_with(&format!("{}-", old_last_profile))
+                    })
+                }) {
+                    Some(acc.id.clone())
+                } else {
+                    None
+                }
+            });
+            if let Some(id) = account_id {
+                self.last_used_profile = Some(id);
+            }
+        }
+
+        self.version = 3;
+        self.save();
     }
     fn config_path_v3() -> PathBuf {
         wombat_dir().join("config.json")

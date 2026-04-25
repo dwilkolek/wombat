@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { wombatAccountStore } from '$lib/stores/available-accounts-store';
 	import { taskStore } from '$lib/stores/task-store';
+	import { get } from 'svelte/store';
 	import AppCardHr from './app-card-hr.svelte';
 	import LambdaTaskStatus from './lambda-task-status.svelte';
 	import LambdaAppProxyBtn from './lambda-app-proxy-btn.svelte';
@@ -11,22 +12,44 @@
 	}
 
 	let { app }: Props = $props();
+
+	let ssoProfileName = $derived.by(() => {
+		// Try to find the role that owns the infra profile for this app in any environment
+		const ssoByInfra = $wombatAccountStore.ssoProfiles.find((sso) =>
+			sso.infra_profiles.some((i) => i.app === app)
+		);
+		if (ssoByInfra) return ssoByInfra.profile_name;
+
+		// Fallback to searching tasks in taskStore for this app
+		const tasks = get(taskStore);
+		for (const env of $wombatAccountStore.environments) {
+			const task = tasks.find((t) => t.arn === lambdaAppArn(app, env));
+			if (task?.sso_profile) return task.sso_profile;
+		}
+
+		return undefined;
+	});
 </script>
 
 <div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
-	<div class="flex gap-2 flex-col justify-around">
-		<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
-			<span class="inline text-base">
+	<div class="min-w-80 w-80 flex flex-col gap-0.5 justify-center py-1">
+		<div class="flex flex-row gap-2 items-center text-md">
+			<span class="inline text-base pl-1">
 				{app}
 			</span>
 		</div>
+		{#if ssoProfileName}
+			<div class="pl-1">
+				<span class="opacity-70 font-medium text-xs italic">{ssoProfileName}</span>
+			</div>
+		{/if}
 	</div>
 
 	<div
 		class="grid w-full divide-x divide-base-100"
-		style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
+		style={`grid-template-columns: repeat(${$wombatAccountStore.environments.length ?? 1}, minmax(0, 1fr));`}
 	>
-		{#each $wombatProfileStore.environments as enabled_env (enabled_env)}
+		{#each $wombatAccountStore.environments as enabled_env (enabled_env)}
 			{@const task = $taskStore.find((task) => task.arn == lambdaAppArn(app, enabled_env))}
 			<div class="flex flex-col app-env-cell px-2">
 				<div class="font-medium text-xs flex items-row gap-1 items-center">

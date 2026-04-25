@@ -5,28 +5,33 @@
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/plugin-process';
 	import { invoke } from '@tauri-apps/api/core';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { availableAccountsStore } from '$lib/stores/available-accounts-store';
 	import { envImportance } from '$lib/stores/env-store';
-	import { BrowserExtensionState, type WombatAwsProfile } from '$lib/types';
+	import { BrowserExtensionState, type WombatAwsAccount } from '$lib/types';
 	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
 	import UpdateBtn from '$lib/components/update-btn.svelte';
 	import FeatureBtn from '$lib/components/feature-btn.svelte';
 	import BrowserExtensionDot from '$lib/components/browser-extension-dot.svelte';
 
-	const { wombatAwsProfiles } = availableProfilesStore;
+	const { wombatAwsAccounts } = availableAccountsStore;
 	let { login } = userStore;
 
-	let profile: WombatAwsProfile | undefined = $state();
-	let userId: string = $state($userStore.id ?? '');
+	let account: WombatAwsAccount | undefined = $state();
+	let userId: string | undefined = $state($userStore.id);
 	let loading = $state(false);
 	let buttonText = $state('Start');
 
-	userStore.subscribe((user) => {
-		wombatAwsProfiles.subscribe((profiles) => {
-			profile = profiles.find((p) => p?.name == user.last_used_profile);
-			userId = user.id ?? '';
-		});
+	$effect(() => {
+		if ($wombatAwsAccounts.length > 0 && $userStore.id) {
+			const found = $wombatAwsAccounts.find((p) => p.id === $userStore.last_used_profile);
+			if (found) {
+				account = found;
+			} else if (!account) {
+				account = $wombatAwsAccounts[0];
+			}
+		}
 	});
+
 	listen<string>('message', (event) => {
 		buttonText = event.payload;
 	});
@@ -114,7 +119,7 @@
 						try {
 							e.preventDefault();
 							loading = true;
-							await login(profile);
+							await login(account);
 							loading = false;
 							goto(`/logged/apps`, { replaceState: true });
 						} catch (e) {
@@ -126,17 +131,17 @@
 				>
 					<div class="form-control">
 						<label class="label" for="aws-profile">
-							<span class="label-text">AWS profile</span>
+							<span class="label-text">AWS Account</span>
 						</label>
 						<div class="flex items-center gap-2">
 							{#if userId}
-								<select class="select w-full" bind:value={profile}>
-									{#each $wombatAwsProfiles as wombatAwsProfile (wombatAwsProfile)}
-										<option value={wombatAwsProfile}>
-											{wombatAwsProfile.name}
-											{#if wombatAwsProfile.support_level == 'Full'}✅{/if}
-											{#if wombatAwsProfile.support_level == 'Partial'}⚠️{/if}
-											{#if wombatAwsProfile.support_level == 'None'}🚫{/if}
+								<select class="select w-full" bind:value={account}>
+									{#each $wombatAwsAccounts as wombatAwsAccount (wombatAwsAccount.id)}
+										<option value={wombatAwsAccount}>
+											{wombatAwsAccount.name}
+											{#if wombatAwsAccount.support_level == 'Full'}✅{/if}
+											{#if wombatAwsAccount.support_level == 'Partial'}⚠️{/if}
+											{#if wombatAwsAccount.support_level == 'None'}🚫{/if}
 										</option>
 									{/each}
 								</select>
@@ -150,7 +155,7 @@
 									try {
 										e.preventDefault();
 										await invoke('reload_aws_config');
-										await availableProfilesStore.refresh();
+										await availableAccountsStore.refresh();
 									} catch (e) {
 										console.error(e);
 									} finally {
@@ -175,27 +180,35 @@
 						</div>
 					</div>
 					<div class="mt-2">
-						{#if profile}
+						{#if account}
 							<div class="flex flex-col gap-1 pl-2 text-sm">
-								{#if profile.single_source_profile}
-									<span class="font-bold">This profile is using single SSO profile.</span>
+								{#if account.single_source_profile}
+									<span class="font-bold">This account is using single SSO profile.</span>
 									<span
-										>Environments: {Object.values(profile.sso_profiles)
-											.sort((a, b) => envImportance[a.env] - envImportance[b.env])
-											.map((sso) => sso.env)
+										>Environments: {[
+											...new Set(
+												Object.values(account.sso_profiles)
+													.flat()
+													.map((sso) => sso.env)
+											)
+										]
+											.sort((a, b) => envImportance[a] - envImportance[b])
 											.join(', ')}</span
 									>
 									<span
-										>Infra profiles: {Object.values(profile.sso_profiles)[0].infra_profiles
-											.length}</span
+										>Infra profiles: {Object.values(account.sso_profiles)
+											.flat()
+											.reduce((acc, sso) => acc + sso.infra_profiles.length, 0)}</span
 									>
 								{:else}
-									{#each Object.values(profile.sso_profiles).sort((a, b) => envImportance[a.env] - envImportance[b.env]) as sso_profiles (sso_profiles.profile_name)}
+									{#each Object.values(account.sso_profiles)
+										.flat()
+										.sort((a, b) => envImportance[a.env] - envImportance[b.env]) as sso_profile (sso_profile.profile_name)}
 										<div class="flex gap-1">
-											{#if sso_profiles.support_level == 'Full'}✅{/if}
-											{#if sso_profiles.support_level == 'Partial'}⚠️{/if}
-											{#if sso_profiles.support_level == 'None'}🚫{/if}
-											<b>{sso_profiles.profile_name}</b>({sso_profiles.infra_profiles.length} infra profiles)
+											{#if sso_profile.support_level == 'Full'}✅{/if}
+											{#if sso_profile.support_level == 'Partial'}⚠️{/if}
+											{#if sso_profile.support_level == 'None'}🚫{/if}
+											<b>{sso_profile.profile_name}</b>({sso_profile.infra_profiles.length} infra profiles)
 										</div>
 									{/each}
 								{/if}

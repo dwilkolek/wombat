@@ -84,7 +84,7 @@ pub async fn check_dependencies(
     let sso_profile = &aws_config_provider
         .wombat_profiles
         .iter()
-        .map(|w| w.sso_profiles.len())
+        .map(|w| w.sso_profiles.values().flatten().count())
         .sum::<usize>();
     let infra_profiles = &aws_config_provider
         .wombat_profiles
@@ -92,9 +92,8 @@ pub async fn check_dependencies(
         .flat_map(|w| {
             w.sso_profiles.iter().map(|sso| {
                 sso.1
-                    .infra_profiles
                     .iter()
-                    .map(|infra| infra.profile_name.as_ref())
+                    .flat_map(|p| p.infra_profiles.iter().map(|infra| infra.profile_name.as_ref()))
                     .collect::<HashSet<&str>>()
                     .len()
             })

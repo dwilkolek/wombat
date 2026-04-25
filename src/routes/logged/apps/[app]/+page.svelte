@@ -2,7 +2,7 @@
 	import AppEnvCard from '$lib/components/app-env-card.svelte';
 	import StarIcon from '$lib/components/star-icon.svelte';
 	import { serviceDetailStore } from '$lib/stores/service-details-store';
-	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
+	import { activeAccountPreferences, userStore } from '$lib/stores/user-store';
 	import type { AppPage } from './+page';
 
 	interface Props {
@@ -15,7 +15,7 @@
 	let details = $derived($detailsStorr);
 
 	let isFavourite = $derived((name: string): boolean => {
-		return !!$activeProfilePreferences.tracked_names.find((tracked_name) => tracked_name == name);
+		return !!$activeAccountPreferences.tracked_names.find((tracked_name) => tracked_name == name);
 	});
 </script>
 

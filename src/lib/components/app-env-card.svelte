@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { serviceDetailStore } from '$lib/stores/service-details-store';
+	import { wombatAccountStore } from '$lib/stores/available-accounts-store';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import type { AwsEnv } from '$lib/types';
@@ -12,6 +13,12 @@
 
 	let details = $derived(serviceDetailStore(app));
 	let envDetails = $derived($details?.envs?.get(env));
+	let ssoProfilesForEnv = $derived($wombatAccountStore.ssoProfiles.filter((sso) => sso.env == env));
+	let ssoProfile = $derived(
+		ssoProfilesForEnv.find((p) => p.support_level == 'Full') ||
+			ssoProfilesForEnv.find((p) => p.support_level == 'Partial') ||
+			ssoProfilesForEnv[0]
+	);
 </script>
 
 {#if envDetails}
@@ -20,6 +27,9 @@
 			<div class="card-body">
 				<div class="card-title flex flex-row gap-2 items-center text-md">
 					{env}
+					{#if ssoProfile}
+						<span class="opacity-40 font-normal">({ssoProfile.profile_name})</span>
+					{/if}
 				</div>
 				<div class="flex flex-col gap-2 text-md">
 					<div class="">

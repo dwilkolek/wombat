@@ -85,22 +85,32 @@ async fn get_authorized_full(
     if now - last_check > CHECK_AUTH_AFTER {
         info!("Checking authentication");
         let mut checked_ssos = HashSet::new();
-        for (env, profile) in &profile.sso_profiles {
-            if !checked_ssos.insert(profile.profile_name.to_owned()) {
-                continue;
-            }
+        let mut success_count = 0;
+        let mut total_count = 0;
+
+        for (env, _profile_list) in &profile.sso_profiles {
             let aws_config_provider = aws_config_provider.read().await;
             let (aws_profile, config) = aws_config_provider.sso_config(env).await;
-            let login_check = check_login_and_trigger(&aws_profile, &config, fast_path).await;
-            if login_check.is_err() {
-                app_ctx.no_of_failed_logins += 1;
-                if app_ctx.no_of_failed_logins == 2 {
-                    let _ = app_handle.emit("KILL_ME", "".to_owned());
-                }
-                return Err("Authentication failed".to_owned());
+
+            if !checked_ssos.insert(aws_profile.clone()) {
+                continue;
             }
-            app_ctx.no_of_failed_logins = 0;
+            total_count += 1;
+
+            let login_check = check_login_and_trigger(&aws_profile, &config, fast_path).await;
+            if login_check.is_ok() {
+                success_count += 1;
+            }
         }
+
+        if success_count == 0 && total_count > 0 {
+            app_ctx.no_of_failed_logins += 1;
+            if app_ctx.no_of_failed_logins == 2 {
+                let _ = app_handle.emit("KILL_ME", "".to_owned());
+            }
+            return Err("Authentication failed for all roles".to_owned());
+        }
+
         app_ctx.no_of_failed_logins = 0;
         app_ctx.last_auth_check = now;
     } else {
@@ -151,7 +161,7 @@ async fn favorite(
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
     user_config.favorite(
-        &aws_config_provider.active_wombat_profile.name,
+        &aws_config_provider.active_wombat_profile.id,
         name.to_owned(),
     )
 }
@@ -177,6 +187,7 @@ async fn login(
 
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, CommandError> {
+    info!("Logging in with profile {profile}",);
     let environments: Vec<Env>;
     let tracked_names: HashSet<String>;
     {
@@ -191,6 +202,7 @@ async fn login(
             .active_wombat_profile
             .sso_profiles
             .values()
+            .flatten()
             .flat_map(|sso| sso.infra_profiles.clone())
             .map(|infra| infra.app)
             .collect();
@@ -303,7 +315,7 @@ async fn save_preferred_envs(
 ) -> Result<UserConfig, CommandError> {
     let mut user_config = user_config.0.lock().await;
     let aws_config_provider = aws_config_provider.0.read().await;
-    user_config.save_preferred_envs(&aws_config_provider.active_wombat_profile.name, envs)
+    user_config.save_preferred_envs(&aws_config_provider.active_wombat_profile.id, envs)
 }
 
 #[tauri::command]
@@ -1035,7 +1047,7 @@ async fn start_service_proxy(
     app_handle: AppHandle,
     service: aws::EcsService,
     infra_profile: Option<InfraProfile>,
-    sso_profile: Option<SsoProfile>,
+    sso_profiles: Option<Vec<SsoProfile>>,
     headers: HashMap<String, String>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1056,7 +1068,7 @@ async fn start_service_proxy(
     }
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
-        .with_dev_way_check(&infra_profile, &sso_profile)
+        .with_dev_way_check(&infra_profile, &sso_profiles)
         .await
         .expect("Missing sdk_config to start service proxy");
 
@@ -1080,7 +1092,7 @@ async fn start_service_proxy(
 
     if let Some(proxy_auth_config) = proxy_auth_config.as_ref() {
         let (source_app_profile, source_app_config) = aws_config_provider
-            .with_dev_way_check(&infra_profile, &sso_profile)
+            .with_dev_way_check(&infra_profile, &sso_profiles)
             .await
             .expect("Missing sdk_config to setup auth interceptor");
         match proxy_auth_config.auth_type.as_str() {
@@ -1382,11 +1394,12 @@ async fn codeartifact_login_check() -> Result<(), CommandError> {
 async fn available_infra_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<aws::InfraProfile>, CommandError> {
-    let provider = aws_config_provider.0.read().await;
-    Ok(provider
+    let aws_config_provider = aws_config_provider.0.read().await;
+    Ok(aws_config_provider
         .active_wombat_profile
         .sso_profiles
         .values()
+        .flatten()
         .flat_map(|sso| sso.infra_profiles.clone())
         .collect())
 }
@@ -1395,11 +1408,12 @@ async fn available_infra_profiles(
 async fn available_sso_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<Vec<aws::SsoProfile>, CommandError> {
-    let provider = aws_config_provider.0.read().await;
-    Ok(provider
+    let aws_config_provider = aws_config_provider.0.read().await;
+    Ok(aws_config_provider
         .active_wombat_profile
         .sso_profiles
         .values()
+        .flatten()
         .cloned()
         .collect())
 }
@@ -1609,7 +1623,7 @@ fn initialize_cache_db_pool(profile: &str) -> Pool<SqliteConnectionManager> {
 async fn main() {
     fix_path_env::fix().unwrap_or_log();
     let app_config = app_config();
-    let user = UserConfig::default();
+    let mut user = UserConfig::default();
     let cookie_jar = Arc::new(Mutex::new(CookieJar {
         cookies: Vec::new(),
     }));
@@ -1666,6 +1680,10 @@ async fn main() {
     let cache_db_pool = Arc::new(initialize_cache_db_pool("default"));
 
     let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
+    {
+        let provider = aws_config_provider.read().await;
+        user.migrate(&provider.wombat_profiles);
+    }
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())

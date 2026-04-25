@@ -98,6 +98,14 @@ impl RdsResolver {
                 .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 7);
         }
+        if version < 8 {
+            conn.execute(
+                "ALTER TABLE databases ADD COLUMN sso_profile TEXT DEFAULT ''",
+                [],
+            )
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 8);
+        }
     }
 
     pub async fn refresh(&mut self) -> Vec<aws::RdsInstance> {
@@ -129,11 +137,13 @@ impl RdsResolver {
         let mut unique_databases_map = HashMap::new();
 
         for env in environments.iter() {
-            let (profile, config) = aws_config_resolver.sso_config(env).await;
-            info!("Fetching rds from aws using profile {profile}");
-            let databases = aws::databases(&config).await;
-            for db in databases {
-                unique_databases_map.insert(db.arn.clone(), db);
+            let configs = aws_config_resolver.all_sso_configs(env).await;
+            for (profile, config) in configs {
+                info!("Fetching rds from aws using profile {profile}");
+                let databases = aws::databases(&config, &profile).await;
+                for db in databases {
+                    unique_databases_map.insert(db.arn.clone(), db);
+                }
             }
         }
         let mut databases = unique_databases_map.values().cloned().collect::<Vec<_>>();
@@ -161,7 +171,7 @@ impl RdsResolver {
 fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
     log::info!("reading rds instances from cache");
 
-    let mut stmt = match conn.prepare("SELECT arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, cdk_stack_name, cdk_logical_id, master_username FROM databases ORDER BY order_index ASC;") {
+    let mut stmt = match conn.prepare("SELECT arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, cdk_stack_name, cdk_logical_id, master_username, sso_profile FROM databases ORDER BY order_index ASC;") {
         Ok(s) => s,
         Err(e) => {
             log::error!("reading rds instances from cache failed, reason: {e}");
@@ -183,6 +193,7 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
         let cdk_stack_name: Option<String> = row.get(11).ok();
         let cdk_logical_id: Option<String> = row.get(12).ok();
         let master_username: Option<String> = row.get(13).ok();
+        let sso_profile: String = row.get(14).unwrap_or_default();
         Ok(aws::RdsInstance {
             arn,
             identifier,
@@ -198,6 +209,7 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
             cdk_stack_name,
             cdk_logical_id,
             master_username,
+            sso_profile,
         })
     });
     match rows {
@@ -222,7 +234,7 @@ fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) 
 
     for (i, db) in databases.iter().enumerate() {
         conn.execute(
-            "INSERT INTO databases(arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, cdk_stack_name, cdk_logical_id, master_username, order_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO databases(arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, cdk_stack_name, cdk_logical_id, master_username, order_index, sso_profile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             rusqlite::params![
                 db.arn.clone(),
                 db.name.clone(),
@@ -238,7 +250,8 @@ fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) 
                 db.cdk_stack_name.clone(),
                 db.cdk_logical_id.clone(),
                 db.master_username.clone(),
-                i32::try_from(i).unwrap_or(0)
+                i32::try_from(i).unwrap_or(0),
+                db.sso_profile.clone(),
             ],
         ).unwrap();
     }

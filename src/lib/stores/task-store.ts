@@ -18,6 +18,7 @@ export type Task = {
 	status: TaskStatus;
 	port?: number;
 	proxyAuthConfig?: ProxyAuthConfig;
+	sso_profile?: string;
 };
 
 export type NewTaskParams = {
@@ -25,7 +26,12 @@ export type NewTaskParams = {
 	proxyAuthConfig?: ProxyAuthConfig;
 };
 
-type TaskDef = { name: string; arn: string; proxyAuthConfig?: ProxyAuthConfig };
+type TaskDef = {
+	name: string;
+	arn: string;
+	proxyAuthConfig?: ProxyAuthConfig;
+	sso_profile?: string;
+};
 
 const createTaskStore = () => {
 	const tasks = writable<Task[]>([]);
@@ -37,10 +43,10 @@ const createTaskStore = () => {
 	};
 
 	const startTask = async (
-		{ name, arn, proxyAuthConfig }: TaskDef,
+		{ name, arn, proxyAuthConfig, sso_profile }: TaskDef,
 		startTask: () => Promise<NewTaskParams>
 	) => {
-		updateToStatus({ arn, name, status: TaskStatus.STARTING, proxyAuthConfig });
+		updateToStatus({ arn, name, status: TaskStatus.STARTING, proxyAuthConfig, sso_profile });
 		try {
 			const { port, proxyAuthConfig } = await startTask();
 			updateToStatus({
@@ -48,11 +54,12 @@ const createTaskStore = () => {
 				name,
 				status: TaskStatus.RUNNING,
 				port,
-				proxyAuthConfig
+				proxyAuthConfig,
+				sso_profile
 			});
 		} catch (e) {
 			console.warn('Failed to start task', e);
-			updateToStatus({ arn, name, status: TaskStatus.FAILED });
+			updateToStatus({ arn, name, status: TaskStatus.FAILED, sso_profile });
 		}
 	};
 

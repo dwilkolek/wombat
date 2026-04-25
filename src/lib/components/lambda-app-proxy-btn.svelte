@@ -6,7 +6,7 @@
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/plugin-dialog';
 	import { userStore } from '$lib/stores/user-store';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { wombatAccountStore } from '$lib/stores/available-accounts-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
 	import { getFromList, lambdaAppArn } from '$lib/utils';
 
@@ -30,7 +30,7 @@
 		new Set([
 			'none',
 			'dxp',
-			...$wombatProfileStore.infraProfiles
+			...$wombatAccountStore.infraProfiles
 				.filter((infra) => infra.env == env)
 				.map((infra) => infra.app)
 		])
