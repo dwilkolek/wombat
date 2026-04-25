@@ -331,7 +331,9 @@ impl AwsConfigProvider {
                     sso_profile
                         .infra_profiles
                         .iter()
-                        .find(|infra_profile| &infra_profile.env == env && infra_profile.app == app)
+                        .find(|infra_profile| {
+                            &infra_profile.env == env && app.starts_with(&infra_profile.app)
+                        })
                         .cloned()
                 });
 
