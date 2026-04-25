@@ -1,6 +1,6 @@
 import { derived, writable } from 'svelte/store';
 import { execute } from './error-store';
-import type { AwsEnv, UserConfig, WombatAwsProfile } from '../types';
+import type { AwsEnv, UserConfig, WombatAwsAccount } from '../types';
 import { emit } from '@tauri-apps/api/event';
 
 const createUserStore = () => {
@@ -28,14 +28,14 @@ const createUserStore = () => {
 		set(prepareConfig(config));
 	};
 
-	const login = async (profile: WombatAwsProfile | undefined) => {
-		if (!profile) {
+	const login = async (account: WombatAwsAccount | undefined) => {
+		if (!account) {
 			return;
 		}
-		const config = await execute<UserConfig>('login', { profile: profile.name });
+		const config = await execute<UserConfig>('login', { profile: account.id });
 		set(prepareConfig(config));
 		loggedIn.set(true);
-		console.log('setting', profile);
+		console.log('setting', account);
 		emit('logged-in');
 	};
 
@@ -54,9 +54,16 @@ const createUserStore = () => {
 		set(prepareConfig(config));
 	};
 
+	const logout = async () => {
+		await execute<void>('logout');
+		loggedIn.set(false);
+	};
+
 	return {
 		subscribe,
+		loggedIn: { subscribe: loggedIn.subscribe },
 		login,
+		logout,
 		setDbeaverPath,
 		setLogsDir,
 		favoriteTrackedName,
@@ -71,7 +78,7 @@ const prepareConfig = (config: UserConfig) => {
 };
 export const userStore = createUserStore();
 
-export const activeProfilePreferences = derived([userStore], (stores) => {
+export const activeAccountPreferences = derived([userStore], (stores) => {
 	return (
 		stores[0].preferences[stores[0].last_used_profile ?? ''] ?? {
 			preferred_environments: [],

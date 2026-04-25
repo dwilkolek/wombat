@@ -1,6 +1,6 @@
 export type SupportLevel = 'Full' | 'Partial' | 'None';
 
-export type SsoProfiles = { [key in AwsEnv]?: SsoProfile };
+export type SsoProfiles = { [key in AwsEnv]?: SsoProfile[] };
 export type CookieHealth = 'Ok' | 'Stale' | 'Old';
 export type CookieHealthMap = { [key in AwsEnv]?: CookieHealth };
 export enum BrowserExtensionState {
@@ -18,9 +18,10 @@ export type CookieJarStatus = {
 	cookieHealth: CookieHealthMap;
 };
 
-export type WombatAwsProfile = {
+export type WombatAwsAccount = {
+	id: string;
 	name: string;
-	profile_base_name: string;
+	profile_base_names: string[];
 	sso_profiles: SsoProfiles;
 	support_level: SupportLevel;
 	single_source_profile: boolean;
@@ -56,9 +57,10 @@ export type Cluster = {
 	arn: string;
 	env: AwsEnv;
 	version: number;
+	sso_profile: string;
 };
 type EnvPortMap = { [key: string]: number };
-export type WombatProfilePreferences = {
+export type WombatAccountPreferences = {
 	preferred_environments: AwsEnv[];
 	tracked_names: string[];
 };
@@ -69,7 +71,7 @@ export type UserConfig = {
 	dbeaver_path: string | undefined;
 	logs_dir: string;
 	arn_to_proxy_port_map: EnvPortMap;
-	preferences: { [key: string]: WombatProfilePreferences };
+	preferences: { [key: string]: WombatAccountPreferences };
 };
 
 export type EcsService = {
@@ -78,6 +80,7 @@ export type EcsService = {
 	arn: string;
 	cluster_arn: string;
 	td_family: string;
+	sso_profile: string;
 };
 
 export type ServiceDetails = {
@@ -90,6 +93,7 @@ export type ServiceDetails = {
 	task_registered_at: string;
 	td_family: string;
 	td_revision: number;
+	sso_profile: string;
 };
 
 export type ServiceDetailsMissing = {
@@ -98,6 +102,7 @@ export type ServiceDetailsMissing = {
 	name: string;
 	error: string;
 	env: AwsEnv;
+	sso_profile: string;
 };
 
 export type Endpoint = {
@@ -120,6 +125,7 @@ export type RdsInstance = {
 	cdk_stack_name?: string | null;
 	cdk_logical_id?: string | null;
 	master_username?: string | null;
+	sso_profile: string;
 };
 
 export type DatabaseCredentials = {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { activeProfilePreferences } from '$lib/stores/user-store';
+	import { activeAccountPreferences } from '$lib/stores/user-store';
 	import { serviceStore, servicedForActiveCluster } from '$lib/stores/service-store';
 	import type { EcsService } from '$lib/types';
 
@@ -7,7 +7,7 @@
 	let inputValue = $state('');
 
 	let inputElement: HTMLElement | undefined = $state();
-	let tracked_names = $activeProfilePreferences.tracked_names;
+	let tracked_names = $activeAccountPreferences.tracked_names;
 	let selectedServices = serviceStore.selectedServices;
 	let services = $derived(
 		$servicedForActiveCluster.toSorted((a, b) => {

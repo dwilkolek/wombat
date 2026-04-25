@@ -9,7 +9,7 @@
 	} from '$lib/types';
 	import { message } from '@tauri-apps/plugin-dialog';
 	import { featuresStore } from '$lib/stores/feature-store';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { wombatAccountStore } from '$lib/stores/available-accounts-store';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { type CustomHeader } from '$lib/types';
 	import { taskStore, type NewTaskParams } from '$lib/stores/task-store';
@@ -25,14 +25,22 @@
 	let { service }: Props = $props();
 	let dialog: HTMLDialogElement | undefined = $state();
 	let selectedInfraProfile = $state(
-		$wombatProfileStore.infraProfiles.find(
+		$wombatAccountStore.infraProfiles.find(
 			(infraProfile) => infraProfile.env == service.env && infraProfile.app == service.name
-		) ?? $wombatProfileStore.infraProfiles.at(0)
+		) ?? $wombatAccountStore.infraProfiles.at(0)
 	);
-	let selectedSsoProxy = $state(
-		$wombatProfileStore.ssoProfiles.find((ssoProfile) => ssoProfile.env == service.env) ??
-			$wombatProfileStore.ssoProfiles.at(0)
+	let ssoProfilesForEnv = $derived(
+		$wombatAccountStore.ssoProfiles.filter((ssoProfile) => ssoProfile.env == service.env)
 	);
+	let selectedSsoProxy = $state<SsoProfile | undefined>();
+	$effect(() => {
+		if (!selectedSsoProxy && ssoProfilesForEnv.length > 0) {
+			selectedSsoProxy =
+				ssoProfilesForEnv.find((p) => p.support_level == 'Full') ||
+				ssoProfilesForEnv.find((p) => p.support_level == 'Partial') ||
+				ssoProfilesForEnv[0];
+		}
+	});
 	let useSSOProfile = $state(false);
 	let selectedAuthInterceptor: ProxyAuthConfig | undefined = $state();
 	const baseAddress = $derived(
@@ -58,7 +66,7 @@
 	let customHeaders: CustomHeader[] = $state([]);
 
 	let matchingInfraProfiles = $derived(
-		$wombatProfileStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
+		$wombatAccountStore.infraProfiles.filter((infraProfile) => infraProfile.env == service.env) ??
 			[]
 	);
 
@@ -91,35 +99,33 @@
 			? filterForSsoProfile(proxyAuthConfigsForThisService)
 			: filterForInfraProfile(proxyAuthConfigsForThisService, selectedInfraProfile)
 	);
-
-	const startProxy = async (
-		infraProfile: InfraProfile | undefined,
-		ssoProfile: SsoProfile | undefined,
-		proxyAuthConfig: ProxyAuthConfig | undefined,
-		customHeadersList: CustomHeader[],
-		defaultHeaderList: CustomHeader[]
-	) => {
-		const headers: { [key: string]: string } = {};
-		defaultHeaderList.forEach((header) => {
-			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
+const startProxy = async (
+	infraProfile: InfraProfile | undefined,
+	ssoProfiles: SsoProfile[],
+	proxyAuthConfig: ProxyAuthConfig | undefined,
+	customHeadersList: CustomHeader[],
+	defaultHeaderList: CustomHeader[]
+) => {
+	const headers: { [key: string]: string } = {};
+	defaultHeaderList.forEach((header) => {
+		headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
+	});
+	customHeadersList.forEach((header) => {
+		headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
+	});
+	taskStore.startTask({ ...service, proxyAuthConfig }, async () => {
+		console.log('headers', headers);
+		return invoke<NewTaskParams>('start_service_proxy', {
+			service,
+			proxyAuthConfig,
+			infraProfile,
+			ssoProfiles,
+			headers
 		});
-		customHeadersList.forEach((header) => {
-			headers[header.name] = header.encodeBase64 ? btoa(header.value) : header.value;
-		});
-		taskStore.startTask({ ...service, proxyAuthConfig }, async () => {
-			console.log('headers', headers);
-			return invoke<NewTaskParams>('start_service_proxy', {
-				service,
-				proxyAuthConfig,
-				infraProfile,
-				ssoProfile,
-				headers
-			});
-		});
-		dialog?.close();
-	};
+	});
+	dialog?.close();
+};
 </script>
-
 <div class="tooltip tooltip-left h-5" data-tip={$disabledReason ?? 'Start proxy'}>
 	<button
 		disabled={!!$disabledReason}
@@ -223,14 +229,13 @@
 						<div class="grow">
 							<!-- svelte-ignore a11y_autofocus -->
 							<select autofocus class="select w-full select-sm" bind:value={selectedSsoProxy}>
-								{#each $wombatProfileStore.ssoProfiles as ssoProfile (ssoProfile.profile_name)}
-									{#if ssoProfile.env == service.env}{@const interceptorCount = filterForSsoProfile(
-											proxyAuthConfigsForThisService
-										).length}
-										<option value={ssoProfile}>
-											{ssoProfile.profile_name} - {interceptorCount} interceptor(s)
-										</option>
-									{/if}
+								{#each ssoProfilesForEnv as ssoProfile (ssoProfile.profile_name)}
+									{@const interceptorCount = filterForSsoProfile(
+										proxyAuthConfigsForThisService
+									).length}
+									<option value={ssoProfile}>
+										{ssoProfile.profile_name} - {interceptorCount} interceptor(s)
+									</option>
 								{/each}
 							</select>
 						</div>
@@ -399,9 +404,12 @@
 					data-umami-event-uid={$userStore.id}
 					onclick={(e) => {
 						e.preventDefault();
+						if (useSSOProfile && !selectedSsoProxy) return;
+						if (!useSSOProfile && !selectedInfraProfile) return;
+
 						startProxy(
-							useSSOProfile ? undefined : selectedInfraProfile,
-							useSSOProfile ? selectedSsoProxy : undefined,
+							useSSOProfile ? undefined : selectedInfraProfile!,
+							useSSOProfile ? [selectedSsoProxy!] : ssoProfilesForEnv,
 							selectedAuthInterceptor,
 							customHeaders,
 							defaultHeaders

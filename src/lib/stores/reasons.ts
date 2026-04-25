@@ -1,6 +1,6 @@
 import { AwsEnv, type EcsService, type RdsInstance } from '$lib/types';
 import { derived } from 'svelte/store';
-import { wombatProfileStore } from './available-profiles-store';
+import { wombatAccountStore } from './available-accounts-store';
 import { TaskStatus, taskStore } from './task-store';
 import { featuresStore } from './feature-store';
 import { deplyomentStore } from './deployment-store';
@@ -8,7 +8,7 @@ import { deplyomentStore } from './deployment-store';
 const PROD_ACTIONS_DISABLED_REASON = 'Not available';
 
 export function startEcsProxyDisabledReason(service: EcsService) {
-	return derived([featuresStore, taskStore, wombatProfileStore], (stores) => {
+	return derived([featuresStore, taskStore, wombatAccountStore], (stores) => {
 		const { devWay, startEcsProxy, ecsProdActions } = stores[0];
 		if (stores[1].some((t) => t.arn == service.arn && t.status == TaskStatus.STARTING)) {
 			return 'Starting...';
@@ -28,7 +28,7 @@ export function startEcsProxyDisabledReason(service: EcsService) {
 }
 
 export function startRdsProxyDisabledReason(rds: RdsInstance) {
-	return derived([featuresStore, wombatProfileStore, taskStore], (stores) => {
+	return derived([featuresStore, wombatAccountStore, taskStore], (stores) => {
 		const { devWay, startRdsProxy, rdsProdActions } = stores[0];
 		if (stores[2].some((t) => t.arn == rds.arn && t.status == TaskStatus.STARTING)) {
 			return 'Starting...';
@@ -85,12 +85,12 @@ export function startCookieSessionProxyDisabledReason(address: string) {
 
 export function restartEcsDisabledReason(service: EcsService) {
 	return derived(
-		[featuresStore, wombatProfileStore, deplyomentStore],
-		([{ restartEcsService, ecsProdActions }, wombatProfileStore, deplyomentStore]) => {
+		[featuresStore, wombatAccountStore, deplyomentStore],
+		([{ restartEcsService, ecsProdActions }, wombatAccountStore, deplyomentStore]) => {
 			if (!restartEcsService) {
 				return { message: 'ECS restart disabled' };
 			}
-			const missingInfraProfile = !wombatProfileStore.infraProfiles.some(
+			const missingInfraProfile = !wombatAccountStore.infraProfiles.some(
 				({ app, env }) => service.name.startsWith(app) && env == service.env
 			);
 			if (missingInfraProfile) {
@@ -112,12 +112,12 @@ export function restartEcsDisabledReason(service: EcsService) {
 
 export function deployEcsServiceDisabledReason(service: EcsService) {
 	return derived(
-		[featuresStore, wombatProfileStore, deplyomentStore],
-		([{ deployEcsService, ecsProdActions }, wombatProfileStore, deplyomentStore]) => {
+		[featuresStore, wombatAccountStore, deplyomentStore],
+		([{ deployEcsService, ecsProdActions }, wombatAccountStore, deplyomentStore]) => {
 			if (!deployEcsService) {
 				return { message: 'ECS deploy disabled' };
 			}
-			const missingInfraProfile = !wombatProfileStore.infraProfiles.some(
+			const missingInfraProfile = !wombatAccountStore.infraProfiles.some(
 				({ app, env }) => service.name.startsWith(app) && env == service.env
 			);
 			if (missingInfraProfile) {
@@ -138,7 +138,7 @@ export function deployEcsServiceDisabledReason(service: EcsService) {
 }
 
 export function removeEcsTaskDefinitionsReason(service: EcsService) {
-	return derived([featuresStore, wombatProfileStore], (stores) => {
+	return derived([featuresStore, wombatAccountStore], (stores) => {
 		const { removeEcsTaskDefinitions, ecsProdActions } = stores[0];
 
 		if (!removeEcsTaskDefinitions) {
@@ -158,7 +158,7 @@ export function removeEcsTaskDefinitionsReason(service: EcsService) {
 }
 
 export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
-	return derived([featuresStore, wombatProfileStore], (stores) => {
+	return derived([featuresStore, wombatAccountStore], (stores) => {
 		const { getRdsSecret, rdsProdActions } = stores[0];
 		if (!rds) {
 			return 'No RDS selected';

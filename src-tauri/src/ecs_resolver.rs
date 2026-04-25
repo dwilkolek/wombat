@@ -59,6 +59,16 @@ impl EcsResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 2);
         }
+        if version < 3 {
+            conn.execute(
+                "ALTER TABLE services
+                  ADD COLUMN sso_profile text default ''
+                  ",
+                [],
+            )
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 3);
+        }
     }
 
     pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
@@ -180,18 +190,19 @@ impl EcsResolver {
                 })
                 .collect();
         }
-
         let mut unique_services_map = HashMap::new();
         for cluster in clusters {
             if environments.contains(&cluster.env) {
-                let (profile, config) = aws_config_resolver.sso_config(&cluster.env).await;
-                info!(
-                    "Using profile={} to resolve services for cluster={}",
-                    cluster.arn, profile
-                );
-                let services = aws::services(&config, &cluster).await;
-                for service in services {
-                    unique_services_map.insert(service.arn.clone(), service);
+                let configs = aws_config_resolver.all_sso_configs(&cluster.env).await;
+                for (profile, config) in configs {
+                    info!(
+                        "Using profile={} to resolve services for cluster={}",
+                        profile, cluster.arn
+                    );
+                    let services = aws::services(&config, &cluster, &profile).await;
+                    for service in services {
+                        unique_services_map.insert(service.arn.clone(), service);
+                    }
                 }
             } else {
                 warn!(
@@ -227,26 +238,29 @@ impl EcsResolver {
 
 fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
     log::info!("reading ecs instances from cache");
-    let mut stmt = match conn.prepare("SELECT arn, name, cluster_arn, env, td_family FROM services")
-    {
-        Ok(s) => s,
-        Err(e) => {
-            log::error!("reading ecs instances from cache failed, reason: {e}");
-            return Vec::new();
-        }
-    };
+    let mut stmt =
+        match conn.prepare("SELECT arn, name, cluster_arn, env, td_family, sso_profile FROM services")
+        {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("reading ecs instances from cache failed, reason: {e}");
+                return Vec::new();
+            }
+        };
     let rows = stmt.query_map([], |row| {
         let arn: String = row.get(0)?;
         let name: String = row.get(1)?;
         let cluster_arn: String = row.get(2)?;
         let env: Env = serde_json::from_str(&row.get::<usize, String>(3)?).unwrap();
         let td_family: String = row.get(4)?;
+        let sso_profile: String = row.get(5).unwrap_or_default();
         Ok(aws::EcsService {
             arn,
             name,
             cluster_arn,
             env,
             td_family,
+            sso_profile,
         })
     });
     match rows {
@@ -272,12 +286,14 @@ fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[aws::EcsServ
     for ecs in services.iter() {
         let conn = pool.get().unwrap();
         conn.execute(
-            "INSERT INTO services(arn, name, cluster_arn, env) VALUES (?, ?, ?, ?)",
+            "INSERT INTO services(arn, name, cluster_arn, env, td_family, sso_profile) VALUES (?, ?, ?, ?, ?, ?)",
             rusqlite::params![
                 ecs.arn.clone(),
                 ecs.name.clone(),
                 ecs.cluster_arn.clone(),
                 serde_json::to_string(&ecs.env).unwrap(),
+                ecs.td_family.clone(),
+                ecs.sso_profile.clone(),
             ],
         )
         .unwrap();

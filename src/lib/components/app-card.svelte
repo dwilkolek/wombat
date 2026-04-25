@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
+	import { activeAccountPreferences, userStore } from '$lib/stores/user-store';
 
 	import { allServiceDetailsStore, serviceDetailStore } from '$lib/stores/service-details-store';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { wombatAccountStore } from '$lib/stores/available-accounts-store';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import StarIcon from './star-icon.svelte';
@@ -26,13 +26,31 @@
 
 	let details = $derived(serviceDetailStore(app));
 
-	let isFavourite = $derived(!!$activeProfilePreferences.tracked_names.includes(app));
+	let isFavourite = $derived(!!$activeAccountPreferences.tracked_names.includes(app));
+
+	let ssoProfileName = $derived.by(() => {
+		// Try to find the role that owns the infra profile for this app in any environment
+		const ssoByInfra = $wombatAccountStore.ssoProfiles.find((sso) =>
+			sso.infra_profiles.some((i) => i.app === app)
+		);
+		if (ssoByInfra) return ssoByInfra.profile_name;
+
+		// Fallback to the sso_profile recorded during discovery in any env
+		if ($details) {
+			for (const envDetails of $details.envs.values()) {
+				const name = envDetails.services[0]?.sso_profile || envDetails.dbs[0]?.sso_profile;
+				if (name) return name;
+			}
+		}
+		return undefined;
+	});
 </script>
 
 {#if displayConfig.favorite == null || isFavourite === displayConfig.favorite}
 	<div class="px-2 py-1 shadow-2xl w-full flex rounded-lg bg-base-300">
-		<div class="flex gap-2 flex-col justify-between">
-			<div class="min-w-80 w-80 flex flex-row gap-2 items-center text-md">
+		<div class="min-w-80 w-80 flex flex-col gap-0.5 justify-center py-1">
+			<!-- Line 1: Star + App Name -->
+			<div class="flex flex-row gap-2 items-center text-md">
 				<button
 					class="text-xs"
 					data-umami-event="favorite_app_toggle"
@@ -49,10 +67,19 @@
 					</a>
 				</span>
 			</div>
+
+			<!-- Line 2: Profile Name -->
+			{#if ssoProfileName}
+				<div class="pl-1">
+					<span class="opacity-70 font-medium text-xs italic">{ssoProfileName}</span>
+				</div>
+			{/if}
+
+			<!-- Line 3: Sync Details -->
 			{#if $details}
-				<div class="place-content-end text-xs text-slate-500 font-italic">
-					<div class="flex gap-2">
-						<span>Synchronized at: {format($details.timestamp, 'yyyy-MM-dd HH:mm:ss')}</span>
+				<div class="pl-1 text-xs text-slate-500 font-italic">
+					<div class="flex gap-2 items-center">
+						<span>Sync at: {format($details.timestamp, 'HH:mm:ss')}</span>
 						<button
 							aria-label="Refresh"
 							data-umami-event="app_refresh"
@@ -68,7 +95,7 @@
 								viewBox="0 0 24 24"
 								stroke-width="1.5"
 								stroke="currentColor"
-								class="w-4 h-4"
+								class="w-3 h-3"
 							>
 								<path
 									stroke-linecap="round"
@@ -89,12 +116,12 @@
 		{#if $details}
 			<div
 				class="grid w-full divide-x divide-base-100"
-				style={`grid-template-columns: repeat(${$wombatProfileStore.environments.length ?? 1}, minmax(0, 1fr));`}
+				style={`grid-template-columns: repeat(${$wombatAccountStore.environments.length ?? 1}, minmax(0, 1fr));`}
 			>
-				{#each $wombatProfileStore.environments as enabled_env (enabled_env)}
+				{#each $wombatAccountStore.environments as enabled_env (enabled_env)}
 					{@const value = $details.envs?.get(enabled_env)}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(enabled_env)}
-						{@const hasInfraProfile = $wombatProfileStore.infraProfiles.some(
+						{@const hasInfraProfile = $wombatAccountStore.infraProfiles.some(
 							(infra) => infra.env == enabled_env && infra.app == app
 						)}
 						<div class="flex flex-col app-env-cell px-2">

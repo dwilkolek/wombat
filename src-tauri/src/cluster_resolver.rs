@@ -56,6 +56,16 @@ impl ClusterResolver {
             .unwrap();
             cache_db::set_cache_version(conn, CACHE_NAME, 2);
         }
+        if version < 3 {
+            conn.execute(
+                "ALTER TABLE clusters
+                  ADD COLUMN sso_profile text default ''
+                  ",
+                [],
+            )
+            .unwrap();
+            cache_db::set_cache_version(conn, CACHE_NAME, 3);
+        }
     }
 
     pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
@@ -86,11 +96,13 @@ impl ClusterResolver {
 
         let mut unique_clusters_map = HashMap::new();
         for env in environments.iter() {
-            let (profile, config) = aws_config_resolver.sso_config(env).await;
-            info!("Fetching ecs from aws using {profile}");
-            let clusters = aws::clusters(&config).await;
-            for cluster in clusters {
-                unique_clusters_map.insert(cluster.arn.clone(), cluster);
+            let configs = aws_config_resolver.all_sso_configs(env).await;
+            for (profile, config) in configs {
+                info!("Fetching ecs from aws using {profile}");
+                let clusters = aws::clusters(&config, &profile).await;
+                for cluster in clusters {
+                    unique_clusters_map.insert(cluster.arn.clone(), cluster);
+                }
             }
         }
 
@@ -124,23 +136,26 @@ impl ClusterResolver {
 
 fn fetch_clusters(conn: &Connection) -> Vec<aws::Cluster> {
     log::info!("reading clusters from cache");
-    let mut stmt = match conn.prepare("SELECT arn, name, env, platform_version FROM clusters;") {
-        Ok(s) => s,
-        Err(e) => {
-            log::error!("reading clusters cache failed, reason: {e}");
-            return Vec::new();
-        }
-    };
+    let mut stmt =
+        match conn.prepare("SELECT arn, name, env, platform_version, sso_profile FROM clusters;") {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!("reading clusters cache failed, reason: {e}");
+                return Vec::new();
+            }
+        };
     let rows = stmt.query_map([], |row| {
         let arn: String = row.get(0)?;
         let name: String = row.get(1)?;
         let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(2)?).unwrap();
         let platform_version: i32 = row.get(3).unwrap_or(0);
+        let sso_profile: String = row.get(4).unwrap_or_default();
         Ok(aws::Cluster {
             arn,
             name,
             env,
             platform_version,
+            sso_profile,
         })
     });
     match rows {
@@ -163,11 +178,13 @@ fn store_clusters(conn: &Connection, clusters: &[aws::Cluster]) {
     clear_clusters(conn);
     for db in clusters.iter() {
         conn.execute(
-            "INSERT INTO clusters(arn, name, env) VALUES (?, ?, ?)",
+            "INSERT INTO clusters(arn, name, env, platform_version, sso_profile) VALUES (?, ?, ?, ?, ?)",
             params![
                 db.arn.clone(),
                 db.name.clone(),
-                serde_json::to_string(&db.env).unwrap()
+                serde_json::to_string(&db.env).unwrap(),
+                db.platform_version,
+                db.sso_profile.clone(),
             ],
         )
         .unwrap();

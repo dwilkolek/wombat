@@ -5,7 +5,7 @@
 	import { execute } from '$lib/stores/error-store';
 	import { featuresStore } from '$lib/stores/feature-store';
 	import { userStore } from '$lib/stores/user-store';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import { availableAccountsStore } from '$lib/stores/available-accounts-store';
 
 	let userConfig = $derived($userStore);
 	let loadingAwsConfigs = $state(false);
@@ -29,7 +29,7 @@
 			try {
 				loadingAwsConfigs = true;
 				await execute('reload_aws_config', undefined, true);
-				await availableProfilesStore.refresh();
+				await availableAccountsStore.refresh();
 				await featuresStore.refreshFeatures();
 			} finally {
 				loadingAwsConfigs = false;
