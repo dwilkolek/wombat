@@ -8,7 +8,8 @@
 	import { userStore } from '$lib/stores/user-store';
 	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
-	import { getFromList, lambdaAppArn } from '$lib/utils';
+	import { lambdaAppArn } from '$lib/utils';
+
 
 	interface Props {
 		app: string;
@@ -200,19 +201,19 @@
 				</div>
 
 				<div class="flex gap-1 flex-col">
-					{#each getFromList(defaultHeaders) as header (header)}
+					{#each defaultHeaders as header (header.name)}
 						<CustomHeaderForm
 							added={true}
 							disabled={true}
-							bind:name={header.name}
-							bind:value={header.value}
-							bind:encodeBase64={header.encodeBase64}
+							name={header.name}
+							value={header.value}
+							encodeBase64={header.encodeBase64}
 							onRemove={() => {
 								console.error('cannot remove');
 							}}
 						/>
 					{/each}
-					{#each getFromList(customHeaders) as header (header)}
+					{#each customHeaders as header (header)}
 						<CustomHeaderForm
 							added={true}
 							bind:name={header.name}

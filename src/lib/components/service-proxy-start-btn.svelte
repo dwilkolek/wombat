@@ -16,7 +16,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { userStore } from '$lib/stores/user-store';
 	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
-	import { getFromList } from '$lib/utils';
+
 
 	interface Props {
 		service: EcsService;
@@ -351,17 +351,17 @@
 					>
 				</div>
 				<div class="flex gap-1 flex-col">
-					{#each getFromList(defaultHeaders) as header (header)}
+					{#each defaultHeaders as header (header.name)}
 						<CustomHeaderForm
 							added={true}
-							bind:name={header.name}
-							bind:value={header.value}
-							bind:encodeBase64={header.encodeBase64}
+							name={header.name}
+							value={header.value}
+							encodeBase64={header.encodeBase64}
 							disabled={true}
 						/>
 					{/each}
 					{#if $featuresStore.proxyCustomHeaders}
-						{#each getFromList(customHeaders) as header (header)}
+						{#each customHeaders as header (header)}
 							<CustomHeaderForm
 								added={true}
 								bind:name={header.name}
