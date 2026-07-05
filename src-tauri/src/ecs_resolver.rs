@@ -111,7 +111,7 @@ impl EcsResolver {
                     .await;
                     info!(
                         "Deployment={} has status={:?}",
-                        &deployment_id, &deployment_status
+                        deployment_id, deployment_status
                     );
                     let mut status_str = "Unknown";
                     let mut error_message = None;

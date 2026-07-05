@@ -34,7 +34,7 @@ impl RdsResolver {
 
     fn migrate(conn: &rusqlite::Connection) {
         let version = cache_db::get_cache_version(conn, CACHE_NAME);
-        info!("Version {}", &version);
+        info!("Version {}", version);
 
         if version < 1 {
             conn.execute(
