@@ -59,7 +59,7 @@ impl JepsenAutheticator {
     }
 
     pub async fn get_jepsen_token(&self) -> Result<String, String> {
-        info!("Getting token {}", &self.secret_arn);
+        info!("Getting token {}", self.secret_arn);
         let client_secret = aws::get_secret(&self.aws_config, &self.secret_arn)
             .await
             .unwrap_or_log();
@@ -79,13 +79,13 @@ impl JepsenAutheticator {
                 match response_body {
                     Ok(body) => Ok(body.access_token),
                     Err(e) => {
-                        warn!("Failed to deserialize, {}", &e);
+                        warn!("Failed to deserialize, {}", e);
                         Err(format!("Failed to deserialize, {e}"))
                     }
                 }
             }
             Err(e) => {
-                warn!("Failed to get jepsen secret, {}", &e);
+                warn!("Failed to get jepsen secret, {}", e);
                 Err(format!("Failed to get jepsen secret, {e}"))
             }
         }
@@ -102,7 +102,7 @@ impl ProxyInterceptor for JepsenAutheticator {
             info!("adding jepsen headers");
             headers.insert(
                 "Authorization",
-                format!("Bearer {}", &token).parse().unwrap(),
+                format!("Bearer {}", token).parse().unwrap(),
             );
         }
     }

@@ -337,7 +337,7 @@ async fn kv_get(
     let kv_store = kv_store.0.lock().await;
     match kv_store.get(&key) {
         Some(v) => Ok(v),
-        None => Err(format!("Key {} not found", &key)),
+        None => Err(format!("Key {} not found", key)),
     }
 }
 
@@ -390,7 +390,7 @@ async fn credentials(
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
-                warn!("Falling back to user profile: {}", &override_aws_profile);
+                warn!("Falling back to user profile: {}", override_aws_profile);
                 secret = find_secret_with_fallback(
                     &override_aws_config,
                     &db,
@@ -688,7 +688,7 @@ async fn abort_find_logs(
     reason: String,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
 ) -> Result<(), CommandError> {
-    info!("Attempt to abort find logs: {}", &reason);
+    info!("Attempt to abort find logs: {}", reason);
     let mut tracker = async_task_tracker.0.lock().await;
     if let Some(handler) = &tracker.search_log_handler {
         handler.abort();
@@ -747,7 +747,7 @@ async fn deploy_ecs_service(
         .expect("Missing sdk_config to deploy service");
     info!(
         "Attemping to restart service {} on {} with profile {}",
-        &service_name, &cluster_arn, &aws_profile
+        service_name, cluster_arn, aws_profile
     );
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     ecs_resolver_instance
@@ -914,7 +914,7 @@ async fn service_details(
 
     info!(
         "Called for service_details: {}, profile: {}",
-        &app, &authorized_user.profile
+        app, authorized_user.profile
     );
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
@@ -1087,7 +1087,7 @@ async fn start_service_proxy(
             "jepsen" => {
                 info!(
                     "Adding jepsen auth interceptor, profile={}",
-                    &source_app_profile
+                    source_app_profile
                 );
                 interceptors.push(Box::new(
                     proxy_authenticators::JepsenAutheticator::from_proxy_auth_config(
@@ -1099,7 +1099,7 @@ async fn start_service_proxy(
             "basic" => {
                 info!(
                     "Adding basic auth interceptor, profile={}",
-                    &source_app_profile
+                    source_app_profile
                 );
                 interceptors.push(Box::new(
                     proxy_authenticators::BasicAuthenticator::from_proxy_auth_config(
@@ -1141,7 +1141,7 @@ async fn start_service_proxy(
 
         info!(
             "Proxy to {} started={}",
-            &service.name,
+            service.name,
             proxy_started.is_ok()
         );
 
@@ -1209,7 +1209,7 @@ async fn start_cookie_session_proxy(
 
     info!(
         "Started cookie session proxy with id={cookie_session_proxy} with cookie from env={env} to {}",
-        &address
+        address
     );
 
     Ok(NewTaskParams {
@@ -1260,7 +1260,7 @@ async fn start_lambda_app_proxy(
         .task_handlers
         .insert(lambda_arn.clone(), handle);
 
-    info!("Started lambda proxy={} to {}", lambda_arn, &address);
+    info!("Started lambda proxy={} to {}", lambda_arn, address);
 
     Ok(NewTaskParams {
         port: local_port,
@@ -1480,7 +1480,7 @@ async fn open_dbeaver(
             if aws_config_provider.dev_way {
                 let (override_aws_profile, override_aws_config) =
                     aws_config_provider.sso_config(&db.env).await;
-                warn!("Falling back to user profile: {}", &override_aws_profile);
+                warn!("Falling back to user profile: {}", override_aws_profile);
                 secret = Box::pin(find_secret_with_fallback(
                     &override_aws_config,
                     &db,
@@ -1497,7 +1497,7 @@ async fn open_dbeaver(
     let db_secret = match secret {
         Ok(secret) => secret,
         Err(error) => {
-            error!("failed to get rds secret, reason={}", &error.message);
+            error!("failed to get rds secret, reason={}", error.message);
             return Err(error);
         }
     };
@@ -1659,7 +1659,7 @@ async fn main() {
             Some(guard)
         }
         _ => {
-            panic!("Unknown logger: {}", &app_config.logger);
+            panic!("Unknown logger: {}", app_config.logger);
         }
     };
 

@@ -25,8 +25,8 @@ impl WombatApi {
 
     pub async fn ping(&self) -> bool {
         let client = reqwest::Client::new();
-        let to = format!("{}{}", &self.url, "/health");
-        log::info!("pinging: {}", &to);
+        let to = format!("{}{}", self.url, "/health");
+        log::info!("pinging: {}", to);
         let response = client.get(to).send().await;
         if let Ok(response) = response {
             return response.status() == reqwest::StatusCode::OK;
@@ -63,12 +63,12 @@ impl WombatApi {
 
         info!("Invalid wombat jwt token, getting new one");
         let client = reqwest::Client::new();
-        let to = format!("{}{}", &self.url, "/api/login");
-        log::info!("authenticating with: {}", &to);
+        let to = format!("{}{}", self.url, "/api/login");
+        log::info!("authenticating with: {}", to);
         let response = client
             .post(to)
             .basic_auth(self.user.clone(), Some(self.password.clone()))
-            .body(format!("{}", &self.user_id))
+            .body(format!("{}", self.user_id))
             .send()
             .await;
         if let Ok(response) = response {

@@ -257,11 +257,11 @@ impl UserConfig {
         profile_name: &str,
         tracked_name: TrackedName,
     ) -> Result<UserConfig, CommandError> {
-        info!("Favorite {} ", &tracked_name);
+        info!("Favorite {} ", tracked_name);
         let preferences = &mut self.preferences;
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
         if !preference.tracked_names.remove(&tracked_name) {
-            info!("Favorite Add {} ", &tracked_name);
+            info!("Favorite Add {} ", tracked_name);
             preference.tracked_names.insert(tracked_name);
         }
         self.save();

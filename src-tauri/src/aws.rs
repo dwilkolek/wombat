@@ -88,12 +88,12 @@ impl std::cmp::Ord for RdsInstance {
         let other_key = format!(
             "{}/{}",
             other.cdk_stack_id.as_deref().unwrap_or(""),
-            &other.identifier
+            other.identifier
         );
         let self_key = format!(
             "{}/{}",
             self.cdk_stack_id.as_deref().unwrap_or(""),
-            &self.identifier
+            self.identifier
         );
 
         self_key.cmp(&other_key)
@@ -940,7 +940,7 @@ pub async fn databases(config: &aws_config::SdkConfig) -> Vec<RdsInstance> {
 pub async fn find_source_rds(config: &aws_config::SdkConfig, rds: &RdsInstance) -> Option<String> {
     if rds.source_db_eligible() {
         let cdk_client = aws_sdk_cloudformation::Client::new(config);
-        info!("Trying to fill source rds for: {} ", &rds.identifier);
+        info!("Trying to fill source rds for: {} ", rds.identifier);
         let cdk_res = cdk_client
             .get_template()
             .stack_name(rds.cdk_stack_name.as_ref().unwrap())
@@ -957,7 +957,7 @@ pub async fn find_source_rds(config: &aws_config::SdkConfig, rds: &RdsInstance) 
                         if let Some(Value::String(source_db)) =
                             properties.get("SourceDBInstanceIdentifier")
                         {
-                            info!("For db {} source is: {source_db} ", &rds.identifier);
+                            info!("For db {} source is: {source_db} ", rds.identifier);
                             return Some(source_db.to_owned());
                         }
                     }
@@ -1109,7 +1109,7 @@ pub async fn deploy_service(
         Err(err) => {
             let error_msg = format!(
                 "{} service {}, cluster: {}. Reason: {}",
-                &command, service_arn, cluster_arn, err
+                command, service_arn, cluster_arn, err
             );
             error!("Deployment error: {error_msg}");
             Err(CommandError::new(&command, error_msg))
@@ -1141,7 +1141,7 @@ pub async fn services(config: &aws_config::SdkConfig, cluster: &Cluster) -> Vec<
             let env = cluster.env.clone();
             let td_family = format!(
                 "{}-{}-{}",
-                &service_name, &cluster.env, cluster.platform_version
+                service_name, cluster.env, cluster.platform_version
             );
             values.push(EcsService {
                 name: service_name,
@@ -1284,10 +1284,10 @@ pub async fn remove_non_platform_task_definitions(
 
         info!(
             "Task definition: {}, tagged={}, registered={}",
-            &arn, &has_terraform_tag, &is_registered_by_terraform
+            arn, has_terraform_tag, is_registered_by_terraform
         );
         if has_terraform_tag && !is_registered_by_terraform {
-            info!("Found cheated terraform task definition: {}", &arn)
+            info!("Found cheated terraform task definition: {}", arn)
         }
         if !is_registered_by_terraform && !excluded_task_definition {
             if !dry_run {
@@ -1323,7 +1323,7 @@ async fn register_task_definition(
 ) -> Option<TaskDefinition> {
     info!(
         "Registering new task definition with template={:?}. new_version={}",
-        task_definition, &new_version
+        task_definition, new_version
     );
     let contrainer_definitions = task_definition.container_definitions.as_ref().map(|cds| {
         cds.iter()
@@ -1450,21 +1450,21 @@ pub async fn find_logs(
         .await;
 
     let response_data = response.unwrap();
-    let apps_dbg_str = format!("web/{}/", &apps.join("|"));
+    let apps_dbg_str = format!("web/{}/", apps.join("|"));
 
     let groups = response_data.log_groups();
     let mut log_count: usize = 0;
 
     let search_string = filter.clone().unwrap_or(String::from("<empty>"));
     let mut stream_names = Vec::new();
-    info!("limit: {:?}", &limit);
+    info!("limit: {:?}", limit);
     {
         let mut notifier = log_search_monitor.lock().await;
         notifier.message(String::from("Search log streams in progress..."));
     }
     for group in groups {
         let group_name = group.log_group_name().unwrap_or_default();
-        info!("log group: {}", &group_name);
+        info!("log group: {}", group_name);
         {
             info!("Searching for {search_string} in {apps_dbg_str}");
             let log_streams_result = find_stream_names(
@@ -1501,10 +1501,7 @@ pub async fn find_logs(
                 ));
             }
 
-            info!(
-                "found log streams: [{}]",
-                &stream_names.join(",").to_string()
-            );
+            info!("found log streams: [{}]", stream_names.join(","));
 
             let mut marker = None;
             let mut first = true;
@@ -1531,7 +1528,7 @@ pub async fn find_logs(
                             .to_owned();
 
                         let mut notifier = log_search_monitor.lock().await;
-                        notifier.error(format!("Error: {}", &message).to_owned());
+                        notifier.error(format!("Error: {}", message).to_owned());
 
                         return Result::Err(CommandError {
                             message,
@@ -1542,7 +1539,7 @@ pub async fn find_logs(
 
                     marker = log_response_data.next_token().map(|m| m.to_owned());
                     let events = log_response_data.events.unwrap_or_default();
-                    info!("found {} logs", &events.len());
+                    info!("found {} logs", events.len());
                     log_count += events.len();
                     let mut notifier = log_search_monitor.lock().await;
                     notifier.notify(
@@ -1564,7 +1561,7 @@ pub async fn find_logs(
                         if log_count > limit {
                             let msg = format!(
                                 "Search in {} log stream(s) aborted, found {} logs. Reached limit of {} logs.",
-                                stream_names.len(), &log_count, &limit
+                                stream_names.len(), log_count, limit
                             )
                             .to_owned();
                             warn!("exceeded max log count, Limit {log_count}/{limit}");
@@ -1624,7 +1621,7 @@ async fn find_stream_names(
 
         if let Err(err) = describe_log_streams_response {
             let message = err.to_string();
-            return Err(format!("Error: {}", &message));
+            return Err(format!("Error: {}", message));
         }
         let data = describe_log_streams_response.unwrap();
 
@@ -1638,7 +1635,7 @@ async fn find_stream_names(
 
             let app = apps
                 .iter()
-                .find(|app| stream_name.starts_with(&format!("web/{}/", &app)));
+                .find(|app| stream_name.starts_with(&format!("web/{}/", app)));
             if let Some(app) = app {
                 let last_known_creation_time: i64 =
                     last_creation_dates.get(app).copied().unwrap_or(i64::MAX);
