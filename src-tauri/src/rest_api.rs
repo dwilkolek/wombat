@@ -31,9 +31,9 @@ async fn put_cookie(
 ) -> Result<warp::reply::Response, warp::Rejection> {
     log::info!(
         "Storing cookie for env={}, name={}, value={}",
-        &dto.env,
-        &dto.name,
-        &dto.value
+        dto.env,
+        dto.name,
+        dto.value
     );
     let mut jar = jar.lock().await;
     jar.cookies.retain(|cookie| cookie.name != dto.name);
@@ -84,7 +84,7 @@ struct BrowserExtensionTrackingBody {
 async fn browser_extension_event(
     body: BrowserExtensionTrackingBody,
 ) -> Result<warp::reply::Response, warp::Rejection> {
-    log::info!("browser extension event: {}", &body.event);
+    log::info!("browser extension event: {}", body.event);
     Ok(warp::reply().into_response())
 }
 

@@ -55,10 +55,10 @@ pub async fn start_aws_ssm_proxy(
 
     info!(
         "Local: {}, target: {}, access: {}",
-        &local_port, &target_port, &access_port
+        local_port, target_port, access_port
     );
 
-    warn!("making sure {} is free", &local_port);
+    warn!("making sure {} is free", local_port);
     kill_pid_on_port(local_port);
 
     let tmp_dir = TempDir::new().unwrap();
@@ -173,7 +173,7 @@ async fn handle(
     headers: &mut Headers,
     handler: Arc<tokio::sync::RwLock<RequestHandler>>,
 ) {
-    info!("Handling request, {}", &uri);
+    info!("Handling request, {}", uri);
     let handler = handler.read().await;
     let interceptors_ref = &handler.interceptors;
     for interceptor in interceptors_ref.iter() {
@@ -325,7 +325,7 @@ fn kill_pid_on_port(port: u16) {
         .unwrap();
     let res = String::from_utf8(grep_by_listen.stdout).expect("Failed to convert string");
     for line in res.lines() {
-        info!("lsof line: {}", &line);
+        info!("lsof line: {}", line);
         if let Some(pid_str) = trim_whitespace_v2(line).split_whitespace().nth(1) {
             if let Ok(pid) = pid_str.parse::<u32>() {
                 warn!("Killing pid {pid}");
