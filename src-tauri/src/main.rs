@@ -19,6 +19,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{env, fs};
+use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{Mutex, RwLock};
 use tracing_unwrap::{OptionExt, ResultExt};
@@ -1666,6 +1667,12 @@ async fn main() {
     let cache_db_pool = Arc::new(initialize_cache_db_pool("default"));
 
     let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
+    let mut updater_headers: HeaderMap = HeaderMap::new();
+    updater_headers.append(
+        "USER_UUID",
+        HeaderValue::from_str(&user.id.to_string())
+            .unwrap_or_else(|_| HeaderValue::from_static("")),
+    );
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
@@ -1673,7 +1680,11 @@ async fn main() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.handle()
-                .plugin(tauri_plugin_updater::Builder::new().build())
+                .plugin(
+                    tauri_plugin_updater::Builder::new()
+                        .headers(updater_headers)
+                        .build(),
+                )
                 .expect("Failed to initialize updater plugin");
             Ok(())
         })
