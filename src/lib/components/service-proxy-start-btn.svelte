@@ -16,7 +16,7 @@
 	import { invoke } from '@tauri-apps/api/core';
 	import { userStore } from '$lib/stores/user-store';
 	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
-	import { getFromList } from '$lib/utils';
+	import { getFromList, appMatchesPrefix } from '$lib/utils';
 
 	interface Props {
 		service: EcsService;
@@ -26,7 +26,8 @@
 	let dialog: HTMLDialogElement | undefined = $state();
 	let selectedInfraProfile = $state(
 		$wombatProfileStore.infraProfiles.find(
-			(infraProfile) => infraProfile.env == service.env && infraProfile.app == service.name
+			(infraProfile) =>
+				infraProfile.env == service.env && appMatchesPrefix(service.name, infraProfile.app_prefix)
 		) ?? $wombatProfileStore.infraProfiles.at(0)
 	);
 	let selectedSsoProxy = $state(
@@ -77,7 +78,7 @@
 		return configs.filter(
 			(config) =>
 				infraProfile &&
-				(config.fromApp == '*' || infraProfile.app == config.fromApp) &&
+				(config.fromApp == '*' || appMatchesPrefix(config.fromApp, infraProfile.app_prefix)) &&
 				!config.requireSsoProfile
 		);
 	};
@@ -108,6 +109,7 @@
 		});
 		taskStore.startTask({ ...service, proxyAuthConfig }, async () => {
 			console.log('headers', headers);
+			console.log('proxyAuthConfig', proxyAuthConfig);
 			return invoke<NewTaskParams>('start_service_proxy', {
 				service,
 				proxyAuthConfig,
@@ -272,16 +274,30 @@
 						class="btn btn-xs btn-accent"
 						disabled={!$featuresStore.proxyCustomHeaders}
 						onclick={() => {
-							let uuid = 'a77e0899-bb86-4551-b737-f28971f2d943';
-							if (service.env == AwsEnv.DEMO) {
-								uuid = '0a8d41aa-f38d-45fc-852b-6a01f57bbc54';
-							}
-							if (service.env == AwsEnv.PROD) {
-								uuid = 'b0152a54-650e-47eb-87e0-075776ab3860';
+							let uuid: string;
+							switch (service.env) {
+								case AwsEnv.DEV:
+									uuid = 'a77e0899-bb86-4551-b737-f28971f2d943';
+									break;
+								case AwsEnv.DEMO:
+									uuid = '0a8d41aa-f38d-45fc-852b-6a01f57bbc54';
+									break;
+								case AwsEnv.PROD:
+									uuid = 'b0152a54-650e-47eb-87e0-075776ab3860';
+									break;
+								default:
+									uuid = '';
 							}
 							customHeaders = [
 								...customHeaders.filter(
-									(h) => !['USER-UUID', 'USER-EMAIL', 'USER-NAME', 'USER-ROLES'].includes(h.name)
+									(h) =>
+										![
+											'USER-UUID',
+											'USER-EMAIL',
+											'USER-NAME',
+											'USER-ROLES',
+											'USER-COMPANY'
+										].includes(h.name)
 								),
 								{
 									name: 'USER-UUID',
@@ -301,6 +317,11 @@
 								{
 									name: 'USER-ROLES',
 									value: 'ADMIN,USER',
+									encodeBase64: true
+								},
+								{
+									name: 'USER-COMPANY',
+									value: 'TECHNIPFMC',
 									encodeBase64: true
 								}
 							];
