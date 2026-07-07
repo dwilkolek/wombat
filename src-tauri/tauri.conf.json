@@ -48,7 +48,7 @@
 		"createUpdaterArtifacts": true
 	},
 	"productName": "Wombat",
-	"version": "5.0.7",
+	"version": "5.0.8",
 	"identifier": "eu.wilkolek.wombat",
 	"plugins": {
 		"updater": {
