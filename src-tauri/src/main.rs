@@ -26,6 +26,8 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 
+use crate::aws::EcsService;
+
 mod aws;
 mod cache_db;
 mod cluster_resolver;
@@ -158,6 +160,45 @@ async fn favorite(
 }
 
 #[tauri::command]
+async fn services_matching_infra_profile(
+    app_state: tauri::State<'_, AppContextState>,
+    ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
+) -> Result<HashSet<String>, CommandError> {
+    let infra_profiles: HashSet<String> = {
+        let app_state = app_state.0.lock().await;
+        app_state
+            .active_profile
+            .iter()
+            .flat_map(|profile| profile.sso_profiles.values())
+            .flat_map(|sso| sso.infra_profiles.iter())
+            .map(|infra| infra.app_prefix.clone())
+            .collect::<HashSet<String>>()
+    };
+
+    let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
+    let services = ecs_resolver_instance.read_services().await;
+
+    Ok(get_matching_services(infra_profiles, services))
+}
+
+fn get_matching_services(
+    infra_profiles: HashSet<String>,
+    services: Vec<EcsService>,
+) -> HashSet<String> {
+    let matching_services = services
+        .iter()
+        .filter(|service| {
+            infra_profiles.contains(&service.name)
+                || infra_profiles
+                    .iter()
+                    .any(|infra| service.name.starts_with(&format!("{}-", infra)))
+        })
+        .map(|service| service.name.clone())
+        .collect::<HashSet<_>>();
+    matching_services
+}
+
+#[tauri::command]
 async fn is_debug() -> bool {
     cfg!(debug_assertions)
 }
@@ -179,7 +220,7 @@ async fn login(
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, CommandError> {
     let environments: Vec<Env>;
-    let tracked_names: HashSet<String>;
+    let infra_profile_names: HashSet<String>;
     {
         let mut aws_config_provider = aws_config_provider.0.write().await;
 
@@ -188,12 +229,12 @@ async fn login(
         aws_config_provider.login(profile.to_owned(), is_enabled);
 
         environments = aws_config_provider.configured_envs();
-        tracked_names = aws_config_provider
+        infra_profile_names = aws_config_provider
             .active_wombat_profile
             .sso_profiles
             .values()
             .flat_map(|sso| sso.infra_profiles.clone())
-            .map(|infra| infra.app)
+            .map(|infra| infra.app_prefix)
             .collect();
 
         let mut app_state = app_state.0.lock().await;
@@ -207,7 +248,7 @@ async fn login(
 
     let _ = app_handle.emit("message", "Updating profile...");
     let mut user_config = user_config.0.lock().await;
-    user_config.use_profile(profile, environments, tracked_names);
+    let new_preferences_initialzied = user_config.use_profile(profile, environments);
 
     let cache_db_pool = Arc::new(initialize_cache_db_pool("default"));
 
@@ -230,7 +271,11 @@ async fn login(
     {
         let mut ecs_resolver_instance = ecs_resolver_instance.0.write().await;
         ecs_resolver_instance.init(cache_db_pool.clone());
-        ecs_resolver_instance.services(clusters).await;
+        let services = ecs_resolver_instance.services(clusters).await;
+        if new_preferences_initialzied {
+            let matching_services = get_matching_services(infra_profile_names, services);
+            user_config.append_tracked_names(profile, matching_services);
+        }
     }
 
     let _ = app_handle.emit("message", "Syncing global state...");
@@ -1728,6 +1773,7 @@ async fn main() {
             logout,
             clusters,
             services,
+            services_matching_infra_profile,
             deploy_ecs_service,
             remove_task_definitions,
             databases,

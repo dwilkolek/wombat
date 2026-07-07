@@ -239,7 +239,7 @@ pub struct InfraProfile {
     pub source_profile: String,
     pub profile_name: String,
     pub region: Option<String>,
-    pub app: String,
+    pub app_prefix: String,
     pub env: Env,
 }
 
@@ -332,7 +332,9 @@ impl AwsConfigProvider {
                         .infra_profiles
                         .iter()
                         .find(|infra_profile| {
-                            &infra_profile.env == env && app.starts_with(&infra_profile.app)
+                            &infra_profile.env == env
+                                && (app == infra_profile.app_prefix
+                                    || app.starts_with(&format!("{}-", infra_profile.app_prefix)))
                         })
                         .cloned()
                 });
@@ -533,7 +535,7 @@ impl AwsConfigProvider {
 
                 let mut matched_env = false;
                 let base_infra_profile = InfraProfile {
-                    app: app.to_owned(),
+                    app_prefix: app.to_owned(),
                     env: Env::DEVNULL,
                     profile_name: profile.to_owned(),
                     region: region.map(|r| r.to_owned()),
@@ -835,7 +837,10 @@ pub async fn get_secret(
     if let Ok(param) = param {
         if let Some(param) = param.parameter() {
             let secret = param.value().unwrap_or_log().to_owned();
-            info!("Found secret with value={secret}");
+            info!(
+                "Found secret with value={}...",
+                secret.split_at(secret.len() / 2).0
+            );
             return Ok(secret);
         }
     }

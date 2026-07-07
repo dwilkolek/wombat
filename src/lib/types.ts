@@ -38,7 +38,7 @@ export type InfraProfile = {
 	source_profile: string;
 	profile_name: string;
 	region?: string;
-	app: string;
+	app_prefix: string;
 	env: AwsEnv;
 };
 
