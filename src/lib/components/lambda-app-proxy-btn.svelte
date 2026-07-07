@@ -6,7 +6,6 @@
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/plugin-dialog';
 	import { userStore } from '$lib/stores/user-store';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
 	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
 	import { getFromList, lambdaAppArn } from '$lib/utils';
 
@@ -24,17 +23,16 @@
 		})?.port
 	);
 
+	let servicesMatchingProfiles = $state<string[]>([]);
+	$effect(() => {
+		invoke<string[]>('services_matching_infra_profile').then(
+			(profiles) => (servicesMatchingProfiles = profiles)
+		);
+	});
+
 	let dialog: HTMLDialogElement | undefined = $state();
 
-	let availableApps = $derived(
-		new Set([
-			'none',
-			'dxp',
-			...$wombatProfileStore.infraProfiles
-				.filter((infra) => infra.env == env)
-				.map((infra) => infra.app)
-		])
-	);
+	let availableApps = $derived(new Set(['none', 'dxp', ...servicesMatchingProfiles]));
 
 	let selectedApp = $state('none');
 

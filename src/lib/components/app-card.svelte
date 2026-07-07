@@ -8,6 +8,7 @@
 	import StarIcon from './star-icon.svelte';
 	import type { AwsEnv } from '$lib/types';
 	import { taskStore } from '$lib/stores/task-store';
+	import { appMatchesPrefix } from '$lib/utils';
 	import DbTaskStatus from './db-task-status.svelte';
 	import ServiceTaskStatus from './service-task-status.svelte';
 	import AppCardHr from './app-card-hr.svelte';
@@ -95,7 +96,7 @@
 					{@const value = $details.envs?.get(enabled_env)}
 					{#if displayConfig.envs == null || displayConfig.envs.includes(enabled_env)}
 						{@const hasInfraProfile = $wombatProfileStore.infraProfiles.some(
-							(infra) => infra.env == enabled_env && infra.app == app
+							(infra) => infra.env == enabled_env && appMatchesPrefix(app, infra.app_prefix)
 						)}
 						<div class="flex flex-col app-env-cell px-2">
 							<div class="font-medium text-xs italic flex gap-1 items-center">

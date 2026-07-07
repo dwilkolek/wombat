@@ -4,6 +4,7 @@ import { wombatProfileStore } from './available-profiles-store';
 import { TaskStatus, taskStore } from './task-store';
 import { featuresStore } from './feature-store';
 import { deplyomentStore } from './deployment-store';
+import { appMatchesPrefix } from '$lib/utils';
 
 const PROD_ACTIONS_DISABLED_REASON = 'Not available';
 
@@ -41,7 +42,7 @@ export function startRdsProxyDisabledReason(rds: RdsInstance) {
 		}
 		if (
 			!stores[1].infraProfiles.some(
-				({ app, env }) => rds.appname_tag.startsWith(app) && env == rds.env
+				({ app_prefix, env }) => appMatchesPrefix(rds.appname_tag, app_prefix) && env == rds.env
 			) &&
 			!devWay
 		) {
@@ -91,7 +92,7 @@ export function restartEcsDisabledReason(service: EcsService) {
 				return { message: 'ECS restart disabled' };
 			}
 			const missingInfraProfile = !wombatProfileStore.infraProfiles.some(
-				({ app, env }) => service.name.startsWith(app) && env == service.env
+				({ app_prefix, env }) => appMatchesPrefix(service.name, app_prefix) && env == service.env
 			);
 			if (missingInfraProfile) {
 				return { message: `Missing infra profile: ${service.name}` };
@@ -118,7 +119,7 @@ export function deployEcsServiceDisabledReason(service: EcsService) {
 				return { message: 'ECS deploy disabled' };
 			}
 			const missingInfraProfile = !wombatProfileStore.infraProfiles.some(
-				({ app, env }) => service.name.startsWith(app) && env == service.env
+				({ app_prefix, env }) => appMatchesPrefix(service.name, app_prefix) && env == service.env
 			);
 			if (missingInfraProfile) {
 				return { message: `Missing infra profile: ${service.name}` };
@@ -146,7 +147,7 @@ export function removeEcsTaskDefinitionsReason(service: EcsService) {
 		}
 		if (
 			!stores[1].infraProfiles.some(
-				({ app, env }) => service.name.startsWith(app) && env == service.env
+				({ app_prefix, env }) => appMatchesPrefix(service.name, app_prefix) && env == service.env
 			)
 		) {
 			return `Missing infra profile: ${service.name}`;
@@ -168,7 +169,7 @@ export function getRdsSecretDisabledReason(rds: RdsInstance | undefined) {
 		}
 		if (
 			!stores[1].infraProfiles.some(
-				({ app, env }) => rds.appname_tag.startsWith(app) && env == rds.env
+				({ app_prefix, env }) => appMatchesPrefix(rds.appname_tag, app_prefix) && env == rds.env
 			)
 		) {
 			return `Missing infra profile: ${rds.appname_tag}`;

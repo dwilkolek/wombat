@@ -236,20 +236,35 @@ impl UserConfig {
         }
     }
 
-    pub fn use_profile(&mut self, profile: &str, envs: Vec<Env>, tracked_names: HashSet<String>) {
-        info!("Using profile: {profile}, envs={envs:?}, tracked_names={tracked_names:?}");
+    pub fn use_profile(&mut self, profile: &str, envs: Vec<Env>) -> bool {
+        info!("Using profile: {profile}, envs={envs:?}");
         self.last_used_profile = Some(profile.to_owned());
         let preferences = &mut self.preferences;
+        let mut new_preferences = false;
         if !preferences.contains_key(profile) {
             preferences.insert(
                 profile.to_owned(),
                 WombatAwsProfilePreferences {
-                    tracked_names,
+                    tracked_names: HashSet::new(),
                     preferred_environments: envs,
                 },
             );
+            new_preferences = true
         }
-        self.save()
+        self.save();
+
+        new_preferences
+    }
+
+    pub fn append_tracked_names(
+        &mut self,
+        profile_name: &str,
+        tracked_names: HashSet<TrackedName>,
+    ) {
+        let preferences = &mut self.preferences;
+        let preference = preferences.get_mut(profile_name).unwrap_or_log();
+        preference.tracked_names.extend(tracked_names);
+        self.save();
     }
 
     pub fn favorite(

@@ -17,3 +17,7 @@ export function cookieSessionProxyArn(address: string, env: AwsEnv): string {
 export function isCommandError(e: unknown): e is CommandError {
 	return (e as CommandError).command != null && (e as CommandError).message != null;
 }
+
+export function appMatchesPrefix(app: string, prefix: string): boolean {
+	return app === prefix || app.startsWith(prefix + '-');
+}
