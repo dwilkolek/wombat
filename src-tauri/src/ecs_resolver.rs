@@ -78,7 +78,7 @@ impl EcsResolver {
     pub async fn deploy_service(
         &self,
         app_handle: AppHandle,
-        config: aws_config::SdkConfig,
+        config: wombat_core::SdkConfig,
         cluster_arn: String,
         service_arn: String,
         desired_version: Option<String>,
@@ -123,13 +123,13 @@ impl EcsResolver {
                     let mut status_str = "Unknown";
                     let mut error_message = None;
                     if let Ok(status) = deployment_status {
-                        status_str = match status {
-                            aws_sdk_ecs::types::DeploymentRolloutState::Completed => "Completed",
-                            aws_sdk_ecs::types::DeploymentRolloutState::Failed => "Failed",
-                            aws_sdk_ecs::types::DeploymentRolloutState::InProgress => "In Progress",
-                            _ => {
+                        status_str = match wombat_core::deployment_rollout_state(&status) {
+                            wombat_core::DeploymentStatus::Completed => "Completed",
+                            wombat_core::DeploymentStatus::Failed => "Failed",
+                            wombat_core::DeploymentStatus::InProgress => "In Progress",
+                            wombat_core::DeploymentStatus::Unknown => {
                                 error_count += 1;
-                                error_message = Some(format!("Unknown status: {status:?}"));
+                                error_message = Some(format!("Unknown status: {}", status.as_str()));
                                 "Unknown"
                             }
                         };

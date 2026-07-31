@@ -7260,9 +7260,6 @@ name = "wombat"
 version = "5.0.8"
 dependencies = [
  "async-trait",
- "aws-config",
- "aws-sdk-ecs",
- "aws-types",
  "base64 0.22.1",
  "chrono",
  "digest 0.11.3",

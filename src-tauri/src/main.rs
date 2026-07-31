@@ -671,7 +671,7 @@ async fn find_logs(
     }
 
     let user_config = Arc::clone(&user_config.0);
-    let sdk_config: aws_config::SdkConfig;
+    let sdk_config: wombat_core::SdkConfig;
     {
         let aws_config_provider = aws_config_provider.0.read().await;
         //TODO: it will be annoying to do to search logs with different sdk_configs...
@@ -1562,7 +1562,7 @@ async fn open_dbeaver(
 }
 
 async fn find_secret_with_fallback(
-    config: &aws_config::SdkConfig,
+    config: &wombat_core::SdkConfig,
     rds: &wombat_core::RdsInstance,
     rds_resolver: Arc<RwLock<RdsResolver>>,
 ) -> Option<wombat_core::DbSecret> {
@@ -1862,7 +1862,7 @@ struct TaskTracker {
 
 async fn check_login_and_trigger(
     profile: &str,
-    config: &aws_config::SdkConfig,
+    config: &wombat_core::SdkConfig,
     fast_path: bool,
 ) -> Result<(), CommandError> {
     if !wombat_core::is_logged(profile, config, fast_path).await {

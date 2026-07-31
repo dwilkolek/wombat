@@ -1,13 +1,2 @@
-# 64 bit MSVC
-[target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "link-arg=/STACK:8000000"]
-
-# 64 bit Mingw
-[target.x86_64-pc-windows-gnu]
-rustflags = ["-C", "link-arg=-Wl,--stack,8000000"]
-
-# [build]
-# rustflags = ["-Z", "threads=8"]
-
 [patch."https://github.com/dwilkolek/wombat-core"]
 wombat-core = { path = "../wombat-core" }

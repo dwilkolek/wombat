@@ -35,7 +35,7 @@ struct JepsenResponse {
 }
 
 pub struct JepsenAutheticator {
-    aws_config: aws_config::SdkConfig,
+    aws_config: wombat_core::SdkConfig,
     path_prefix: String,
     jepsen_url: String,
     api_name: String,
@@ -44,7 +44,7 @@ pub struct JepsenAutheticator {
 }
 impl JepsenAutheticator {
     pub fn from_proxy_auth_config(
-        aws_config: &aws_config::SdkConfig,
+        aws_config: &wombat_core::SdkConfig,
         jepsen_config: wombat_api::ProxyAuthConfig,
     ) -> Self {
         JepsenAutheticator {
@@ -114,7 +114,7 @@ pub struct BasicAuthenticator {
 }
 impl BasicAuthenticator {
     pub async fn from_proxy_auth_config(
-        aws_config: &aws_config::SdkConfig,
+        aws_config: &wombat_core::SdkConfig,
         basic_config: wombat_api::ProxyAuthConfig,
     ) -> Self {
         BasicAuthenticator {
