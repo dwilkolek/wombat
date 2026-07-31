@@ -1,6 +1,5 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use aws::{Cluster, DbSecret, InfraProfile, LogEntry, RdsInstance, SsoProfile};
 use chrono::{DateTime, Utc};
 use cluster_resolver::ClusterResolver;
 #[cfg(debug_assertions)]
@@ -11,7 +10,7 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rds_resolver::RdsResolver;
 use sha2::{Digest, Sha256};
-use shared::{arn_to_name, BrowserExtension, CommandError, CookieJar, Env};
+use shared::{arn_to_name, BrowserExtension, CommandError, CookieJar};
 use shared_child::SharedChild;
 use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
@@ -26,9 +25,6 @@ use tracing_unwrap::{OptionExt, ResultExt};
 use urlencoding::encode;
 use user::UserConfig;
 
-use crate::aws::EcsService;
-
-mod aws;
 mod cache_db;
 mod cluster_resolver;
 mod dependency_check;
@@ -57,8 +53,8 @@ struct NewTaskParams {
 #[derive(Clone, serde::Serialize)]
 struct ServiceDetailsPayload {
     app: String,
-    services: Vec<Result<aws::ServiceDetails, aws::ServiceDetailsMissing>>,
-    dbs: Vec<aws::RdsInstance>,
+    services: Vec<Result<wombat_core::ServiceDetails, wombat_core::ServiceDetailsMissing>>,
+    dbs: Vec<wombat_core::RdsInstance>,
     timestamp: DateTime<Utc>,
 }
 
@@ -183,7 +179,7 @@ async fn services_matching_infra_profile(
 
 fn get_matching_services(
     infra_profiles: HashSet<String>,
-    services: Vec<EcsService>,
+    services: Vec<wombat_core::EcsService>,
 ) -> HashSet<String> {
     let matching_services = services
         .iter()
@@ -219,7 +215,7 @@ async fn login(
 
     wombat_api_instance: tauri::State<'_, WombatApiInstance>,
 ) -> Result<UserConfig, CommandError> {
-    let environments: Vec<Env>;
+    let environments: Vec<wombat_core::Env>;
     let infra_profile_names: HashSet<String>;
     {
         let mut aws_config_provider = aws_config_provider.0.write().await;
@@ -343,7 +339,7 @@ async fn set_logs_dir_path(
 
 #[tauri::command]
 async fn save_preferred_envs(
-    envs: Vec<shared::Env>,
+    envs: Vec<wombat_core::Env>,
     user_config: tauri::State<'_, UserConfigState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
 ) -> Result<UserConfig, CommandError> {
@@ -397,11 +393,11 @@ async fn kv_delete(key: String, kv_store: tauri::State<'_, KVStoreInstance>) -> 
 #[tauri::command]
 async fn credentials(
     app_handle: AppHandle,
-    db: aws::RdsInstance,
+    db: wombat_core::RdsInstance,
     app_state: tauri::State<'_, AppContextState>,
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-) -> Result<DbSecret, CommandError> {
+) -> Result<wombat_core::DbSecret, CommandError> {
     if let Err(msg) = get_authorized(&app_handle, &app_state.0).await {
         return Err(CommandError::new("credentials", msg));
     };
@@ -554,8 +550,8 @@ struct WindowNotifier {
     app_handle: AppHandle,
 }
 
-impl aws::LogSearchMonitor for WindowNotifier {
-    fn notify(&mut self, logs: Vec<aws::LogEntry>) {
+impl wombat_core::LogSearchMonitor for WindowNotifier {
+    fn notify(&mut self, logs: Vec<wombat_core::LogEntry>) {
         let _ = self.app_handle.emit("new-log-found", logs);
     }
     fn success(&mut self, msg: String) {
@@ -575,8 +571,8 @@ struct FileNotifier {
     filename_location: String,
 }
 
-impl aws::LogSearchMonitor for FileNotifier {
-    fn notify(&mut self, logs: Vec<aws::LogEntry>) {
+impl wombat_core::LogSearchMonitor for FileNotifier {
+    fn notify(&mut self, logs: Vec<wombat_core::LogEntry>) {
         let writer = &mut self.writer;
         let mut data = "".to_owned();
         for log in logs.iter() {
@@ -590,7 +586,7 @@ impl aws::LogSearchMonitor for FileNotifier {
             let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
             let _ = self.app_handle.emit(
                 "new-log-found",
-                vec![LogEntry {
+                vec![wombat_core::LogEntry {
                     log_stream_name: log.log_stream_name.to_owned(),
                     ingestion_time: log.ingestion_time,
                     timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
@@ -604,7 +600,7 @@ impl aws::LogSearchMonitor for FileNotifier {
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
         let _ = self.app_handle.emit(
             "new-log-found",
-            vec![LogEntry {
+            vec![wombat_core::LogEntry {
                 log_stream_name: "-".to_owned(),
                 ingestion_time: i64::try_from(timestamp.as_millis()).unwrap(),
                 timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
@@ -619,7 +615,7 @@ impl aws::LogSearchMonitor for FileNotifier {
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
         let _ = self.app_handle.emit(
             "new-log-found",
-            vec![LogEntry {
+            vec![wombat_core::LogEntry {
                 log_stream_name: "-".to_owned(),
                 ingestion_time: i64::try_from(timestamp.as_millis()).unwrap(),
                 timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
@@ -634,7 +630,7 @@ impl aws::LogSearchMonitor for FileNotifier {
         let timestamp = now.duration_since(UNIX_EPOCH).unwrap_or_log();
         let _ = self.app_handle.emit(
             "new-log-found",
-            vec![LogEntry {
+            vec![wombat_core::LogEntry {
                 log_stream_name: "-".to_owned(),
                 ingestion_time: i64::try_from(timestamp.as_millis()).unwrap(),
                 timestamp: i64::try_from(timestamp.as_millis()).unwrap(),
@@ -650,7 +646,7 @@ impl aws::LogSearchMonitor for FileNotifier {
 async fn find_logs(
     app_handle: AppHandle,
     apps: Vec<String>,
-    env: Env,
+    env: wombat_core::Env,
     start_timestamp: i64,
     end_timestamp: i64,
     filter: String,
@@ -684,7 +680,7 @@ async fn find_logs(
         sdk_config = app_config.1;
     }
     async_task_tracker.0.lock().await.search_log_handler = Some(tokio::task::spawn(async move {
-        let _ = aws::find_logs(
+        let _ = wombat_core::find_logs(
             &sdk_config,
             env,
             apps,
@@ -747,7 +743,7 @@ async fn abort_find_logs(
 #[tauri::command]
 async fn clusters(
     cache_resolver_instance: tauri::State<'_, ClusterResolverInstance>,
-) -> Result<Vec<aws::Cluster>, CommandError> {
+) -> Result<Vec<wombat_core::Cluster>, CommandError> {
     let cache_resolver_instance = cache_resolver_instance.0.read().await;
 
     let clusters = cache_resolver_instance.read_clusters().await;
@@ -756,9 +752,9 @@ async fn clusters(
 
 #[tauri::command]
 async fn services(
-    cluster: Cluster,
+    cluster: wombat_core::Cluster,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
-) -> Result<Vec<aws::EcsService>, CommandError> {
+) -> Result<Vec<wombat_core::EcsService>, CommandError> {
     let ecs_resolver_instance = ecs_resolver_instance.0.read().await;
     let services = ecs_resolver_instance.read_services().await;
     Ok(services
@@ -784,7 +780,7 @@ async fn deploy_ecs_service(
     };
 
     let service_name = arn_to_name(&service_arn);
-    let env = Env::from_any(&cluster_arn);
+    let env = wombat_core::Env::from_any(&cluster_arn);
 
     let aws_config_provider = aws_config_provider.0.read().await;
     let (aws_profile, aws_config) = aws_config_provider
@@ -810,7 +806,7 @@ async fn deploy_ecs_service(
 
 #[tauri::command]
 async fn remove_task_definitions(
-    service: aws::ServiceDetails,
+    service: wombat_core::ServiceDetails,
     dry_run: bool,
     app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
@@ -824,7 +820,7 @@ async fn remove_task_definitions(
         .app_config(&service.name, &service.env)
         .await
         .expect("Missing sdk_config to remove task definitions");
-    return Ok(aws::remove_non_platform_task_definitions(
+    return Ok(wombat_core::remove_non_platform_task_definitions(
         &aws_config,
         service.td_family,
         service.td_revision,
@@ -835,9 +831,9 @@ async fn remove_task_definitions(
 
 #[tauri::command]
 async fn databases(
-    env: shared::Env,
+    env: wombat_core::Env,
     rds_resolver_instance: tauri::State<'_, RdsResolverInstance>,
-) -> Result<Vec<aws::RdsInstance>, CommandError> {
+) -> Result<Vec<wombat_core::RdsInstance>, CommandError> {
     let rds_resolver_instance = rds_resolver_instance.0.read().await;
     let databases = rds_resolver_instance.read_databases().await;
     Ok(databases.into_iter().filter(|db| db.env == env).collect())
@@ -875,7 +871,7 @@ async fn discover(
 
     {
         let rds_resolver_instance = rds_resolver_instance.0.read().await;
-        let found_dbs: Vec<RdsInstance> = rds_resolver_instance
+        let found_dbs: Vec<wombat_core::RdsInstance> = rds_resolver_instance
             .read_databases()
             .await
             .into_iter()
@@ -952,7 +948,7 @@ async fn service_details(
         Ok(authorized_user) => authorized_user,
     };
 
-    let environments: Vec<Env>;
+    let environments: Vec<wombat_core::Env>;
     {
         let aws_config_provider = aws_config_provider.0.read().await;
         environments = aws_config_provider.configured_envs();
@@ -965,7 +961,7 @@ async fn service_details(
     let ecs_resolver_instance = Arc::clone(&ecs_resolver_instance.0);
     let rds_resolver_instance = Arc::clone(&rds_resolver_instance.0);
 
-    let mut dbs_list: Vec<aws::RdsInstance> = Vec::new();
+    let mut dbs_list: Vec<wombat_core::RdsInstance> = Vec::new();
     {
         let rds_resolver_instance = rds_resolver_instance.read().await;
         let all_databases = rds_resolver_instance.read_databases().await;
@@ -976,7 +972,7 @@ async fn service_details(
         );
     }
 
-    let services_to_resolve: Vec<aws::EcsService>;
+    let services_to_resolve: Vec<wombat_core::EcsService>;
     {
         let ecs_resolver_instance = ecs_resolver_instance.read().await;
         let services = ecs_resolver_instance.read_services().await;
@@ -986,7 +982,8 @@ async fn service_details(
             .collect();
     }
     let services =
-        aws::service_details(aws_config_provider.0.clone(), services_to_resolve.clone()).await;
+        wombat_core::service_details(aws_config_provider.0.clone(), services_to_resolve.clone())
+            .await;
 
     app_handle
         .emit(
@@ -1006,7 +1003,7 @@ async fn service_details(
 #[allow(clippy::too_many_arguments)]
 async fn start_db_proxy(
     app_handle: AppHandle,
-    db: aws::RdsInstance,
+    db: wombat_core::RdsInstance,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
     async_task_tracker: tauri::State<'_, AsyncTaskManager>,
@@ -1027,7 +1024,7 @@ async fn start_db_proxy(
     let mut user_config = user_config.0.lock().await;
     let local_port = user_config.get_db_port(&db.arn);
 
-    let mut bastions = aws::bastions(&aws_config).await;
+    let mut bastions = wombat_core::bastions(&aws_config).await;
 
     let bastion_failure_map_inner = bastion_failure_map.0.read().await;
     let bastion_failures = bastion_failure_map_inner.to_owned();
@@ -1079,9 +1076,9 @@ async fn start_db_proxy(
 #[tauri::command]
 async fn start_service_proxy(
     app_handle: AppHandle,
-    service: aws::EcsService,
-    infra_profile: Option<InfraProfile>,
-    sso_profile: Option<SsoProfile>,
+    service: wombat_core::EcsService,
+    infra_profile: Option<wombat_core::InfraProfile>,
+    sso_profile: Option<wombat_core::SsoProfile>,
     headers: HashMap<String, String>,
     proxy_auth_config: Option<wombat_api::ProxyAuthConfig>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1106,7 +1103,7 @@ async fn start_service_proxy(
         .await
         .expect("Missing sdk_config to start service proxy");
 
-    let mut bastions = aws::bastions(&aws_config).await;
+    let mut bastions = wombat_core::bastions(&aws_config).await;
 
     let bastion_failure_map_inner = bastion_failure_map.0.read().await;
     let bastion_failures = bastion_failure_map_inner.to_owned();
@@ -1216,7 +1213,7 @@ async fn start_service_proxy(
 #[tauri::command]
 async fn start_cookie_session_proxy(
     address: String,
-    env: Env,
+    env: wombat_core::Env,
     headers: HashMap<String, String>,
     cookie_jar: tauri::State<'_, CookieJarInstance>,
     user_config: tauri::State<'_, UserConfigState>,
@@ -1268,7 +1265,7 @@ async fn start_cookie_session_proxy(
 #[tauri::command]
 async fn start_lambda_app_proxy(
     app: String,
-    env: shared::Env,
+    env: wombat_core::Env,
     address: String,
     headers: HashMap<String, String>,
     cookie_jar: tauri::State<'_, CookieJarInstance>,
@@ -1427,7 +1424,7 @@ async fn codeartifact_login_check() -> Result<(), CommandError> {
 #[tauri::command]
 async fn available_infra_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<aws::InfraProfile>, CommandError> {
+) -> Result<Vec<wombat_core::InfraProfile>, CommandError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider
         .active_wombat_profile
@@ -1440,7 +1437,7 @@ async fn available_infra_profiles(
 #[tauri::command]
 async fn available_sso_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<aws::SsoProfile>, CommandError> {
+) -> Result<Vec<wombat_core::SsoProfile>, CommandError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider
         .active_wombat_profile
@@ -1453,7 +1450,7 @@ async fn available_sso_profiles(
 #[tauri::command]
 async fn wombat_aws_profiles(
     aws_config_provider: tauri::State<'_, AwsConfigProviderInstance>,
-) -> Result<Vec<aws::WombatAwsProfile>, CommandError> {
+) -> Result<Vec<wombat_core::WombatAwsProfile>, CommandError> {
     let provider = aws_config_provider.0.read().await;
     Ok(provider.wombat_profiles.clone())
 }
@@ -1462,7 +1459,7 @@ async fn wombat_aws_profiles(
 #[allow(clippy::too_many_arguments)]
 async fn open_dbeaver(
     app_handle: AppHandle,
-    db: aws::RdsInstance,
+    db: wombat_core::RdsInstance,
     port: u16,
     user_config: tauri::State<'_, UserConfigState>,
     app_state: tauri::State<'_, AppContextState>,
@@ -1474,7 +1471,7 @@ async fn open_dbeaver(
         db_name: &str,
         host: &str,
         port: u16,
-        secret: &aws::DbSecret,
+        secret: &wombat_core::DbSecret,
         read_only: bool,
     ) -> String {
         let rw_suffix = if read_only { "R" } else { "RW" };
@@ -1517,7 +1514,7 @@ async fn open_dbeaver(
         .expect("Missing sdk_config to get secreto for dbBeaver");
 
     let secret;
-    let found_db_secret = aws::db_secret(&aws_config, &db).await;
+    let found_db_secret = wombat_core::db_secret(&aws_config, &db).await;
     match found_db_secret {
         Some(found_secret) => {
             secret = Ok(found_secret);
@@ -1566,15 +1563,15 @@ async fn open_dbeaver(
 
 async fn find_secret_with_fallback(
     config: &aws_config::SdkConfig,
-    rds: &RdsInstance,
+    rds: &wombat_core::RdsInstance,
     rds_resolver: Arc<RwLock<RdsResolver>>,
-) -> Option<DbSecret> {
-    let found_secret = aws::db_secret(config, rds).await;
+) -> Option<wombat_core::DbSecret> {
+    let found_secret = wombat_core::db_secret(config, rds).await;
     if let Some(secret) = found_secret {
         return Some(secret);
     }
 
-    let source_db = aws::find_source_rds(config, rds).await;
+    let source_db = wombat_core::find_source_rds(config, rds).await;
     let databases;
     {
         let resolver = rds_resolver.read().await;
@@ -1711,7 +1708,7 @@ async fn main() {
 
     let cache_db_pool = Arc::new(initialize_cache_db_pool("default"));
 
-    let aws_config_provider = Arc::new(RwLock::new(aws::AwsConfigProvider::new().await));
+    let aws_config_provider = Arc::new(RwLock::new(wombat_core::AwsConfigProvider::new().await));
     let mut updater_headers: HeaderMap = HeaderMap::new();
     updater_headers.append(
         "USER_UUID",
@@ -1814,8 +1811,8 @@ async fn main() {
 }
 
 struct AppContext {
-    active_profile: Option<aws::WombatAwsProfile>,
-    aws_config_provider: Arc<RwLock<aws::AwsConfigProvider>>,
+    active_profile: Option<wombat_core::WombatAwsProfile>,
+    aws_config_provider: Arc<RwLock<wombat_core::AwsConfigProvider>>,
     last_auth_check: i64,
     no_of_failed_logins: i64,
 }
@@ -1826,7 +1823,7 @@ struct UserConfigState(Arc<Mutex<UserConfig>>);
 
 pub struct AsyncTaskManager(Arc<Mutex<TaskTracker>>);
 
-struct AwsConfigProviderInstance(Arc<RwLock<aws::AwsConfigProvider>>);
+struct AwsConfigProviderInstance(Arc<RwLock<wombat_core::AwsConfigProvider>>);
 struct RdsResolverInstance(Arc<RwLock<RdsResolver>>);
 struct ClusterResolverInstance(Arc<RwLock<ClusterResolver>>);
 struct EcsResolverInstance(Arc<RwLock<EcsResolver>>);
@@ -1868,11 +1865,11 @@ async fn check_login_and_trigger(
     config: &aws_config::SdkConfig,
     fast_path: bool,
 ) -> Result<(), CommandError> {
-    if !aws::is_logged(profile, config, fast_path).await {
+    if !wombat_core::is_logged(profile, config, fast_path).await {
         info!("Trigger log in into AWS");
-        aws::cli_login(profile);
+        wombat_core::cli_login(profile);
 
-        if aws::is_logged(profile, config, fast_path).await {
+        if wombat_core::is_logged(profile, config, fast_path).await {
             return Ok(());
         }
         return Err(CommandError::new("login", "Failed to log in"));

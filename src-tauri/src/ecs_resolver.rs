@@ -1,6 +1,6 @@
 use crate::{
-    aws, cache_db,
-    shared::{arn_to_name, CommandError, Env},
+    cache_db,
+    shared::{arn_to_name, CommandError},
 };
 use log::{info, warn};
 use r2d2::Pool;
@@ -13,13 +13,13 @@ const CACHE_NAME: &str = "ecs";
 
 pub struct EcsResolver {
     db_pool: Arc<Pool<SqliteConnectionManager>>,
-    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    aws_config_resolver: Arc<RwLock<wombat_core::AwsConfigProvider>>,
 }
 
 impl EcsResolver {
     pub fn new(
         db_pool: Arc<Pool<SqliteConnectionManager>>,
-        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+        aws_config_resolver: Arc<RwLock<wombat_core::AwsConfigProvider>>,
     ) -> Self {
         EcsResolver {
             db_pool,
@@ -61,7 +61,10 @@ impl EcsResolver {
         }
     }
 
-    pub async fn refresh(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
+    pub async fn refresh(
+        &mut self,
+        clusters: Vec<wombat_core::Cluster>,
+    ) -> Vec<wombat_core::EcsService> {
         {
             let pool = self.db_pool.clone();
             tokio::task::block_in_place(|| {
@@ -81,7 +84,11 @@ impl EcsResolver {
         desired_version: Option<String>,
         include_terraform_tag: bool,
     ) -> Result<String, CommandError> {
-        let deplyoment_res = aws::deploy_service(
+        let command = match desired_version {
+            Some(_) => "deploy-new-service-version".to_owned(),
+            None => "restart-service".to_owned(),
+        };
+        let deplyoment_res = wombat_core::deploy_service(
             &config,
             &cluster_arn,
             &service_arn,
@@ -102,7 +109,7 @@ impl EcsResolver {
                 while continue_checking {
                     interval.tick().await;
                     info!("Checking deployment={deployment_id}");
-                    let deployment_status = aws::get_deploment_status(
+                    let deployment_status = wombat_core::get_deploment_status(
                         &config,
                         &cluster_arn,
                         &service_name,
@@ -157,15 +164,18 @@ impl EcsResolver {
             });
         }
 
-        deplyoment_res
+        deplyoment_res.map_err(|err| CommandError::from_core(command, err))
     }
 
-    pub async fn services(&mut self, clusters: Vec<aws::Cluster>) -> Vec<aws::EcsService> {
+    pub async fn services(
+        &mut self,
+        clusters: Vec<wombat_core::Cluster>,
+    ) -> Vec<wombat_core::EcsService> {
         info!("Resolving services for clusters {clusters:?}");
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         let pool = self.db_pool.clone();
-        let services: Vec<aws::EcsService> = tokio::task::block_in_place(|| {
+        let services: Vec<wombat_core::EcsService> = tokio::task::block_in_place(|| {
             let conn = pool.get().unwrap();
             fetch_services(&conn)
         });
@@ -189,7 +199,7 @@ impl EcsResolver {
                     "Using profile={} to resolve services for cluster={}",
                     cluster.arn, profile
                 );
-                let services = aws::services(&config, &cluster).await;
+                let services = wombat_core::services(&config, &cluster).await;
                 for service in services {
                     unique_services_map.insert(service.arn.clone(), service);
                 }
@@ -211,9 +221,9 @@ impl EcsResolver {
         services
     }
 
-    pub async fn read_services(&self) -> Vec<aws::EcsService> {
+    pub async fn read_services(&self) -> Vec<wombat_core::EcsService> {
         let pool = self.db_pool.clone();
-        let services: Vec<aws::EcsService> = tokio::task::block_in_place(|| {
+        let services: Vec<wombat_core::EcsService> = tokio::task::block_in_place(|| {
             let conn = pool.get().unwrap();
             fetch_services(&conn)
         });
@@ -225,7 +235,7 @@ impl EcsResolver {
     }
 }
 
-fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
+fn fetch_services(conn: &rusqlite::Connection) -> Vec<wombat_core::EcsService> {
     log::info!("reading ecs instances from cache");
     let mut stmt = match conn.prepare("SELECT arn, name, cluster_arn, env, td_family FROM services")
     {
@@ -239,9 +249,9 @@ fn fetch_services(conn: &rusqlite::Connection) -> Vec<aws::EcsService> {
         let arn: String = row.get(0)?;
         let name: String = row.get(1)?;
         let cluster_arn: String = row.get(2)?;
-        let env: Env = serde_json::from_str(&row.get::<usize, String>(3)?).unwrap();
+        let env: wombat_core::Env = serde_json::from_str(&row.get::<usize, String>(3)?).unwrap();
         let td_family: String = row.get(4)?;
-        Ok(aws::EcsService {
+        Ok(wombat_core::EcsService {
             arn,
             name,
             cluster_arn,
@@ -266,7 +276,7 @@ fn clear_services(conn: &rusqlite::Connection) {
     conn.execute("DELETE FROM services", []).unwrap();
 }
 
-fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[aws::EcsService]) {
+fn store_services(pool: &Pool<SqliteConnectionManager>, services: &[wombat_core::EcsService]) {
     clear_services(&pool.get().unwrap());
 
     for ecs in services.iter() {

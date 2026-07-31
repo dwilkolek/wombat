@@ -1,5 +1,4 @@
-use crate::shared;
-use crate::{aws, cache_db};
+use crate::cache_db;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -11,13 +10,13 @@ const CACHE_NAME: &str = "cluster";
 
 pub struct ClusterResolver {
     db_pool: Arc<Pool<SqliteConnectionManager>>,
-    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    aws_config_resolver: Arc<RwLock<wombat_core::AwsConfigProvider>>,
 }
 
 impl ClusterResolver {
     pub fn new(
         db_pool: Arc<Pool<SqliteConnectionManager>>,
-        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+        aws_config_resolver: Arc<RwLock<wombat_core::AwsConfigProvider>>,
     ) -> Self {
         ClusterResolver {
             db_pool,
@@ -58,7 +57,7 @@ impl ClusterResolver {
         }
     }
 
-    pub async fn refresh(&mut self) -> Vec<aws::Cluster> {
+    pub async fn refresh(&mut self) -> Vec<wombat_core::Cluster> {
         let pool = self.db_pool.clone();
         tokio::task::block_in_place(|| {
             let conn = pool.get().unwrap();
@@ -67,7 +66,7 @@ impl ClusterResolver {
         self.clusters().await.clone()
     }
 
-    pub async fn clusters(&mut self) -> Vec<aws::Cluster> {
+    pub async fn clusters(&mut self) -> Vec<wombat_core::Cluster> {
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
         info!("Resolving clusters");
@@ -88,7 +87,7 @@ impl ClusterResolver {
         for env in environments.iter() {
             let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching ecs from aws using {profile}");
-            let clusters = aws::clusters(&config).await;
+            let clusters = wombat_core::clusters(&config).await;
             for cluster in clusters {
                 unique_clusters_map.insert(cluster.arn.clone(), cluster);
             }
@@ -107,7 +106,7 @@ impl ClusterResolver {
         clusters
     }
 
-    pub async fn read_clusters(&self) -> Vec<aws::Cluster> {
+    pub async fn read_clusters(&self) -> Vec<wombat_core::Cluster> {
         info!("Resolving clusters");
         let pool = self.db_pool.clone();
         let clusters = tokio::task::block_in_place(|| {
@@ -122,7 +121,7 @@ impl ClusterResolver {
     }
 }
 
-fn fetch_clusters(conn: &Connection) -> Vec<aws::Cluster> {
+fn fetch_clusters(conn: &Connection) -> Vec<wombat_core::Cluster> {
     log::info!("reading clusters from cache");
     let mut stmt = match conn.prepare("SELECT arn, name, env, platform_version FROM clusters;") {
         Ok(s) => s,
@@ -134,9 +133,9 @@ fn fetch_clusters(conn: &Connection) -> Vec<aws::Cluster> {
     let rows = stmt.query_map([], |row| {
         let arn: String = row.get(0)?;
         let name: String = row.get(1)?;
-        let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(2)?).unwrap();
+        let env: wombat_core::Env = serde_json::from_str(&row.get::<usize, String>(2)?).unwrap();
         let platform_version: i32 = row.get(3).unwrap_or(0);
-        Ok(aws::Cluster {
+        Ok(wombat_core::Cluster {
             arn,
             name,
             env,
@@ -159,7 +158,7 @@ fn clear_clusters(conn: &Connection) {
     info!("dropping clusters from cache");
     conn.execute("DELETE FROM clusters", []).unwrap();
 }
-fn store_clusters(conn: &Connection, clusters: &[aws::Cluster]) {
+fn store_clusters(conn: &Connection, clusters: &[wombat_core::Cluster]) {
     clear_clusters(conn);
     for db in clusters.iter() {
         conn.execute(

@@ -7261,15 +7261,7 @@ version = "5.0.8"
 dependencies = [
  "async-trait",
  "aws-config",
- "aws-runtime",
- "aws-sdk-cloudformation",
- "aws-sdk-cloudwatchlogs",
- "aws-sdk-ec2",
  "aws-sdk-ecs",
- "aws-sdk-rds",
- "aws-sdk-secretsmanager",
- "aws-sdk-ssm",
- "aws-sdk-sts",
  "aws-types",
  "base64 0.22.1",
  "chrono",
@@ -7311,6 +7303,38 @@ dependencies = [
  "wait-timeout",
  "warp",
  "warp-reverse-proxy",
+ "wombat-core",
+]
+
+[[package]]
+name = "wombat-core"
+version = "5.0.8"
+dependencies = [
+ "async-trait",
+ "aws-config",
+ "aws-runtime",
+ "aws-sdk-cloudformation",
+ "aws-sdk-cloudwatchlogs",
+ "aws-sdk-ec2",
+ "aws-sdk-ecs",
+ "aws-sdk-rds",
+ "aws-sdk-secretsmanager",
+ "aws-sdk-ssm",
+ "aws-sdk-sts",
+ "aws-types",
+ "chrono",
+ "futures",
+ "log",
+ "rand 0.10.2",
+ "range-overlap",
+ "regex",
+ "serde",
+ "serde_json",
+ "shared_child",
+ "tokio",
+ "tracing-unwrap",
+ "uuid",
+ "wait-timeout",
 ]
 
 [[package]]

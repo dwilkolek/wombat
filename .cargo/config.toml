@@ -8,3 +8,6 @@ rustflags = ["-C", "link-arg=-Wl,--stack,8000000"]
 
 # [build]
 # rustflags = ["-Z", "threads=8"]
+
+[patch."https://github.com/dwilkolek/wombat-core"]
+wombat-core = { path = "../wombat-core" }
