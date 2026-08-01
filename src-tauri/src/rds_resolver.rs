@@ -1,5 +1,4 @@
-use crate::shared;
-use crate::{aws, cache_db};
+use crate::cache_db;
 use log::info;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -10,13 +9,13 @@ const CACHE_NAME: &str = "rds";
 
 pub struct RdsResolver {
     db_pool: Arc<Pool<SqliteConnectionManager>>,
-    aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+    aws_config_resolver: Arc<RwLock<wombat_core::aws::AwsConfigProvider>>,
 }
 
 impl RdsResolver {
     pub fn new(
         db_pool: Arc<Pool<SqliteConnectionManager>>,
-        aws_config_resolver: Arc<RwLock<aws::AwsConfigProvider>>,
+        aws_config_resolver: Arc<RwLock<wombat_core::aws::AwsConfigProvider>>,
     ) -> Self {
         RdsResolver {
             db_pool,
@@ -100,7 +99,7 @@ impl RdsResolver {
         }
     }
 
-    pub async fn refresh(&mut self) -> Vec<aws::RdsInstance> {
+    pub async fn refresh(&mut self) -> Vec<wombat_core::aws::RdsInstance> {
         {
             let pool = self.db_pool.clone();
             tokio::task::block_in_place(|| {
@@ -111,7 +110,7 @@ impl RdsResolver {
         self.databases().await
     }
 
-    pub async fn databases(&mut self) -> Vec<aws::RdsInstance> {
+    pub async fn databases(&mut self) -> Vec<wombat_core::aws::RdsInstance> {
         info!("Resolving databases");
         let aws_config_resolver = self.aws_config_resolver.read().await;
         let environments = aws_config_resolver.configured_envs();
@@ -131,7 +130,7 @@ impl RdsResolver {
         for env in environments.iter() {
             let (profile, config) = aws_config_resolver.sso_config(env).await;
             info!("Fetching rds from aws using profile {profile}");
-            let databases = aws::databases(&config).await;
+            let databases = wombat_core::aws::databases(&config).await;
             for db in databases {
                 unique_databases_map.insert(db.arn.clone(), db);
             }
@@ -146,7 +145,7 @@ impl RdsResolver {
         databases
     }
 
-    pub async fn read_databases(&self) -> Vec<aws::RdsInstance> {
+    pub async fn read_databases(&self) -> Vec<wombat_core::aws::RdsInstance> {
         let pool = self.db_pool.clone();
         let conn = pool.get().unwrap();
         let databases = fetch_databases(&conn);
@@ -158,7 +157,7 @@ impl RdsResolver {
     }
 }
 
-fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
+fn fetch_databases(conn: &rusqlite::Connection) -> Vec<wombat_core::aws::RdsInstance> {
     log::info!("reading rds instances from cache");
 
     let mut stmt = match conn.prepare("SELECT arn, name, identifier, engine, engine_version, endpoint, subnet_name, environment_tag, env, appname_tag, cdk_stack_id, cdk_stack_name, cdk_logical_id, master_username FROM databases ORDER BY order_index ASC;") {
@@ -174,16 +173,18 @@ fn fetch_databases(conn: &rusqlite::Connection) -> Vec<aws::RdsInstance> {
         let identifier: String = row.get(2)?;
         let engine: String = row.get(3)?;
         let engine_version: String = row.get(4)?;
-        let endpoint: aws::Endpoint = serde_json::from_str(&row.get::<usize, String>(5)?).unwrap();
+        let endpoint: wombat_core::aws::Endpoint =
+            serde_json::from_str(&row.get::<usize, String>(5)?).unwrap();
         let subnet_name: String = row.get(6)?;
         let environment_tag: String = row.get(7)?;
-        let env: shared::Env = serde_json::from_str(&row.get::<usize, String>(8)?).unwrap();
+        let env: wombat_core::aws::Env =
+            serde_json::from_str(&row.get::<usize, String>(8)?).unwrap();
         let appname_tag: String = row.get(9)?;
         let cdk_stack_id: Option<String> = row.get(10).ok();
         let cdk_stack_name: Option<String> = row.get(11).ok();
         let cdk_logical_id: Option<String> = row.get(12).ok();
         let master_username: Option<String> = row.get(13).ok();
-        Ok(aws::RdsInstance {
+        Ok(wombat_core::aws::RdsInstance {
             arn,
             identifier,
             name,
@@ -217,7 +218,7 @@ fn clear_databases(conn: &rusqlite::Connection) {
     conn.execute("DELETE FROM databases", []).unwrap();
 }
 
-fn store_databases(conn: &rusqlite::Connection, databases: &[aws::RdsInstance]) {
+fn store_databases(conn: &rusqlite::Connection, databases: &[wombat_core::aws::RdsInstance]) {
     clear_databases(conn);
 
     for (i, db) in databases.iter().enumerate() {

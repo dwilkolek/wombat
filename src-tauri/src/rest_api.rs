@@ -1,5 +1,4 @@
-use crate::shared::{BrowserExtension, Cookie, CookieJar, Env};
-use crate::wombat_api::WombatApi;
+use crate::shared::{BrowserExtension, Cookie, CookieJar};
 use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use warp::reply::Reply;
@@ -11,7 +10,7 @@ use warp::{self, http::StatusCode};
 struct NewCookieDto {
     name: String,
     value: String,
-    env: Env,
+    env: wombat_core::aws::Env,
     stored_at: i64,
 }
 impl From<NewCookieDto> for Cookie {
@@ -58,7 +57,7 @@ struct HealthBody {
 async fn health(
     body: HealthBody,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
-    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
+    wombat_api: std::sync::Arc<tokio::sync::Mutex<wombat_core::client::WombatApi>>,
 ) -> Result<warp::reply::Response, warp::Rejection> {
     let version = body.version;
     let mut browser_ext = browser_ext.lock().await;
@@ -107,9 +106,9 @@ fn with_browser_extension(
 }
 
 fn with_wombat_api(
-    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
+    wombat_api: std::sync::Arc<tokio::sync::Mutex<wombat_core::client::WombatApi>>,
 ) -> impl Filter<
-    Extract = (std::sync::Arc<tokio::sync::Mutex<WombatApi>>,),
+    Extract = (std::sync::Arc<tokio::sync::Mutex<wombat_core::client::WombatApi>>,),
     Error = std::convert::Infallible,
 > + Clone {
     warp::any().map(move || wombat_api.clone())
@@ -118,7 +117,7 @@ fn with_wombat_api(
 pub fn serve(
     jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
     browser_ext: std::sync::Arc<tokio::sync::Mutex<BrowserExtension>>,
-    wombat_api: std::sync::Arc<tokio::sync::Mutex<WombatApi>>,
+    wombat_api: std::sync::Arc<tokio::sync::Mutex<wombat_core::client::WombatApi>>,
 ) {
     tokio::task::spawn(async move {
         let routes = warp::put()

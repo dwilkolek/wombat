@@ -35,6 +35,18 @@ jobs:
             platform-name: 'Windows'
     runs-on: ${{ matrix.platform }}
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app_token
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            wombat
+            wombat-core
+      - name: Authenticate Git for private repos
+        run: |
+          git config --global url."https://x-access-token:${{ steps.app_token.outputs.token }}@github.com".insteadOf "ssh://git@github.com"
       - name: Set git to use LF
         run: |
           git config --global core.autocrlf false
