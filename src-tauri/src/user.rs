@@ -1,4 +1,4 @@
-use crate::shared::{CommandError, Env, TrackedName};
+use crate::shared::{CommandError, TrackedName};
 use log::{error, info, warn};
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub fn wombat_dir() -> PathBuf {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WombatAwsProfilePreferences {
     pub tracked_names: HashSet<TrackedName>,
-    pub preferred_environments: Vec<Env>,
+    pub preferred_environments: Vec<wombat_core::aws::Env>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -125,7 +125,7 @@ impl UserConfig {
     pub fn save_preferred_envs(
         &mut self,
         profile_name: &str,
-        envs: Vec<Env>,
+        envs: Vec<wombat_core::aws::Env>,
     ) -> Result<UserConfig, CommandError> {
         let preferences = &mut self.preferences;
         let preference = preferences.get_mut(profile_name).unwrap_or_log();
@@ -236,7 +236,7 @@ impl UserConfig {
         }
     }
 
-    pub fn use_profile(&mut self, profile: &str, envs: Vec<Env>) -> bool {
+    pub fn use_profile(&mut self, profile: &str, envs: Vec<wombat_core::aws::Env>) -> bool {
         info!("Using profile: {profile}, envs={envs:?}");
         self.last_used_profile = Some(profile.to_owned());
         let preferences = &mut self.preferences;

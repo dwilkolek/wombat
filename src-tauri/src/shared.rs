@@ -1,9 +1,7 @@
 use chrono::{DateTime, Utc};
-use core::fmt;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing_unwrap::{OptionExt, ResultExt};
+use tracing_unwrap::OptionExt;
 
 pub type TrackedName = String;
 
@@ -52,7 +50,7 @@ fn version_to_number(version: &str) -> u32 {
 pub struct Cookie {
     pub name: String,
     pub value: String,
-    pub env: Env,
+    pub env: wombat_core::aws::Env,
     pub stored_at: DateTime<Utc>,
 }
 
@@ -61,7 +59,7 @@ pub struct CookieJar {
 }
 
 impl CookieJar {
-    pub fn header_value_for_env(&self, env: &Env) -> String {
+    pub fn header_value_for_env(&self, env: &wombat_core::aws::Env) -> String {
         self.cookies
             .iter()
             .filter(|c| c.env == *env)
@@ -91,7 +89,7 @@ impl CookieJar {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CookieJarStatus {
-    pub cookie_health: HashMap<Env, CookieHealth>,
+    pub cookie_health: HashMap<wombat_core::aws::Env, CookieHealth>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -127,51 +125,12 @@ impl CommandError {
             message: message.into(),
         }
     }
-}
 
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Env {
-    DEVNULL,
-    PLAY,
-    LAB,
-    DEV,
-    DEMO,
-    PROD,
-}
-impl fmt::Display for Env {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Env::DEVNULL => write!(f, "devnull"),
-            Env::PLAY => write!(f, "play"),
-            Env::LAB => write!(f, "lab"),
-            Env::DEV => write!(f, "dev"),
-            Env::DEMO => write!(f, "demo"),
-            Env::PROD => write!(f, "prod"),
+    pub fn from_core(command: impl Into<String>, err: wombat_core::aws::CoreError) -> CommandError {
+        CommandError {
+            command: command.into(),
+            message: err.message,
         }
-    }
-}
-
-impl Env {
-    pub fn from_exact(str: &str) -> Env {
-        match str {
-            "play" => Env::PLAY,
-            "lab" => Env::LAB,
-            "dev" => Env::DEV,
-            "demo" => Env::DEMO,
-            "prod" => Env::PROD,
-            _ => Env::DEVNULL,
-        }
-    }
-    pub fn from_any(str: &str) -> Env {
-        let env_regex = Regex::new(".*(play|lab|dev|demo|prod).*").unwrap_or_log();
-        let captures = env_regex.captures(str);
-        let env = captures
-            .and_then(|c| c.get(1))
-            .map(|e| e.as_str().to_owned())
-            .unwrap_or("".to_owned());
-
-        Env::from_exact(&env)
     }
 }
 
@@ -187,10 +146,6 @@ fn rds_arn_to_name(arn: &str) -> TrackedName {
         .filter(|part| part != &"dsi" && !(["play", "lab", "dev", "demo", "prod"].contains(part)))
         .collect::<Vec<&str>>()
         .join("-")
-}
-
-pub fn cluster_arn_to_name(arn: &str) -> TrackedName {
-    arn.split('/').next_back().unwrap_or_log().to_owned()
 }
 
 pub fn arn_to_name(arn: &str) -> TrackedName {

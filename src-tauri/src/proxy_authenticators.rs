@@ -1,6 +1,5 @@
 use crate::proxy::ProxyInterceptor;
-use crate::shared::Env;
-use crate::{aws, shared::CookieJar, wombat_api};
+use crate::shared::CookieJar;
 use async_trait::async_trait;
 use headers::authorization::Credentials;
 use headers::Authorization;
@@ -36,7 +35,7 @@ struct JepsenResponse {
 }
 
 pub struct JepsenAutheticator {
-    aws_config: aws_config::SdkConfig,
+    aws_config: wombat_core::aws::SdkConfig,
     path_prefix: String,
     jepsen_url: String,
     api_name: String,
@@ -45,8 +44,8 @@ pub struct JepsenAutheticator {
 }
 impl JepsenAutheticator {
     pub fn from_proxy_auth_config(
-        aws_config: &aws_config::SdkConfig,
-        jepsen_config: wombat_api::ProxyAuthConfig,
+        aws_config: &wombat_core::aws::SdkConfig,
+        jepsen_config: wombat_core::client::ProxyAuthConfig,
     ) -> Self {
         JepsenAutheticator {
             aws_config: aws_config.clone(),
@@ -60,7 +59,7 @@ impl JepsenAutheticator {
 
     pub async fn get_jepsen_token(&self) -> Result<String, String> {
         info!("Getting token {}", self.secret_arn);
-        let client_secret = aws::get_secret(&self.aws_config, &self.secret_arn)
+        let client_secret = wombat_core::aws::get_secret(&self.aws_config, &self.secret_arn)
             .await
             .unwrap_or_log();
         let client = reqwest::Client::new();
@@ -115,13 +114,13 @@ pub struct BasicAuthenticator {
 }
 impl BasicAuthenticator {
     pub async fn from_proxy_auth_config(
-        aws_config: &aws_config::SdkConfig,
-        basic_config: wombat_api::ProxyAuthConfig,
+        aws_config: &wombat_core::aws::SdkConfig,
+        basic_config: wombat_core::client::ProxyAuthConfig,
     ) -> Self {
         BasicAuthenticator {
             user: basic_config.basic_user.unwrap(),
             path_prefix: basic_config.api_path,
-            password: aws::get_secret(aws_config, basic_config.secret_name.as_str())
+            password: wombat_core::aws::get_secret(aws_config, basic_config.secret_name.as_str())
                 .await
                 .ok(),
         }
@@ -147,7 +146,7 @@ impl ProxyInterceptor for BasicAuthenticator {
 }
 
 pub struct CookieAutheticator {
-    pub env: Env,
+    pub env: wombat_core::aws::Env,
     pub jar: std::sync::Arc<tokio::sync::Mutex<CookieJar>>,
 }
 

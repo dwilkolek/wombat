@@ -1,7 +1,5 @@
 use std::{collections::HashSet, env, fs, process::Command};
 
-use crate::{aws, wombat_api::WombatApi};
-
 pub const CODEARTIFACT_LOGIN: &str = "codeartifact-login";
 pub const AWS_CLI: &str = "aws-cli";
 pub const SESSION_MANAGER_PLUGIN: &str = "session-manager-plugin";
@@ -16,8 +14,8 @@ pub struct Dependency {
 }
 
 pub async fn check_dependencies(
-    wombat_api: &mut WombatApi,
-    aws_config_provider: &aws::AwsConfigProvider,
+    wombat_api: &mut wombat_core::client::WombatApi,
+    aws_config_provider: &wombat_core::aws::AwsConfigProvider,
     required_feature: &str,
 ) -> Vec<Dependency> {
     let mut dependecies = Vec::new();

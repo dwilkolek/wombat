@@ -10,6 +10,7 @@ node_modules
 .vercel
 .output
 src-tauri/gen
+src-tauri/target
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /target
@@ -23,3 +24,4 @@ local.db-wal
 client_wal_index
 
 release-test-server
+.cargo/config.toml
