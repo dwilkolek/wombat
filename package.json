@@ -44,6 +44,7 @@
 		"@tailwindcss/vite": "4.3.3",
 		"@tauri-apps/cli": "2.12.1",
 		"@types/gtag.js": "0.0.20",
+		"@types/node": "^26.6.4",
 		"@typescript-eslint/eslint-plugin": "8.71.1",
 		"@typescript-eslint/parser": "8.71.1",
 		"autoprefixer": "^10.6.1",
