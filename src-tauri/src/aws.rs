@@ -1046,6 +1046,7 @@ pub async fn deploy_service(
     service_arn: &str,
     desired_version: Option<String>,
     include_terraform_tag: bool,
+    desired_count: Option<i32>,
 ) -> Result<String, CommandError> {
     let command = match desired_version {
         Some(_) => "deploy-new-service-version".to_owned(),
@@ -1056,7 +1057,7 @@ pub async fn deploy_service(
         .update_service()
         .cluster(cluster_arn)
         .service(arn_to_name(service_arn));
-    let update_service = match desired_version {
+    let mut update_service = match desired_version {
         Some(desired_version) => {
             let service = get_ecs_service(&ecs_client, service_arn)
                 .await
@@ -1092,6 +1093,9 @@ pub async fn deploy_service(
         }
         None => update_service.force_new_deployment(true),
     };
+    if let Some(count) = desired_count {
+        update_service = update_service.desired_count(count);
+    }
     let result = update_service.send().await;
     match result {
         Ok(output) => {

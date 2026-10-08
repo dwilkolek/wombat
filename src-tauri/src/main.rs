@@ -774,6 +774,7 @@ async fn deploy_ecs_service(
     service_arn: String,
     desired_version: Option<String>,
     include_terraform_tag: bool,
+    desired_counted: Option<i32>,
     app_handle: AppHandle,
     app_state: tauri::State<'_, AppContextState>,
     ecs_resolver_instance: tauri::State<'_, EcsResolverInstance>,
@@ -804,6 +805,7 @@ async fn deploy_ecs_service(
             service_arn,
             desired_version,
             include_terraform_tag,
+            desired_counted,
         )
         .await
 }

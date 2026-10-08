@@ -80,6 +80,7 @@ impl EcsResolver {
         service_arn: String,
         desired_version: Option<String>,
         include_terraform_tag: bool,
+        desired_count: Option<i32>,
     ) -> Result<String, CommandError> {
         let deplyoment_res = aws::deploy_service(
             &config,
@@ -87,6 +88,7 @@ impl EcsResolver {
             &service_arn,
             desired_version.clone(),
             include_terraform_tag,
+            desired_count,
         )
         .await;
         if deplyoment_res.is_ok() {

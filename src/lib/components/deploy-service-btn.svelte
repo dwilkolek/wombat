@@ -16,6 +16,7 @@
 
 	let dialog: HTMLDialogElement | undefined = $state();
 	let imageTag = $state(service.version);
+	let desiredCount = $state(null);
 	let includeTerraformTag = $state(false);
 	let deployStarting = $state(false);
 </script>
@@ -97,6 +98,17 @@
 						type="text"
 						placeholder="Image tag"
 						bind:value={imageTag}
+						class="input input-sm input-bordered grow"
+					/>
+					<input
+						disabled={!!$disabledReason || deployStarting}
+						autocomplete="off"
+						autocorrect="off"
+						autocapitalize="off"
+						spellcheck="false"
+						type="number"
+						placeholder="Desired count"
+						bind:value={desiredCount}
 						class="input input-sm input-bordered grow"
 					/>
 					<div class="flex items-center gap-1">
