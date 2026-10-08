@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
-	import { execute } from '$lib/stores/error-store';
-	import { TaskStatus, type Task } from '$lib/stores/task-store';
-	import { AwsEnv, type RdsInstance } from '$lib/types';
-	import { featuresStore } from '$lib/stores/feature-store';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { execute } from '#lib/stores/error-store.js';
+	import { TaskStatus, type Task } from '#lib/stores/task-store.js';
+	import { AwsEnv, type RdsInstance } from '#lib/types.js';
+	import { featuresStore } from '#lib/stores/feature-store.js';
 	interface Props {
 		task: Task | undefined;
 		db: RdsInstance;

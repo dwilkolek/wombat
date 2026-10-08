@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
-import type { ProxyAuthConfig } from '$lib/types';
+import type { ProxyAuthConfig } from '#lib/types.js';
 import { invoke } from '@tauri-apps/api/core';
 
 type TaskKilled = {

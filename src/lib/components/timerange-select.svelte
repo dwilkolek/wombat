@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Timerange, TimeUnit } from '$lib/types';
+	import type { Timerange, TimeUnit } from '#lib/types.js';
 	import { endOfDay, format, startOfDay } from 'date-fns';
 	import { get, type Writable } from 'svelte/store';
 

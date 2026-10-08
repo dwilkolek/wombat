@@ -1,10 +1,10 @@
-import { AwsEnv, type EcsService, type RdsInstance } from '$lib/types';
+import { AwsEnv, type EcsService, type RdsInstance } from '#lib/types.js';
 import { derived } from 'svelte/store';
 import { wombatProfileStore } from './available-profiles-store';
 import { TaskStatus, taskStore } from './task-store';
 import { featuresStore } from './feature-store';
 import { deplyomentStore } from './deployment-store';
-import { appMatchesPrefix } from '$lib/utils';
+import { appMatchesPrefix } from '#lib/utils.js';
 
 const PROD_ACTIONS_DISABLED_REASON = 'Not available';
 

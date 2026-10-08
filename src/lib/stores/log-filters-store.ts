@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
-import type { LogFilter } from '$lib/types';
+import type { LogFilter } from '#lib/types.js';
 import { derived, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
 

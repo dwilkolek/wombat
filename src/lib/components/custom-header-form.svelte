@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
-	import type { CustomHeader } from '$lib/types';
+	import { userStore } from '#lib/stores/user-store.js';
+	import type { CustomHeader } from '#lib/types.js';
 
 	interface Props {
 		onRemove?: (name: string) => void;

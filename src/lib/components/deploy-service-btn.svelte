@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import type { ServiceDetails } from '$lib/types';
-	import { userStore } from '$lib/stores/user-store';
-	import { deployEcsServiceDisabledReason } from '$lib/stores/reasons';
+	import type { ServiceDetails } from '#lib/types.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { deployEcsServiceDisabledReason } from '#lib/stores/reasons.js';
 	import DeploymentStatus from './deployment-status.svelte';
-	import { featuresStore } from '$lib/stores/feature-store';
+	import { featuresStore } from '#lib/stores/feature-store.js';
 
 	interface Props {
 		service: ServiceDetails;

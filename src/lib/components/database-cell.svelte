@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { taskStore } from '$lib/stores/task-store';
-	import type { RdsInstance } from '$lib/types';
+	import { taskStore } from '#lib/stores/task-store.js';
+	import type { RdsInstance } from '#lib/types.js';
 	import DbSecretBtn from './db-secret-btn.svelte';
 	import DbProxyStartBtn from './db-proxy-start-btn.svelte';
 	import DbProxyStopBtn from './db-proxy-stop-btn.svelte';

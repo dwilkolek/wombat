@@ -1,10 +1,10 @@
 <script lang="ts">
-	import JsonView from '$lib/components/json-view.svelte';
-	import { page } from '$app/stores';
+	import JsonView from '#lib/components/json-view.svelte';
+	import { page } from '$app/state';
 	import { invoke } from '@tauri-apps/api/core';
 	import { readable } from 'svelte/store';
 
-	let logPromise = $derived(invoke<string>('kv_get', { key: $page.url.searchParams.get('kvKey') }));
+	let logPromise = $derived(invoke<string>('kv_get', { key: page.url.searchParams.get('kvKey') }));
 </script>
 
 <svelte:head>
@@ -13,7 +13,7 @@
 </svelte:head>
 <div class="bg-base-300 min-h-screen bg-opacity-100">
 	{#await logPromise}
-		Loading log: {$page.url.searchParams.get('kvKey')}
+		Loading log: {page.url.searchParams.get('kvKey')}
 	{:then logString}
 		{@const log = JSON.parse(logString)}
 		<div class="p-2">

@@ -1,17 +1,17 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { userStore } from '$lib/stores/user-store';
-	import { version } from '$app/environment';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { version } from '$app/env';
 	import { listen } from '@tauri-apps/api/event';
 	import { exit } from '@tauri-apps/plugin-process';
 	import { invoke } from '@tauri-apps/api/core';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
-	import { envImportance } from '$lib/stores/env-store';
-	import { BrowserExtensionState, type WombatAwsProfile } from '$lib/types';
-	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
-	import UpdateBtn from '$lib/components/update-btn.svelte';
-	import FeatureBtn from '$lib/components/feature-btn.svelte';
-	import BrowserExtensionDot from '$lib/components/browser-extension-dot.svelte';
+	import { availableProfilesStore } from '#lib/stores/available-profiles-store.js';
+	import { envImportance } from '#lib/stores/env-store.js';
+	import { BrowserExtensionState, type WombatAwsProfile } from '#lib/types.js';
+	import { browserExtensionStatus } from '#lib/stores/browser-extension-status.js';
+	import UpdateBtn from '#lib/components/update-btn.svelte';
+	import FeatureBtn from '#lib/components/feature-btn.svelte';
+	import BrowserExtensionDot from '#lib/components/browser-extension-dot.svelte';
 
 	const { wombatAwsProfiles } = availableProfilesStore;
 	let { login } = userStore;
@@ -98,8 +98,11 @@
 			<a
 				target="_blank"
 				href="https://chromewebstore.google.com/detail/quokka/genpoikemhehdicnplfojdolhdhofonp"
-				>👉 <span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span></a
 			>
+				👉
+
+				<span class="underline text-amber-300 hover:text-amber-500">Chrome web store</span>
+			</a>
 		</div>
 	</div>
 	<div class="hero-content flex-col">
@@ -169,7 +172,7 @@
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-									/>
+									></path>
 								</svg>
 							</button>
 						</div>

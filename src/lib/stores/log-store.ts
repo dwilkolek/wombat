@@ -1,4 +1,4 @@
-import type { AwsEnv, Timerange, TimeUnit } from '$lib/types';
+import type { AwsEnv, Timerange, TimeUnit } from '#lib/types.js';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { format } from 'date-fns';

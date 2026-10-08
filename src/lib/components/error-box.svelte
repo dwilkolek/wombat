@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { userStore } from '$lib/stores/user-store';
+	import { userStore } from '#lib/stores/user-store.js';
 	import { error } from '../stores/error-store';
 </script>
 

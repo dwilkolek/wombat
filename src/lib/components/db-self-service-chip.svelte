@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RdsInstance } from '$lib/types';
+	import type { RdsInstance } from '#lib/types.js';
 	interface Props {
 		database: RdsInstance | undefined;
 	}

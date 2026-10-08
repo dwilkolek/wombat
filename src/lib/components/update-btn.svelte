@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { check } from '@tauri-apps/plugin-updater';
 	import { relaunch } from '@tauri-apps/plugin-process';
-	import { UpdateButtonState } from '$lib/types';
+	import { UpdateButtonState } from '#lib/types.js';
 
 	let btnState: UpdateButtonState = $state(UpdateButtonState.CHECK_DONE);
 	let contentSize = $state(0);

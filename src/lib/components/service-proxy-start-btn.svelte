@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { proxyAuthConfigsStore } from '$lib/stores/proxy-auth-configs-store';
+	import { proxyAuthConfigsStore } from '#lib/stores/proxy-auth-configs-store.js';
 	import {
 		AwsEnv,
 		type ProxyAuthConfig,
 		type InfraProfile,
 		type SsoProfile,
 		type EcsService
-	} from '$lib/types';
+	} from '#lib/types.js';
 	import { message } from '@tauri-apps/plugin-dialog';
-	import { featuresStore } from '$lib/stores/feature-store';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { featuresStore } from '#lib/stores/feature-store.js';
+	import { wombatProfileStore } from '#lib/stores/available-profiles-store.js';
 	import CustomHeaderForm from './custom-header-form.svelte';
-	import { type CustomHeader } from '$lib/types';
-	import { taskStore, type NewTaskParams } from '$lib/stores/task-store';
+	import { type CustomHeader } from '#lib/types.js';
+	import { taskStore, type NewTaskParams } from '#lib/stores/task-store.js';
 	import { invoke } from '@tauri-apps/api/core';
-	import { userStore } from '$lib/stores/user-store';
-	import { startEcsProxyDisabledReason } from '$lib/stores/reasons';
-	import { getFromList, appMatchesPrefix } from '$lib/utils';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { startEcsProxyDisabledReason } from '#lib/stores/reasons.js';
+	import { getFromList, appMatchesPrefix } from '#lib/utils.js';
 
 	interface Props {
 		service: EcsService;

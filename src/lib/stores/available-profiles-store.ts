@@ -1,4 +1,4 @@
-import type { WombatAwsProfile, InfraProfile } from '$lib/types';
+import type { WombatAwsProfile, InfraProfile } from '#lib/types.js';
 import { invoke } from '@tauri-apps/api/core';
 import { derived, writable } from 'svelte/store';
 import { userStore } from './user-store';

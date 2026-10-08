@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { TaskStatus, type Task } from '$lib/stores/task-store';
-	import { userStore } from '$lib/stores/user-store';
-	import type { EcsService } from '$lib/types';
+	import { TaskStatus, type Task } from '#lib/stores/task-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import type { EcsService } from '#lib/types.js';
 	import { open } from '@tauri-apps/plugin-shell';
 
 	interface Props {

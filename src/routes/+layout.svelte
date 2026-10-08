@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../styles.css';
-	import ErrorBox from '$lib/components/error-box.svelte';
-	import { loading } from '$lib/stores/error-store';
+	import ErrorBox from '#lib/components/error-box.svelte';
+	import { loading } from '#lib/stores/error-store.js';
 	import { invoke } from '@tauri-apps/api/core';
 	interface Props {
 		children?: import('svelte').Snippet;

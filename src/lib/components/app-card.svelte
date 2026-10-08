@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
+	import { activeProfilePreferences, userStore } from '#lib/stores/user-store.js';
 
-	import { allServiceDetailsStore, serviceDetailStore } from '$lib/stores/service-details-store';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import { allServiceDetailsStore, serviceDetailStore } from '#lib/stores/service-details-store.js';
+	import { wombatProfileStore } from '#lib/stores/available-profiles-store.js';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
 	import StarIcon from './star-icon.svelte';
-	import type { AwsEnv } from '$lib/types';
-	import { taskStore } from '$lib/stores/task-store';
-	import { appMatchesPrefix } from '$lib/utils';
+	import type { AwsEnv } from '#lib/types.js';
+	import { taskStore } from '#lib/stores/task-store.js';
+	import { appMatchesPrefix } from '#lib/utils.js';
 	import DbTaskStatus from './db-task-status.svelte';
 	import ServiceTaskStatus from './service-task-status.svelte';
 	import AppCardHr from './app-card-hr.svelte';

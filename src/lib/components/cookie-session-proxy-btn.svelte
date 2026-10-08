@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { ENVIRONMENTS } from '$lib/stores/env-store';
-	import { startCookieSessionProxyDisabledReason } from '$lib/stores/reasons';
-	import { taskStore } from '$lib/stores/task-store';
-	import { userStore } from '$lib/stores/user-store';
-	import { AwsEnv } from '$lib/types';
-	import { cookieSessionProxyArn } from '$lib/utils';
+	import { ENVIRONMENTS } from '#lib/stores/env-store.js';
+	import { startCookieSessionProxyDisabledReason } from '#lib/stores/reasons.js';
+	import { taskStore } from '#lib/stores/task-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { AwsEnv } from '#lib/types.js';
+	import { cookieSessionProxyArn } from '#lib/utils.js';
 	import { invoke } from '@tauri-apps/api/core';
 
 	let app = $state('');

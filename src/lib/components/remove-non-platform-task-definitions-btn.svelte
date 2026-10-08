@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import type { ServiceDetails } from '$lib/types';
-	import { removeEcsTaskDefinitionsReason } from '$lib/stores/reasons';
+	import type { ServiceDetails } from '#lib/types.js';
+	import { removeEcsTaskDefinitionsReason } from '#lib/stores/reasons.js';
 	import { ask, message } from '@tauri-apps/plugin-dialog';
 
 	interface Props {

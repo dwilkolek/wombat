@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { serviceDetailStore } from '$lib/stores/service-details-store';
+	import { serviceDetailStore } from '#lib/stores/service-details-store.js';
 	import DatabaseCell from './database-cell.svelte';
 	import ServiceCell from './service-cell.svelte';
-	import type { AwsEnv } from '$lib/types';
+	import type { AwsEnv } from '#lib/types.js';
 	interface Props {
 		app: string;
 		env: AwsEnv;

@@ -1,7 +1,7 @@
 import { derived, get, writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AwsEnv, RdsInstance, ServiceDetails, ServiceDetailsMissing } from '$lib/types';
+import type { AwsEnv, RdsInstance, ServiceDetails, ServiceDetailsMissing } from '#lib/types.js';
 import { ENVIRONMENTS } from './env-store';
 
 type ServiceDetailsPayload = {

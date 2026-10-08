@@ -1,6 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
-import type { Cluster, EcsService } from '$lib/types';
+import type { Cluster, EcsService } from '#lib/types.js';
 import { invoke } from '@tauri-apps/api/core';
 import { clusterStore } from './cluster-store';
 

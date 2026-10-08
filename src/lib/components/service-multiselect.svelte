@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { activeProfilePreferences } from '$lib/stores/user-store';
-	import { serviceStore, servicedForActiveCluster } from '$lib/stores/service-store';
-	import type { EcsService } from '$lib/types';
+	import { activeProfilePreferences } from '#lib/stores/user-store.js';
+	import { serviceStore, servicedForActiveCluster } from '#lib/stores/service-store.js';
+	import type { EcsService } from '#lib/types.js';
 
 	let open = $state(false);
 	let inputValue = $state('');

@@ -1,6 +1,6 @@
 import { get, writable } from 'svelte/store';
 import { listen } from '@tauri-apps/api/event';
-import type { AwsEnv, RdsInstance } from '$lib/types';
+import type { AwsEnv, RdsInstance } from '#lib/types.js';
 import { invoke } from '@tauri-apps/api/core';
 
 const createDbStore = () => {

@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { featuresStore } from '$lib/stores/feature-store';
-	import { taskStore } from '$lib/stores/task-store';
-	import type { AwsEnv, CustomHeader } from '$lib/types';
+	import { featuresStore } from '#lib/stores/feature-store.js';
+	import { taskStore } from '#lib/stores/task-store.js';
+	import type { AwsEnv, CustomHeader } from '#lib/types.js';
 	import { invoke } from '@tauri-apps/api/core';
 	import CustomHeaderForm from './custom-header-form.svelte';
 	import { message } from '@tauri-apps/plugin-dialog';
-	import { userStore } from '$lib/stores/user-store';
-	import { startLambdaProxyDisabledReason } from '$lib/stores/reasons';
-	import { getFromList, lambdaAppArn } from '$lib/utils';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { startLambdaProxyDisabledReason } from '#lib/stores/reasons.js';
+	import { getFromList, lambdaAppArn } from '#lib/utils.js';
 
 	interface Props {
 		app: string;

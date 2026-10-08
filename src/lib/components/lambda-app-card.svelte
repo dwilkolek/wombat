@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
-	import { taskStore } from '$lib/stores/task-store';
+	import { wombatProfileStore } from '#lib/stores/available-profiles-store.js';
+	import { taskStore } from '#lib/stores/task-store.js';
 	import AppCardHr from './app-card-hr.svelte';
 	import LambdaTaskStatus from './lambda-task-status.svelte';
 	import LambdaAppProxyBtn from './lambda-app-proxy-btn.svelte';
-	import { cookieJar } from '$lib/stores/cookie-jar-status';
-	import { lambdaAppArn } from '$lib/utils';
+	import { cookieJar } from '#lib/stores/cookie-jar-status.js';
+	import { lambdaAppArn } from '#lib/utils.js';
 	interface Props {
 		app: string;
 	}
