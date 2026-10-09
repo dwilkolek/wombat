@@ -18,7 +18,6 @@
 	let imageTag = $derived(service.version);
 	let includeTerraformTag = $state(false);
 	let deployStarting = $state(false);
-	
 </script>
 
 {#if $disabledReason?.deployment != null}
