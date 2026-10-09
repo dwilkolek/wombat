@@ -15,9 +15,10 @@
 	let disabledReason = $derived(deployEcsServiceDisabledReason(service));
 
 	let dialog: HTMLDialogElement | undefined = $state();
-	let imageTag = $state(service.version);
+	let imageTag = $derived(service.version);
 	let includeTerraformTag = $state(false);
 	let deployStarting = $state(false);
+	
 </script>
 
 {#if $disabledReason?.deployment != null}

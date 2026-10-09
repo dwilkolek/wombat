@@ -38,19 +38,20 @@
 	let to = $state(endOfDay(new Date()));
 	let amount = $state(30);
 	let unit: TimeUnit = $state('minutes');
-
-	range.subscribe((r) => {
-		type = r.type;
-		switch (r.type) {
-			case 'absolute':
-				from = r.from;
-				to = r.to;
-				break;
-			case 'relative':
-				amount = r.amount;
-				unit = r.unit;
-				break;
-		}
+	$effect(() => {
+		range.subscribe((r) => {
+			type = r.type;
+			switch (r.type) {
+				case 'absolute':
+					from = r.from;
+					to = r.to;
+					break;
+				case 'relative':
+					amount = r.amount;
+					unit = r.unit;
+					break;
+			}
+		});
 	});
 	let details: HTMLDetailsElement | undefined = $state();
 	let open = $state(false);

@@ -74,7 +74,7 @@
 								</button>
 							</div>
 						{/each}
-						<div class="grow h-full" onpointerdown={toggle}>&nbsp;</div>
+						<div class="grow h-full" role="button" tabindex="0" onpointerdown={toggle}>&nbsp;</div>
 					</div>
 
 					<button class="z-50 outline-none focus:outline-none ml-2" onclick={toggle}>

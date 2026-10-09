@@ -43,7 +43,7 @@ export const triggerSilentServiceDetailsRefresh = (app: string) => {
 };
 
 export const allServiceDetailsStore = createServiceDetailsStore();
-let refreshTimeout: number | undefined;
+let refreshTimeout: NodeJS.Timeout | undefined;
 const refresh = () => {
 	console.log('refresh');
 	clearTimeout(refreshTimeout);

@@ -3,7 +3,7 @@ import { BrowserExtensionState, type BrowserExtensionStatus } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import { exit } from '@tauri-apps/plugin-process';
 import { message } from '@tauri-apps/plugin-dialog';
-let timeout: number | undefined = undefined;
+let timeout: NodeJS.Timeout | undefined = undefined;
 
 const createExtensionStatus = () => {
 	const state = writable<BrowserExtensionStatus>({

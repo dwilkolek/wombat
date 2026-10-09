@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 import { BrowserExtensionState, type CookieJarStatus } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import { browserExtensionStatus } from './browser-extension-status';
-let timeout: number | undefined = undefined;
+let timeout: NodeJS.Timeout | undefined = undefined;
 
 const createCookieJarStatus = () => {
 	const state = writable<CookieJarStatus>({ cookieHealth: {} });
