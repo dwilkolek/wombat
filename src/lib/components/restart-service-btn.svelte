@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { invoke } from '@tauri-apps/api/core';
-	import type { ServiceDetails } from '$lib/types';
-	import { userStore } from '$lib/stores/user-store';
-	import { restartEcsDisabledReason } from '$lib/stores/reasons';
+	import type { ServiceDetails } from '#lib/types.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { restartEcsDisabledReason } from '#lib/stores/reasons.js';
 	import DeploymentStatus from './deployment-status.svelte';
 
 	interface Props {

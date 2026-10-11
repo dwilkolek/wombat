@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import WombatIcon from '$lib/images/128x128.png';
-	import { page } from '$app/stores';
+	import WombatIcon from '#lib/images/128x128.png';
+	import { page } from '$app/state';
 	import { invoke } from '@tauri-apps/api/core';
-	import { execute } from '$lib/stores/error-store';
-	import { userStore } from '$lib/stores/user-store';
+	import { execute } from '#lib/stores/error-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
 	import { emit } from '@tauri-apps/api/event';
-	import { version } from '$app/environment';
-	import FeatureBtn from '$lib/components/feature-btn.svelte';
-	import CodeartifactLoginBtn from '$lib/components/codeartifact-login-btn.svelte';
-	import BrowserExtensionDot from '$lib/components/browser-extension-dot.svelte';
-	import { featuresStore } from '$lib/stores/feature-store';
+	import { version } from '$app/env';
+	import FeatureBtn from '#lib/components/feature-btn.svelte';
+	import CodeartifactLoginBtn from '#lib/components/codeartifact-login-btn.svelte';
+	import BrowserExtensionDot from '#lib/components/browser-extension-dot.svelte';
+	import { featuresStore } from '#lib/stores/feature-store.js';
 	interface Props {
 		children?: import('svelte').Snippet;
 	}
@@ -35,7 +35,7 @@
 		<ul class="menu menu-horizontal px-1 gap-2">
 			<li>
 				<a
-					class={$page.url.pathname === '/logged/apps' ? 'active pl-10 relative' : 'pl-10 relative'}
+					class={page.url.pathname === '/logged/apps' ? 'active pl-10 relative' : 'pl-10 relative'}
 					href="/logged/apps"
 				>
 					<img class="h-10 absolute -left-2" alt="wombat" src={WombatIcon} />
@@ -43,26 +43,26 @@
 				</a>
 			</li>
 			<li>
-				<a class={$page.url.pathname === '/logged/logs' ? 'active' : ''} href="/logged/logs"
+				<a class={page.url.pathname === '/logged/logs' ? 'active' : ''} href="/logged/logs"
 					>Logs 🧐</a
 				>
 			</li>
 			<li>
 				<a
-					class={$page.url.pathname === '/logged/lambda-apps' ? 'active' : ''}
+					class={page.url.pathname === '/logged/lambda-apps' ? 'active' : ''}
 					href="/logged/lambda-apps"
 					>Lambda Apps
 				</a>
 			</li>
 			{#if $featuresStore.tasksPage}
 				<li>
-					<a class={$page.url.pathname === '/logged/tasks' ? 'active' : ''} href="/logged/tasks"
-						>Tasks
-					</a>
+					<a class={page.url.pathname === '/logged/tasks' ? 'active' : ''} href="/logged/tasks"
+						>Tasks</a
+					>
 				</li>
 			{/if}
 			<li>
-				<a class={$page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
+				<a class={page.url.pathname === '/logged/config' ? 'active' : ''} href="/logged/config"
 					>Config</a
 				>
 			</li>
@@ -70,9 +70,8 @@
 	</div>
 
 	<div class="flex items-center">
-		<div class="flex items-center gap-1 text-sm mr-4">
-			App: {version}
-		</div>
+		<div class="flex items-center gap-1 text-sm mr-4">App: {version}</div>
+
 		<div class="flex items-center gap-1 text-sm mr-4">
 			<span>Browser extension</span>
 			<BrowserExtensionDot />
@@ -101,7 +100,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 					d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
-				/>
+				></path>
 			</svg>
 		</button>
 		<button
@@ -123,7 +122,7 @@
 					stroke-linecap="round"
 					stroke-linejoin="round"
 					d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75"
-				/>
+				></path>
 			</svg>
 		</button>
 	</div>

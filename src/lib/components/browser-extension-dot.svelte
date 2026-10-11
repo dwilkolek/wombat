@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { browserExtensionStatus } from '$lib/stores/browser-extension-status';
-	import { BrowserExtensionState } from '$lib/types';
+	import { browserExtensionStatus } from '#lib/stores/browser-extension-status.js';
+	import { BrowserExtensionState } from '#lib/types.js';
 </script>
 
 {#if $browserExtensionStatus.state == BrowserExtensionState.Disconnected}

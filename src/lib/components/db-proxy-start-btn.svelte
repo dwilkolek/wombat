@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { startRdsProxyDisabledReason } from '$lib/stores/reasons';
-	import { taskStore } from '$lib/stores/task-store';
-	import { userStore } from '$lib/stores/user-store';
-	import { AwsEnv, type RdsInstance } from '$lib/types';
+	import { startRdsProxyDisabledReason } from '#lib/stores/reasons.js';
+	import { taskStore } from '#lib/stores/task-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { AwsEnv, type RdsInstance } from '#lib/types.js';
 	import { invoke } from '@tauri-apps/api/core';
 
 	interface Props {

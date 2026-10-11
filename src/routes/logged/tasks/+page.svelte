@@ -1,6 +1,6 @@
 <script lang="ts">
-	import CookieSessionProxyBtn from '$lib/components/cookie-session-proxy-btn.svelte';
-	import { TaskStatus, taskStore } from '$lib/stores/task-store';
+	import CookieSessionProxyBtn from '#lib/components/cookie-session-proxy-btn.svelte';
+	import { TaskStatus, taskStore } from '#lib/stores/task-store.js';
 </script>
 
 <svelte:head>

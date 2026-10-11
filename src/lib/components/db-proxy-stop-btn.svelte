@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { execute } from '$lib/stores/error-store';
-	import { userStore } from '$lib/stores/user-store';
+	import { execute } from '#lib/stores/error-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
 
 	interface Props {
 		database_arn: string;

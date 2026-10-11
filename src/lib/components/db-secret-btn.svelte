@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
-	import type { DatabaseCredentials, RdsInstance } from '$lib/types';
-	import { isCommandError } from '$lib/utils';
+	import type { DatabaseCredentials, RdsInstance } from '#lib/types.js';
+	import { isCommandError } from '#lib/utils.js';
 	import { invoke } from '@tauri-apps/api/core';
-	import { userStore } from '$lib/stores/user-store';
-	import { getRdsSecretDisabledReason } from '$lib/stores/reasons';
-	import { featuresStore } from '$lib/stores/feature-store';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { getRdsSecretDisabledReason } from '#lib/stores/reasons.js';
+	import { featuresStore } from '#lib/stores/feature-store.js';
 
 	interface Props {
 		database: RdsInstance | undefined;

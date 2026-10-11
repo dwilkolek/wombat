@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { TaskStatus, type Task } from '$lib/stores/task-store';
-	import { userStore } from '$lib/stores/user-store';
-	import type { AwsEnv } from '$lib/types';
-	import { lambdaAppArn } from '$lib/utils';
+	import { TaskStatus, type Task } from '#lib/stores/task-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import type { AwsEnv } from '#lib/types.js';
+	import { lambdaAppArn } from '#lib/utils.js';
 	import { open } from '@tauri-apps/plugin-shell';
 
 	interface Props {

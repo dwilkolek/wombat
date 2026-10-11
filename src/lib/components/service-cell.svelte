@@ -2,8 +2,8 @@
 	import ServiceProxyStartBtn from './service-proxy-start-btn.svelte';
 	import ServiceProxyStopBtn from './service-proxy-stop-btn.svelte';
 
-	import { taskStore } from '$lib/stores/task-store';
-	import type { EcsService } from '$lib/types';
+	import { taskStore } from '#lib/stores/task-store.js';
+	import type { EcsService } from '#lib/types.js';
 
 	interface Props {
 		service: EcsService;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toPng } from 'html-to-image';
-	import JsonView from '$lib/components/json-view.svelte';
+	import JsonView from '#lib/components/json-view.svelte';
 	import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 	import { readable, type Readable } from 'svelte/store';
 	import { format } from 'date-fns';
@@ -76,23 +76,25 @@
 
 	let activeTags = $derived(compactStacktrace ? [Tag.std, Tag.dots] : [Tag.ext, Tag.std]);
 
-	log.subscribe((log) => {
-		entries = objToList(log ?? {}).sort((a, b) => {
-			const akey = a.key.split('.')[0];
-			const bkey = b.key.split('.')[0];
-			const aPos =
-				priorityList.indexOf(akey) > -1
-					? priorityList.indexOf(akey)
-					: 100 + JSON.stringify(a.value).length;
-			const bPos =
-				priorityList.indexOf(bkey) > -1
-					? priorityList.indexOf(bkey)
-					: 100 + JSON.stringify(b.value).length;
-			return aPos - bPos;
+	$effect(() => {
+		log.subscribe((logArg) => {
+			entries = objToList(logArg ?? {}).sort((a, b) => {
+				const akey = a.key.split('.')[0];
+				const bkey = b.key.split('.')[0];
+				const aPos =
+					priorityList.indexOf(akey) > -1
+						? priorityList.indexOf(akey)
+						: 100 + JSON.stringify(a.value).length;
+				const bPos =
+					priorityList.indexOf(bkey) > -1
+						? priorityList.indexOf(bkey)
+						: 100 + JSON.stringify(b.value).length;
+				return aPos - bPos;
+			});
+			if (!propPrefix) {
+				pngPromise = regeneratePng();
+			}
 		});
-		if (!propPrefix) {
-			pngPromise = regeneratePng();
-		}
 	});
 </script>
 

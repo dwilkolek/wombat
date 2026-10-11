@@ -1,11 +1,11 @@
 <script lang="ts">
-	import PikachuIcon from '$lib/images/pikachu.png';
-	import PsyduckIcon from '$lib/images/psyduck.png';
-	import PokeballIcon from '$lib/images/pokeball.png';
-	import { execute } from '$lib/stores/error-store';
-	import { featuresStore } from '$lib/stores/feature-store';
-	import { userStore } from '$lib/stores/user-store';
-	import { availableProfilesStore } from '$lib/stores/available-profiles-store';
+	import PikachuIcon from '#lib/images/pikachu.png';
+	import PsyduckIcon from '#lib/images/psyduck.png';
+	import PokeballIcon from '#lib/images/pokeball.png';
+	import { execute } from '#lib/stores/error-store.js';
+	import { featuresStore } from '#lib/stores/feature-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
+	import { availableProfilesStore } from '#lib/stores/available-profiles-store.js';
 
 	let userConfig = $derived($userStore);
 	let loadingAwsConfigs = $state(false);

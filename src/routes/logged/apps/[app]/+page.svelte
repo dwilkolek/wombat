@@ -1,8 +1,8 @@
 <script lang="ts">
-	import AppEnvCard from '$lib/components/app-env-card.svelte';
-	import StarIcon from '$lib/components/star-icon.svelte';
-	import { serviceDetailStore } from '$lib/stores/service-details-store';
-	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
+	import AppEnvCard from '#lib/components/app-env-card.svelte';
+	import StarIcon from '#lib/components/star-icon.svelte';
+	import { serviceDetailStore } from '#lib/stores/service-details-store.js';
+	import { activeProfilePreferences, userStore } from '#lib/stores/user-store.js';
 	import type { AppPage } from './+page';
 
 	interface Props {

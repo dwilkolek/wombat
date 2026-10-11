@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { add, endOfDay, format, startOfDay, sub } from 'date-fns';
-	import { clusterStore } from '$lib/stores/cluster-store';
-	import { serviceStore } from '$lib/stores/service-store';
+	import { clusterStore } from '#lib/stores/cluster-store.js';
+	import { serviceStore } from '#lib/stores/service-store.js';
 	import { invoke } from '@tauri-apps/api/core';
 	import { beforeNavigate } from '$app/navigation';
-	import { logStore, type LogData } from '$lib/stores/log-store';
-	import ServiceMultiselect from '$lib/components/service-multiselect.svelte';
-	import { userStore } from '$lib/stores/user-store';
-	import JsonView from '$lib/components/json-view.svelte';
+	import { logStore, type LogData } from '#lib/stores/log-store.js';
+	import ServiceMultiselect from '#lib/components/service-multiselect.svelte';
+	import { userStore } from '#lib/stores/user-store.js';
+	import JsonView from '#lib/components/json-view.svelte';
 	import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-	import TimerangeSelect from '$lib/components/timerange-select.svelte';
-	import { logFiltersStore } from '$lib/stores/log-filters-store';
+	import TimerangeSelect from '#lib/components/timerange-select.svelte';
+	import { logFiltersStore } from '#lib/stores/log-filters-store.js';
 
 	let activeCluser = clusterStore.activeCluser;
 	let selectedServices = serviceStore.selectedServices;
@@ -57,7 +57,9 @@
 		});
 	};
 
-	beforeNavigate(async () => {
+	beforeNavigate(async ({ shallow, type }) => {
+		if (shallow && type === 'goto') return;
+
 		invoke('abort_find_logs', { reason: 'navigation' });
 	});
 
@@ -281,7 +283,7 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"
 							d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-						/>
+						></path>
 					</svg>
 
 					Search!</button
@@ -312,7 +314,7 @@
 							stroke-linecap="round"
 							stroke-linejoin="round"
 							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-						/>
+						></path>
 					</svg>
 
 					Dump logs</button
@@ -335,11 +337,8 @@
 						stroke="currentColor"
 						class="w-6 h-6"
 					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							d="M15.75 5.25v13.5m-7.5-13.5v13.5"
-						/>
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5"
+						></path>
 					</svg>
 
 					Abort</button
@@ -449,12 +448,12 @@
 											fill-rule="evenodd"
 											d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
 											clip-rule="evenodd"
-										/>
+										></path>
 										<path
 											fill-rule="evenodd"
 											d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
 											clip-rule="evenodd"
-										/>
+										></path>
 									</svg>
 								</button>
 							</div></td
@@ -479,7 +478,8 @@
 							stroke="currentColor"
 							class="w-6 h-6"
 						>
-							<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+							<path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"
+							></path>
 						</svg>
 					</button>
 				{/if}
@@ -496,11 +496,8 @@
 							stroke="currentColor"
 							class="w-6 h-6"
 						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M19.5 8.25l-7.5 7.5-7.5-7.5"
-							/>
+							<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+							></path>
 						</svg>
 					</button>
 				{/if}
@@ -528,12 +525,12 @@
 								fill-rule="evenodd"
 								d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Z"
 								clip-rule="evenodd"
-							/>
+							></path>
 							<path
 								fill-rule="evenodd"
 								d="M6.194 12.753a.75.75 0 0 0 1.06.053L16.5 4.44v2.81a.75.75 0 0 0 1.5 0v-4.5a.75.75 0 0 0-.75-.75h-4.5a.75.75 0 0 0 0 1.5h2.553l-9.056 8.194a.75.75 0 0 0-.053 1.06Z"
 								clip-rule="evenodd"
-							/>
+							></path>
 						</svg>
 					</button>
 				</div>
@@ -543,9 +540,7 @@
 		{#if $selectedLog && $storeState.showLogDetails}
 			<div class="h-[40vh] flex flex-col gap-2">
 				<div class="text-sm overflow-auto h-[40vh]">
-					<div bind:this={jsonViewNode}>
-						<JsonView log={selectedLog} {createFilter}></JsonView>
-					</div>
+					<div bind:this={jsonViewNode}><JsonView log={selectedLog} {createFilter} /></div>
 				</div>
 			</div>
 		{/if}

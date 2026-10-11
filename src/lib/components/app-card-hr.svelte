@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TaskStatus, type Task } from '$lib/stores/task-store';
+	import { TaskStatus, type Task } from '#lib/stores/task-store.js';
 
 	interface Props {
 		task: Task | undefined;

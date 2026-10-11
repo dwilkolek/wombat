@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { deplyomentStore, type DeploymentRolloutStatus } from '$lib/stores/deployment-store';
-	import { userStore } from '$lib/stores/user-store';
+	import { deplyomentStore, type DeploymentRolloutStatus } from '#lib/stores/deployment-store.js';
+	import { userStore } from '#lib/stores/user-store.js';
 
 	interface Props {
 		deployment: DeploymentRolloutStatus;

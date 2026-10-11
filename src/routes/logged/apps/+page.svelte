@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { activeProfilePreferences, userStore } from '$lib/stores/user-store';
-	import { AwsEnv } from '$lib/types';
+	import { activeProfilePreferences, userStore } from '#lib/stores/user-store.js';
+	import { AwsEnv } from '#lib/types.js';
 	import { invoke } from '@tauri-apps/api/core';
-	import AppCard from '$lib/components/app-card.svelte';
-	import { wombatProfileStore } from '$lib/stores/available-profiles-store';
+	import AppCard from '#lib/components/app-card.svelte';
+	import { wombatProfileStore } from '#lib/stores/available-profiles-store.js';
 
 	let selectedClusters = $derived($activeProfilePreferences.preferred_environments);
 
