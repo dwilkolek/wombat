@@ -27,7 +27,7 @@ jobs:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
             platform-name: 'Macos-latest'
-          - platform: 'ubuntu-latest'
+          - platform: 'ubuntu-24.04'
             args: ''
             platform-name: 'Linux'
           - platform: 'windows-latest'
